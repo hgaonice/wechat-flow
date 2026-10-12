@@ -1,0 +1,111 @@
+{
+  "defaultAccount": "second",
+  "accounts": {
+    "second": {
+      "displayName": "巧思初数",
+      "author": "巧思初数",
+      "theme": "default",
+      "color": "blue",
+      "cdpPort": 9222,
+      "enabled": true,
+      "dataDir": "./data/second",
+      "contentDir": "./content",
+      "promptsDir": "./prompts",
+      "subjectPrefix": "[巧思初数] ",
+      "emailTo": [
+        "2199382542@qq.com"
+      ]
+    },
+    "gaoh": {
+      "displayName": "gaoh的技术分享",
+      "author": "gaoh的技术分享",
+      "theme": "default",
+      "color": "green",
+      "cdpPort": 9223,
+      "enabled": false,
+      "dataDir": "./data/gaoh",
+      "contentDir": "./content",
+      "promptsDir": "./prompts",
+      "subjectPrefix": "[gaoh的技术分享] ",
+      "emailTo": []
+    }
+  },
+  "publishMethod": "browser",
+  "browser": {
+    "display": ":99",
+    "cdpPort": 9222,
+    "chromePath": "/usr/bin/google-chrome",
+    "width": 1920,
+    "height": 1080,
+    "loginWaitSec": 900
+  },
+  "draftOnly": true,
+  "math": {
+    "enabled": true,
+    "height": "1.5em",
+    "scale": 1,
+    "color": "",
+    "python": "python3"
+  },
+  "manim": {
+    "enabled": true,
+    "width": 720,
+    "fps": 12,
+    "maxMb": 2
+  },
+  "piBin": "pi",
+  "bunBin": "bun",
+  "skillDir": "/root/.agents/skills/baoyu-post-to-wechat",
+  "noSession": false,
+  "timeoutSec": {
+    "plan": 1200,
+    "article": 1800
+  },
+  "model": {
+    "plan": {
+      "model": "agentrouter/deepseek-v4-flash",
+      "thinking": "high",
+      "fallbacks": [
+        "packyapi-deepseek/deepseek-flash"
+      ]
+    },
+    "article": {
+      "model": "justwoker/claude-opus-4-8",
+      "thinking": "medium",
+      "fallbacks": [
+        "agentrouter/claude-opus-4-8",
+        "anyrouter/claude-opus-4-7",
+        "anyrouter/claude-sonnet-4-5-20250929",
+        "agentrouter/deepseek-v4-flash"
+      ]
+    }
+  },
+  "cover": {
+    "mode": "template",
+    "font": "",
+    "uploadToDraft": false
+  },
+  "notify": {
+    "enabled": false,
+    "telegram": {
+      "botToken": "",
+      "chatId": ""
+    },
+    "email": {
+      "enabled": true,
+      "on": "publish",
+      "to": [],
+      "subjectPrefix": "",
+      "attachArticle": true,
+      "skill": {
+        "dir": "/root/.claude/skills/email-sender",
+        "python": "python3"
+      }
+    }
+  },
+  "proxy": {
+    "httpProxy": "http://127.0.0.1:7890",
+    "httpsProxy": "http://127.0.0.1:7890",
+    "noProxy": "127.0.0.1,localhost,192.168.0.0/16,10.0.0.0/8,::1,192.168.0.251"
+  }
+}

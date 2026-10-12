@@ -1,0 +1,17 @@
+[Unit]
+Description=WeChat Flow — weekly content planner (pi agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/wechat-flow
+Environment=HOME=/root
+Environment=PATH=/root/.nvm/versions/node/v24.14.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=http_proxy=http://127.0.0.1:7890
+Environment=https_proxy=http://127.0.0.1:7890
+Environment=no_proxy=127.0.0.1,localhost,192.168.0.0/16,10.0.0.0/8,::1,192.168.0.251
+EnvironmentFile=-/root/wechat-flow/.env
+TimeoutStartSec=2400
+ExecStart=/root/.nvm/versions/node/v24.14.1/bin/bun /root/wechat-flow/src/cli.ts plan --all

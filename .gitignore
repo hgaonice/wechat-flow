@@ -1,0 +1,15 @@
+node_modules/
+# per-account runtime data (data/<alias>/{plans,articles,imgs,state,logs,sessions})
+data/
+# legacy flat layout (auto-migrated into data/<alias>/)
+sessions/
+logs/
+plans/
+articles/
+imgs/
+state/
+config.json
+.env
+
+# local dev session pointer (docs/session.md)
+session.md

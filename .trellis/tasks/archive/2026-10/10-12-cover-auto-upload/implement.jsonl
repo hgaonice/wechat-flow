@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/10-12-cover-auto-upload/research.md", "reason": "封面调研结论与候选方案（O-A/O-B/O-C）"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "任何封面方案都必须以草稿箱真实状态为验收"}
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "封面属确定性产物，失败必须降级不阻断正文"}
+{"file": "README.md", "reason": "§发布方式：为何选浏览器、40164 实测、API 回退步骤（按节读 L485-527）"}
+{"file": ".trellis/tasks/10-12-cover-auto-upload/design.md", "reason": "O-B 详细设计：流程阶段 / 选择器 / 降级 / 回滚 / 真机探针"}
+{"file": ".trellis/tasks/10-12-cover-auto-upload/implement.md", "reason": "实现清单 + 250 真机验收结果（成功 + 降级）"}
+{"file": "deploy/ACCEPTANCE-250.md", "reason": "250 真机验收清单（可复跑）"}

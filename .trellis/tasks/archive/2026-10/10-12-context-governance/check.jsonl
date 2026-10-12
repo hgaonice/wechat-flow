@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/engine/verification.md", "reason": "证据与真相源规则：验收须贴真实命令输出"}
+{"file": "AGENT.md", "reason": "核对续接入口是否含协议/看板/GATE/任务地图/Checkpoint/下一步"}
+{"file": "TREE.md", "reason": "核对 repomap 产物是否覆盖全部 src 模块与导出符号"}

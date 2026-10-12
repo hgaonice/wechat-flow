@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/engine/index.md", "reason": "引擎规范总览：技术栈、硬约束、反模式"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "目录布局与依赖方向，分层文档需与之一致"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "改动后必跑命令与健康基线"}
+{"file": "ARCHITECTURE.md", "reason": "宏观架构（本次产物，须与 src/README.md、TREE.md 相互印证）"}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly WeChat content plan (Sunday 20:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 20:00:00 Asia/Shanghai
+Persistent=true
+AccuracySec=1min
+Unit=wechat-plan.service
+
+[Install]
+WantedBy=timers.target

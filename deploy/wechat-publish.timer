@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily WeChat article publish (07:30 Asia/Shanghai)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Shanghai
+Persistent=true
+AccuracySec=1min
+Unit=wechat-publish.service
+
+[Install]
+WantedBy=timers.target

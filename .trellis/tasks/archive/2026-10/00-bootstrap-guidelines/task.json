@@ -1,0 +1,28 @@
+{
+  "id": "00-bootstrap-guidelines",
+  "name": "00-bootstrap-guidelines",
+  "title": "Bootstrap Engine Spec (已完成)",
+  "description": "用本项目真实约定填充 .trellis/spec/engine/（替换占位 frontend 层）",
+  "status": "completed",
+  "dev_type": "docs",
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "gaoh",
+  "assignee": "gaoh",
+  "createdAt": "2026-10-12",
+  "completedAt": "2026-10-12",
+  "branch": null,
+  "base_branch": null,
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    ".trellis/spec/engine/"
+  ],
+  "notes": "由 trellis init 创建；已填充 engine 规范并归档",
+  "meta": {}
+}

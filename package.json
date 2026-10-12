@@ -1,0 +1,28 @@
+{
+  "name": "wechat-flow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "多账号公众号内容编排与自动发布 —— 通过 pi agent 生成文章并按计划发布（题材由账号配置决定）",
+  "bin": {
+    "wechat-flow": "./src/cli.ts"
+  },
+  "scripts": {
+    "plan": "bun src/cli.ts plan",
+    "publish": "bun src/cli.ts publish",
+    "run": "bun src/cli.ts run",
+    "status": "bun src/cli.ts status",
+    "doctor": "bun src/cli.ts doctor",
+    "drafts": "bun src/cli.ts drafts",
+    "cover": "bun src/cli.ts cover",
+    "typecheck": "tsc --noEmit",
+    "mail-test": "bun src/cli.ts mail-test"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}
