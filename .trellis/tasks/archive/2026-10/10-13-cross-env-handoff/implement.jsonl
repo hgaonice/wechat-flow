@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "guides 层的索引与写作风格基线：新 guide 必须登记在此"}
+{"file": ".trellis/spec/engine/index.md", "reason": "引擎层 spec 的章节结构参考（Pre-Development Checklist / 反模式表），保证新约定同构"}

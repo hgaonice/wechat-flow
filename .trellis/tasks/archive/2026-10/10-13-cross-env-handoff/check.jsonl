@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "核对新 guide 是否登记且链接可达（AC-4)"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "文档类改动同样需通过自检命令与证据打勾规则（AC-5)"}

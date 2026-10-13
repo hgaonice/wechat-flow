@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Cross-Environment Handoff](./cross-env-handoff.md) | 换 Agent / 换环境 / 换机器时怎么写交接稿（必含章节、证据与密钥边界、生命周期） | 需要把工作交给**另一个环境或 Agent**（如本地 pi → CNB Agent、换机器上线）时 |
 
 ---
 
@@ -50,6 +51,15 @@ These guides help you **ask the right questions before coding**.
 - [ ] Multiple branches update the same derived state from `kind` / `action`
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When Handing Off to Another Environment
+
+- [ ] 接手方**看不到你的会话上下文**，或与你不在同一台机器
+- [ ] 工作要分段跨会话继续（需要一份自带前提的开工指令）
+- [ ] 对方环境与本地有差异（工具链、目标机、可用凭据）
+- [ ] 交接内容里有不能外泄的东西（token / master key / 真实配置）
+
+→ Read [Cross-Environment Handoff](./cross-env-handoff.md)，模板在 [`docs/handoffs/TEMPLATE.md`](../../docs/handoffs/TEMPLATE.md)
 
 ### When Verifying AI Cross-Review Results
 

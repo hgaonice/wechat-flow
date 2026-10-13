@@ -79,6 +79,7 @@
 | `archive/2026-10/10-12-cover-auto-upload/` | S10 | 封面自动上传 O-B（真机验收通过） | ✅ 已归档 |
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
+| `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
@@ -96,6 +97,7 @@
 | 某个模块的职责/导出/坑 | [`src/README.md`](./src/README.md) 对应小节 | 小 |
 | 某个符号/文件在哪 | [`TREE.md`](./TREE.md) | 小 |
 | 写 `src/` 代码的约定 | [`.trellis/spec/engine/index.md`](./.trellis/spec/engine/index.md) | 中 |
+| 换环境 / 换 Agent 怎么交接 | [`.trellis/spec/guides/cross-env-handoff.md`](./.trellis/spec/guides/cross-env-handoff.md)（模板：[`docs/handoffs/TEMPLATE.md`](./docs/handoffs/TEMPLATE.md)） | 小 |
 | 怎么安装/部署 | [`README.md`](./README.md)（按节） | 大 |
 | 日常操作/维护/排障 | [`docs/操作手册.md`](./docs/操作手册.md)（按节） | 大 |
 
@@ -187,6 +189,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-13 | **跨环境交接约定落地**：新增 `.trellis/spec/guides/cross-env-handoff.md`（触发条件 / H1–H10 必含章节 / 证据与密钥边界 / 生命周期）；新增 `docs/handoffs/`（`TEMPLATE.md` + `README.md`），`docs/HANDOFF-CNB.md` 迁入为 `docs/handoffs/2026-10-13-cnb-console.md`（含基线 SHA 与失效条件）；AGENT.md §4、spec/guides/index.md 补入口 | pi |
 | 2026-10-13 | **S10 真机验收通过 + 归档**：250 上 `cover` 成功设封面并在重开编辑器后 `--probe` 复读为真实 `mmbiz` 背景图（持久化）；`cover.uploadToDraft=true` 后 `publish --reuse --force` 正文 + 封面均 OK；降级路径（非法图 / CDP 超时）publish 仍成功且邮件提示手动选封面。真机修正：保存点 `#js_submit button`、确认后轮询背景图、上传后等自动选中、去掉缩略图兜底。任务归档。 | pi |
 | 2026-10-13 | **S10 O-B 实现**：`setDraftCover`/`probeDraftCover`（`src/wechat.ts`）+ `cover` 命令 + `cover.uploadToDraft` 开关（默认关、失败降级）；装 devDeps 使 `tsc --noEmit` 通过；文档同步 | pi |
 | 2026-10-12 | **S9 交付并归档**：`AGENT.md`/分层文档/repomap 经用户确认（G4）；任务归档 → `archive/2026-10/` | pi |
