@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/10-13-console-foundation/implement.md", "reason": "C1 验收命令与 AC 映射（逐条核对）"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 与反模式清单"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "AC-3 配置一致性 / 唯一约束 / 迁移前滚"}
+{"file": ".trellis/spec/console/security.md", "reason": "401/403/429/凭据不回显等安全验收"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "engine 改动后必跑命令与健康基线"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源；本任务不触碰发布链路需复核"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/prd.md", "reason": "AC-1..AC-4/AC-10 定义"}

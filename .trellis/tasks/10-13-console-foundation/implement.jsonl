@@ -1,0 +1,12 @@
+{"file": ".trellis/tasks/10-13-console-foundation/design.md", "reason": "C1 技术设计：resolveConfig 抽取 / 配置重建与回渲染 / 鉴权与 Bun 类型策略"}
+{"file": ".trellis/tasks/10-13-console-foundation/implement.md", "reason": "C1 实施清单 I1-1..I1-10 与验收命令"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/prd.md", "reason": "源需求 R1/R4 与 AC-1/2/3/4/10"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/design.md", "reason": "父设计：代码结构 / 配置继承模型 / 数据模型 / 安全设计"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 层硬约束 H1-H8 与技术栈（零依赖 / 不改铁律）"}
+{"file": ".trellis/spec/console/api.md", "reason": "HTTP/CSRF/RBAC 约定与 C1 端点契约"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "v1 DDL 与不变量（唯一约束 / 配置真相源 / AC-3）"}
+{"file": ".trellis/spec/console/security.md", "reason": "鉴权/限流/凭据加密/暴露面收敛（K1）"}
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 技术栈与零依赖红线（AC-10）"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "data/<alias> 与 cdpPort 隔离不变量（AC-1）"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "失败显形：ok:false + 告警，不伪装成功"}
+{"file": "src/config.ts", "reason": "resolveConfig 抽取的唯一改动点（保持旧签名/行为）"}
