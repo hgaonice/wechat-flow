@@ -202,3 +202,48 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 ### Next Steps
 
 - C1 `console-foundation` 规划：补 design.md/implement.md/真实 jsonl → 方案 + 验证命令 + 回滚点 → 用户批准 → `task.py start`
+
+
+## Session 6: 控制台 C1 基座交付并归档（S12/M1）
+<!-- trellis-session: v=2 -->
+
+**Date**: 2026-10-13
+**Task**: C1 控制台基座（`10-13-console-foundation`）
+**Branch**: `main`
+
+### Summary
+
+实现并交付控制台基座（`src/console/**`）：Bun HTTP 服务 + SQLite(WAL) + 鉴权/RBAC/CSRF + 账号 CRUD/配置继承/导入回渲染 + 静态 UI，**零新增运行时依赖**。AC-1/2/3/4/10 实测通过，trellis-check 独立复核 PASS（5 项缺陷已修），engine CLI 未回退；console spec 校准 v0→v1；任务归档。
+
+### Main Changes
+
+- 新增 `src/console/**`：`main.ts`/`server.ts`、`http/{router,respond,static}.ts`、`auth/{users,sessions,rbac}.ts`、`crypto/secrets.ts`、`db/{schema,migrate,import-config,render-config}.ts` + `db/dao/*`、`config/resolve.ts`、`ui/*`、`bun.d.ts`、`verify-ac3.ts`
+- `src/config.ts`：**仅新增** `resolveConfig(raw, alias)` 导出；`loadConfig` 内部改为调用（签名/行为不变）
+- `.gitignore`：`console/` → `/console/`（锚定，避免吞掉 `src/console/`）
+- 语义要点：配置真相源 = DB（global + 账号条目 **verbatim**）→ 回渲染 `config.json`（`.bak` 不覆盖 + tmp→fsync→rename）；账号热列仅为约束镜像；无 master key/无管理员 fail-fast；登录 5 次/15 分钟锁定；审计含 `actor`/`ok`
+- spec 校准：`.trellis/spec/console/{index,api,data-model,security}.md` → v1（node:crypto、verbatim、`login_attempts`、401 code、reset `{key}`）
+- 收口：`AGENT.md` §1/§3/§5/§9/§10；本 journal
+
+### Git Commits
+
+- (本次收口提交) feat(console): C1 控制台基座 + spec v1 校准
+
+### Testing
+
+- [OK] `node_modules/.bin/tsc --noEmit` 0 错误；`bun build --target=bun src/console/main.ts` OK
+- [OK] `dependencies=undefined`（零新增运行时依赖）
+- [OK] AC-1 fail-fast：无 master key → exit 1；0 用户 → exit 1
+- [OK] AC-2 `--import-config`：accounts=2、config.json 回写(1733B)、`config.json.bak` 保留原始
+- [OK] AC-3 `--verify-ac3` PASS：两账号逐字段一致 + 回渲染 diff=0；`loadConfig` before/after 字节一致
+- [OK] AC-4 curl 断言 17+9 项：401/403/409/429、owner 隔离、CSRF、audit `denied`
+- [OK] 迁移期：`bun src/cli.ts doctor --all` / `publish --dry-run` 均 exit 0
+- [OK] DB：`user_version=1`、`journal_mode=wal`、`foreign_keys=1`、19 表
+- [OK] trellis-check 复核 PASS（5 项缺陷修复后回归）
+
+### Status
+
+[OK] **C1 完成并归档**（父任务 M1 收口）
+
+### Next Steps
+
+- C2 `console-scheduler` 规划：周/月计划表 + jobs + 调度器 + 每账号互斥 → 父任务 `implement.md` M2

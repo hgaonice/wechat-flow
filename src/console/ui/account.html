@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>账号详情 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body data-page="account">
+<header>
+  <a href="/app">← 返回</a>
+  <span id="alias" class="brand"></span>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+</header>
+<main>
+  <div class="card">
+    <h2>有效配置（继承 / 覆盖 / 显式）</h2>
+    <table>
+      <thead><tr><th>键</th><th>来源</th><th>有效值</th><th></th></tr></thead>
+      <tbody id="effective"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>该账号的覆盖项（overrides，写回 config.json 的 accounts[alias]）</h2>
+    <p class="muted">引擎按“顶层键”回退：某个键在账号里存在即整块生效，不做嵌套深合并。
+      删除某键即恢复继承（重置按钮）。</p>
+    <textarea id="overrides" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button id="save" class="primary">保存覆盖项</button>
+      <button id="reload" class="ghost">放弃修改</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>全局默认（只读，管理员在“全局设置”改）</h2>
+    <pre id="global" class="mono muted"></pre>
+  </div>
+</main>
+</body>
+</html>

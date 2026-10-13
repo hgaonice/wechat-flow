@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v0 契约（先行）**，源 `design.md` §5。C1 落地后校准为 v1 实测。
+> 状态：**v1（C1 已校准；C2–C6 端点仍为契约先验）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -25,7 +25,7 @@
 | HTTP | code | 触发 |
 |---|---|---|
 | 400 | `bad_request` | 参数/校验失败 |
-| 401 | `unauthenticated` | 无/过期/无效会话 |
+| 401 | `unauthorized` | 无/过期/无效会话 |
 | 403 | `forbidden` | 越权（跨账号或角色不足）——同时落 `audit` |
 | 404 | `not_found` | 资源不存在 |
 | 409 | `conflict` | 唯一约束冲突（`alias` / `cdp_port`） |
@@ -33,6 +33,10 @@
 | 500 | `internal` | 未预期错误（**不得**吞成成功） |
 
 > **失败显形**：任何业务失败必须 `ok:false` + `code` + 可读 `message`；禁止 200 + 伪装成功。
+> 409 冲突可带 `detail.suggestions:number[]`（如可用 `cdpPort` 列表）；403 由服务端统一写 `audit(action='denied')`。
+>
+> **落地状态**：§2.1、§2.2 已随 **C1** 实现（另含 `GET /api/meta`、`GET /api/users`、`POST /api/users`、`PUT /api/users/:id`）；
+> §2.3 属 **C2/C3**，§2.4 属 **C4**，§2.5 属 **C5**。
 
 ---
 
@@ -44,7 +48,7 @@
 |---|---|---|
 | POST | `/api/login` | `{username,password}` → 建会话 + Set-Cookie；失败计入锁定 |
 | POST | `/api/logout` | 吊销当前会话 |
-| GET | `/api/me` | 当前用户 `{id,username,role,grantedAccounts[]}` |
+| GET | `/api/me` | 当前用户 `{user:{id,username,role},csrfToken,grantedAccounts,accounts[],isAdmin}` |
 | POST | `/api/password` | 改密（改后吊销其它会话） |
 
 ### 2.2 账号与配置
@@ -56,7 +60,7 @@
 | GET | `/api/accounts/:id` | 详情（含字段来源：`inherited` / `overridden`） |
 | PUT | `/api/accounts/:id` | 更新基本信息 + `overrides` |
 | DELETE | `/api/accounts/:id` | 删除（**不删** `data/<alias>/`，仅解除登记，显式确认） |
-| POST | `/api/accounts/:id/reset-override` | 恢复继承：删除 `overrides` 中某路径（`{path}`） |
+| POST | `/api/accounts/:id/reset-override` | 恢复继承：删除 `overrides` 中某个**顶层键**（`{key}`），返回更新后详情 |
 | GET | `/api/settings` | 全局默认（`settings` 表） |
 | PUT | `/api/settings` | 更新全局默认 → 触发受影响账号的原子回渲染 `config.json` |
 

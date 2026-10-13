@@ -66,8 +66,8 @@
 | Stage | 名称 | 里程碑 | 子任务 | 状态 | GATE | 证据/产物 |
 |-------|------|--------|--------|------|------|-----------|
 | **S11** | 控制台规划定稿（spec 骨架 + AGENT 更新） | M0 | — | ✅ 完成 | — | `.trellis/spec/console/*`、本文件 §1/§3 |
-| **S12** | 控制台基座：服务/DB/鉴权/账号CRUD/配置覆盖/迁移 | M1 | C1 | 🟡 规划 | — | 子任务 `10-13-console-foundation/` |
-| **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | ⚪ 未开始 | — | 子任务 `10-13-console-scheduler/` |
+| **S12** | 控制台基座：服务/DB/鉴权/账号CRUD/配置覆盖/迁移 | M1 | C1 | ✅ 完成 | — | `src/console/**`、`archive/2026-10/10-13-console-foundation/`、spec v1 |
+| **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | 🟡 规划（下一步） | — | 子任务 `10-13-console-scheduler/` |
 | **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱 → 重生成 | M2b | C3 | ⚪ 未开始 | G2 | 子任务 `10-13-console-content-workbench/` |
 | **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ⚪ 未开始 | — | 子任务 `10-13-console-agent-session/` |
 | **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ⚪ 未开始 | G7 | 子任务 `10-13-console-ops-tunnel/` |
@@ -97,8 +97,8 @@
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
-| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 规划（M0 已收口） |
-| `10-13-console-foundation/` | S12 | C1 控制台基座 | ⚪ 规划 |
+| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（M1 已收口） |
+| `archive/2026-10/10-13-console-foundation/` | S12 | C1 控制台基座（服务/DB/鉴权/RBAC/配置继承/迁移） | ✅ 已归档（2026-10-13） |
 | `10-13-console-scheduler/` | S13 | C2 调度与任务模型 | ⚪ 规划 |
 | `10-13-console-content-workbench/` | S14 | C3 内容工作台 | ⚪ 规划 |
 | `10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ⚪ 规划 |
@@ -131,18 +131,22 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：**控制台 M0 已收口 → 进入 C1 `console-foundation` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
+**当前任务**：**控制台 C1 `console-foundation` 已完成并归档 → 下一步 C2 `console-scheduler` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
 
-### 当前（控制台）· M0 规划收口
+### 当前（控制台）· C1 基座收口（M1）
 
 | # | 步骤 | 状态 | 证据 |
 |---|------|------|------|
-| P6 | 用户批准规划摘要 | ✅ | 2026-10-13 用户确认「确认，按这个走」 |
-| P7 | 建 `.trellis/spec/console/` 骨架 | ✅ | `.trellis/spec/console/{index,api,data-model,security,agent-session}.md`（v0 契约） |
-| P8 | 更新 `AGENT.md`（S11+ 看板 / GATE / 任务地图 / D11–D14） | ✅ | 本文件 §1/§2/§3/§8 |
+| I1-1..I1-10 | 服务骨架/DB/加密/鉴权RBAC/DAO/resolveConfig/导入回渲染/UI/校验/回归 | ✅ | `archive/2026-10/10-13-console-foundation/implement.md` §6 证据索引 |
+| AC-1/2/4 | fail-fast / 导入 / 鉴权RBAC+CSRF+审计 | ✅ | curl 断言 17+9 项全过；`--status`、审计 `denied` 行 |
+| AC-3 | DB 派生 == 文件派生（逐字段）+ 回渲染 diff=0 | ✅ | `--verify-ac3` PASS；`loadConfig` before/after 字节一致 |
+| AC-10 | 零新增运行时依赖 / tsc / bun build | ✅ | `dependencies=undefined`、`tsc --noEmit` 0 错、`bun build` OK |
+| 独立复核 | trellis-check | ✅ | `check-report.md`（PASS；5 项缺陷已修并回归） |
+| 迁移期兼容 | engine 未回退 | ✅ | `doctor --all` / `publish --dry-run` 均可用 |
+| spec | 校准 console spec v0→v1 | ✅ | `.trellis/spec/console/{index,api,data-model,security}.md` |
 
-**下一步**：C1 规划（补 `design.md`/`implement.md`/真实 jsonl → 改动方案 + 验证命令 + 回滚点 → 用户批准 → `task.py start`）。
-**推进顺序**：C1 → C2 → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
+**下一步**：C2 `console-scheduler` 规划（周/月计划表 + jobs + 调度器 + 每账号互斥）→ 见父任务 `implement.md` M2 与子任务 `prd.md`。
+**推进顺序**：C1 ✅ → C2 → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
 
 ### 上一阶段（引擎 S10）
 
@@ -163,11 +167,12 @@
 **上一任务（S9 上下文治理）**：✅ 已交付并经用户确认 → `archive/2026-10/10-12-context-governance/`
 
 **Checkpoint（下次开工先看这里）**
-- **S10 已完成**：O-B 封面自动上传在 250 真机验收通过（成功 + 降级双路径）。用法：`config.json` 开 `cover.uploadToDraft:true`（默认关）；发布在正文校验通过后，用同一 CDP 会话驱动封面弹窗上传 `cover.png`；失败只 warn，绝不影响正文。
-- **真机要点**：保存点 `#js_submit button`（非容器）；`确认` 后须**轮询**背景图变化；上传后须等**自动选中**再点 `下一步`；**不做缩略图兜底**（避免误设旧图）。
-- **无待办阻塞**。下一步候选见 §10。
+- **C1 已完成并归档（S12/M1）**：控制台基座在 `src/console/**`（`bun` 运行、零新增依赖）。子命令：`bun src/console/main.ts --init-key | --import-config | --create-admin <name> | serve | --status | --verify-ac3`。
+- **两条数据脉络**：① 配置真相源 = DB（`settings(global)` + `accounts.overrides_json` **逐字节 verbatim**）→ 回渲染 `config.json`；回渲染 = `.bak`(不覆盖) + tmp→fsync→rename。② 账号热列（`cdp_port`/`enabled`…）仅为约束/查询镜像，由单一写路径同步。
+- **关键不变量**：`alias`/`cdp_port` 唯一（API 409 + 端口建议）；owner 仅 `account_grants` 账号且**看不到 global 机密**；无 master key / 无管理员 → fail-fast 拒绝启动；写请求必须 CSRF。
+- **坑**：`.gitignore` 的 `console/` 必须写成 `/console/`（否则会吞掉 `src/console/`）；引擎 `model` 回退是**按嵌套 kind**，`cover`/`math` 是**整对象**回退，`null` 等价缺失（继承）。
+- **下一步**：C2 `console-scheduler` 规划。复现证据：`cat .trellis/tasks/archive/2026-10/10-13-console-foundation/{prd,design,implement}.md`、`check-report.md`。
 - 若上下文过长：按 §6 规则把新进展写回本节 → `/clear` → 重读本文件 §5 继续。
-- 复现：`cat .trellis/tasks/archive/2026-10/10-12-cover-auto-upload/{design.md,implement.md}`、`python3 .trellis/scripts/task.py list`。
 
 ---
 
@@ -230,6 +235,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-13 | **控制台 C1 基座交付并归档（S12/M1）**：新增 `src/console/**`（`Bun.serve` + `bun:sqlite` WAL + argon2id 会话/CSRF/RBAC + 账号CRUD/配置覆盖/导入回渲染 + 静态 UI，**零新增运行时依赖**）；`src/config.ts` 仅新增 `resolveConfig(raw,alias)` 导出（`loadConfig` 行为不变）；`.gitignore` 增 `/console/`。AC-1/2/3/4/10 实测通过（`--verify-ac3` 逐字段一致、`loadConfig` 前后**字节一致**、17+9 项 curl 断言）；`trellis-check` 独立复核 **PASS**（5 项缺陷已修并回归：cdpPort 字符串绕过 UNIQUE / owner 详情泄露 global / 畸形 Cookie 500 / 不存在 grant id 的 FK 500 + 孤儿用户 / CSP·HSTS 缺失）；engine `doctor --all`/`publish --dry-run` 未回退；console spec 校准 v0→v1 | pi |
 | 2026-10-13 | **控制台 M0 规划收口（S11）**：用户批准规划摘要；新建 `.trellis/spec/console/` 骨架（`index/api/data-model/security/agent-session`，v0 契约）；更新 `AGENT.md` —— §1 新增控制台路线 S11–S17、§2 新增 G6/G7、§3 补 6 个子任务、§8 补 D11–D14 | pi |
 | 2026-10-13 | **跨环境交接约定落地**：新增 `.trellis/spec/guides/cross-env-handoff.md`（触发条件 / H1–H10 必含章节 / 证据与密钥边界 / 生命周期）；新增 `docs/handoffs/`（`TEMPLATE.md` + `README.md`），`docs/HANDOFF-CNB.md` 迁入为 `docs/handoffs/2026-10-13-cnb-console.md`（含基线 SHA 与失效条件）；AGENT.md §4、spec/guides/index.md 补入口 | pi |
 | 2026-10-13 | **S10 真机验收通过 + 归档**：250 上 `cover` 成功设封面并在重开编辑器后 `--probe` 复读为真实 `mmbiz` 背景图（持久化）；`cover.uploadToDraft=true` 后 `publish --reuse --force` 正文 + 封面均 OK；降级路径（非法图 / CDP 超时）publish 仍成功且邮件提示手动选封面。真机修正：保存点 `#js_submit button`、确认后轮询背景图、上传后等自动选中、去掉缩略图兜底。任务归档。 | pi |
@@ -247,7 +253,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（控制台 S11+）**：M0 已收口 → 执行 **C1 `console-foundation`** 规划（补 `design.md`/`implement.md`/jsonl → 方案与验证命令 → 批准 → `task.py start`）；后续 C2→C3→C4→C5→C6。见 §5 与父任务 `implement.md`。
+1. **当前主线（控制台 S11+）**：C1 ✅ → 规划并实施 **C2 `console-scheduler`**（周/月计划表 + jobs + 调度器 + 每账号互斥），随后 C3 → C4 → C5 → C6。见 §5 与父任务 `implement.md`。
 2. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
 3. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
 4. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。

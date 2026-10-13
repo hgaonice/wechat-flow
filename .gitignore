@@ -1,4 +1,6 @@
 node_modules/
+# console runtime (SQLite DB + generated config backups)
+/console/
 # per-account runtime data (data/<alias>/{plans,articles,imgs,state,logs,sessions})
 data/
 # legacy flat layout (auto-migrated into data/<alias>/)

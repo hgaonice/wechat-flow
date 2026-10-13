@@ -3,7 +3,8 @@
 > 控制面（control plane）：在既有 engine（`src/*.ts`，见 `../engine/index.md`）之上加一层**带鉴权的 Web 管理控制台**，
 > 让非命令行使用者能自助管理多账号、编排内容计划、与 pi agent 会话并在环审批。
 >
-> **状态：v0 契约（先行）** —— 于 M0 编写（源：父任务 `design.md`）；`C1` 落地后逐条校准为「v1 实测」。
+> **状态：C1 已落地；`api.md`/`data-model.md`/`security.md` 已校准为 v1；`agent-session.md` 仍为 v0 契约（C4 校准）。**
+> 于 M0 编写（源：父任务 `design.md`）。
 > 契约与代码冲突时：**先改本目录，再改代码**；DDL / API / 安全语义变更必须同步本目录。
 
 ---
@@ -30,9 +31,9 @@
 | 运行时 | `bun >= 1.3`（实测 1.4.2），直接执行 `.ts`，不编译不打包 |
 | 服务端 | `Bun.serve`（HTTP + SSE/WS 升级） |
 | 数据 | `bun:sqlite`，WAL + `foreign_keys=ON`，`console/console.db`（不入 git） |
-| 加密 | WebCrypto `crypto.subtle` AES-256-GCM；口令 `Bun.password`（argon2id） |
+| 加密 | **`node:crypto`** AES-256-GCM（`createCipheriv`，**非** WebCrypto）；口令 `Bun.password`（argon2id） |
 | 前端 | 静态页面（`src/console/ui/`）+ 原生 JS，**无构建步骤**（R5.1） |
-| 类型检查 | `bunx tsc --noEmit` + `bun build --target=bun src/console/main.ts` |
+| 类型检查 | `node_modules/.bin/tsc --noEmit`（本地）或 `bunx tsc --noEmit`；另 `bun build --target=bun src/console/main.ts` |
 
 ---
 
@@ -61,10 +62,10 @@ src/console/
 
 | Guide | 说明 | 状态 |
 |-------|------|------|
-| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v0 契约 |
-| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v0 契约 |
-| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v0 契约 |
-| [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v0 契约 |
+| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v1（C1） |
+| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v1（C1） |
+| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v1（C1） |
+| [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v0 契约（C4） |
 
 ---
 

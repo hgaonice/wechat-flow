@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全局设置 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body data-page="settings">
+<header>
+  <a href="/app">← 返回</a>
+  <span class="brand">全局设置</span>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+</header>
+<main>
+  <div class="card">
+    <h2>global（config.json 顶层，除 accounts 之外）</h2>
+    <p class="muted">保存后立即写回 config.json。账号覆盖项请在账号详情页维护。</p>
+    <textarea id="global-json" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button id="save" class="primary">保存</button>
+      <button id="reload" class="ghost">放弃修改</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>用户与授权</h2>
+    <table>
+      <thead><tr><th>id</th><th>用户名</th><th>角色</th><th>状态</th><th>授权账号</th></tr></thead>
+      <tbody id="users"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>审计日志（最近 100 条）</h2>
+    <table>
+      <thead><tr><th>时间</th><th>动作</th><th>目标</th><th>结果</th><th>IP</th></tr></thead>
+      <tbody id="audit"></tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

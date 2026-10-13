@@ -195,14 +195,17 @@ export function listAccounts(): AccountInfo[] {
 }
 
 /**
- * Resolve the effective config for one account.
+ * Resolve the effective config for one account from an in-memory raw config.
  *
  * Precedence: explicit argument > MW_ACCOUNT env > config.defaultAccount > first account.
  * Every path is rooted at the account's own data dir so two accounts never share
  * plans / articles / state / logs.
+ *
+ * This is the pure core of `loadConfig()`. The console rebuilds `raw` from its DB
+ * (src/console/config/resolve.ts) and calls this same function, so DB-derived and
+ * file-derived configs are field-for-field identical (AC-3).
  */
-export function loadConfig(accountAlias?: string): AppConfig {
-  const raw = readRawConfig();
+export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
   const accounts = normalizeAccounts(raw);
   const def = defaultAlias(raw);
   const requested = accountAlias ?? process.env.MW_ACCOUNT ?? def;
@@ -316,6 +319,11 @@ export function loadConfig(accountAlias?: string): AppConfig {
   };
 
   return cfg;
+}
+
+/** Load `config.json` and resolve the effective config for one account. */
+export function loadConfig(accountAlias?: string): AppConfig {
+  return resolveConfig(readRawConfig(), accountAlias);
 }
 
 export function ensureDirs(cfg: AppConfig): void {

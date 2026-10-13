@@ -1,59 +1,83 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v0 契约（先行）**，源 `design.md` §7。C1/C5/C6 落地后校准。
+> 状态：**v1（已随 C1 校准）**。C5/C6 落地后继续校准。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
 
 ## 1. 传输与暴露面收敛
 
-| 项 | 约定 |
-|---|---|
-| 监听 | 服务只监听 `127.0.0.1:8787`，**不监听 `0.0.0.0`** |
-| 公网入口 | 仅经 cloudflared（HTTPS）；建议叠加 **Cloudflare Access** 作为隧道前置身份门 |
-| 端口 | 隧道**只**映射控制台端口；**Chrome CDP 端口绝不暴露**（H8） |
-| 响应头 | `Strict-Transport-Security`、`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、CSP 最小集 |
+| 项 | 约定 | 落地 |
+|---|---|---|
+| 监听 | 默认只监听 `127.0.0.1:8787`（`CONSOLE_HOST`/`CONSOLE_PORT` 可覆盖），**不默认监听 `0.0.0.0`** | ✅ C1 |
+| 公网入口 | 仅经 cloudflared（HTTPS）；建议叠加 **Cloudflare Access** 作为隧道前置身份门 | C5 |
+| 端口 | 隧道**只**映射控制台端口；**Chrome CDP 端口绝不暴露**（H8） | C5/C6 |
+| 响应头 | `X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`、`Cache-Control: no-store`、**CSP** | ✅ C1 |
+| CSP（实际值） | `default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'` | ✅ C1 |
+| HSTS | `Strict-Transport-Security: max-age=31536000; includeSubDomains` —— **仅在安全 Cookie 生效时下发**（即非 `CONSOLE_ALLOW_INSECURE_COOKIE=1` 的开发态） | ✅ C1 |
+
+> 开发态放行明文：`CONSOLE_ALLOW_INSECURE_COOKIE=1` 让 Cookie 去掉 `Secure` 并可不下发 HSTS，**仅供本地/隧道联调**，生产禁用。
 
 ## 2. 身份（Authentication）
 
 - 口令存储：`Bun.password`（**argon2id**）哈希，不存明文。
-- 登录：`POST /api/login` → 成功建 `login_sessions` → `Set-Cookie: wfc_sid=<opaque>; HttpOnly; Secure; SameSite=Lax`。
-- 会话令牌：服务端只存 `token_hash`（可哈希，如 SHA-256），Cookie 值为不可预测随机串。
-- 过期/吊销：`expires_at` 到点失效；改密/登出/管理员吊销使会话不可用。
-- **无 master key 必须 fail-fast**：见 §5；不静默降级。
+- 登录：`POST /api/login` → 成功建 `login_sessions` 行 → `Set-Cookie: wfc_sid=<opaque>`。
+- Cookie 属性：`HttpOnly; Path=/; SameSite=Lax; Max-Age=<ttl>`，**`Secure` 除非 `CONSOLE_ALLOW_INSECURE_COOKIE=1`**。
+- 会话令牌：`wfc_sid` = 32B 随机（base64url）；服务端只存 `sha256(token)` 于 `login_sessions.token_hash`，**不存明文令牌**。
+- 过期/吊销：`expires_at` 到点失效（默认 TTL 12h，`CONSOLE_SESSION_TTL_HOURS` 可覆盖）；改密/停用/登出会使相关会话不可用。
+- **无 master key 或 无任何用户 必须 fail-fast**：见 §5 / §2.1；不静默降级、不设默认口令。
+
+### 2.1 启动前置校验（fail-fast，拒绝默认口令启动）
+
+`serve` 启动顺序：`loadMasterKey()` → `countUsers()` → `countAdmins()`，任一不满足即**报错退出（exit 1）**：
+
+1. 无 master key → 提示设置 `CONSOLE_MASTER_KEY` 或运行 `--init-key`；
+2. 用户数为 0 → 提示先 `--create-admin <name>`；
+3. 管理员数为 0 → 提示提升一个管理员。
 
 ## 3. 授权（Authorization）
 
 - 角色：`admin` 全通；`owner` 仅 `account_grants` 内账号。
 - 每次请求装载 `{user, role, grantedAccounts}` 后判定：
-  - 未登录 → **401**；跨账号/角色不足 → **403** 且落 `audit`。
-- 授权判定集中在 `auth/rbac.ts`，禁止各 handler 自行判断。
+  - 未登录 → **401 `unauthorized`**；跨账号/角色不足 → **403 `forbidden`** 且落 `audit`（`action='denied'`）。
+- 授权判定集中在 `auth/rbac.ts`（`assertAdmin` / `assertAccountAccess`），禁止各 handler 自行判断。
+- **机密可见性**：非 admin 的 `GET /api/accounts/:id` **不下发 `global`**，且从 `effective`/`overrides` 剔除
+  `notify`/`proxy`/`piBin`/`bunBin`/`skillDir`（H7，见 `server.ts#accountDetail`）。
 
 ## 4. 会话与 CSRF
 
-- 写请求（POST/PUT/PATCH/DELETE）必须带 `X-CSRF-Token`，与 `login_sessions.csrf_token` 比对；不匹配 → 403。
+- 写请求（POST/PUT/PATCH/DELETE，除 `POST /api/login` 外）必须带 `X-CSRF-Token`，与 `login_sessions.csrf_token` **定时安全比较**；不匹配 → 403。
 - Cookie `SameSite=Lax` 作为第二道防线；CORS 默认关闭（同源）。
+- Cookie 解析对畸形百分号编码**容错**（不抛 500，等价“无令牌”→ 401）。
 
 ## 5. 凭据加密（Credentials）
 
-- 算法：**AES-256-GCM**（`crypto.subtle`），每条密文独立随机 `nonce`，记录 `key_version` 以支持轮换。
+- 算法：**AES-256-GCM**（`node:crypto` —— `createCipheriv("aes-256-gcm", …)`，**非 WebCrypto**，D3）。
+  每条密文独立 **12 字节随机 nonce**，认证标签附于密文尾部；记录 `key_version`（当前 `KEY_VERSION=1`）以支持轮换。
+- master key 文件：`~/.wechat-console/master.key`（`CONSOLE_MASTER_KEY_FILE` 可覆盖）。
 - master key 装载顺序：
   1. 环境变量 `CONSOLE_MASTER_KEY`（base64，32 字节）；
-  2. 否则 `~/.wechat-console/master.key`（**权限 0600**，不存在则首启生成并提示备份）。
+  2. 否则读 `~/.wechat-console/master.key`：**校验权限必须为 0600**，组/他人可读则**拒绝启动**；
+  3. 文件不存在 → **拒绝启动**，提示 `--init-key`。
+- `--init-key`：在文件缺失时生成 32B 随机密钥并以 **0600** 落盘（**不覆盖已有文件**）。v0 稿“首启自动生成”已改为**显式 `--init-key`**，避免隐式落盘状态。
 - **无 key**：拒绝启动（或拒绝解密）并**显式报错**——绝不回退明文。
-- **API 永不回显明文**：读接口返回 `{kind, configured:true, updated_at}`；写接口只收不发。
+- **API 永不回显明文**：读接口返回 `{kind, configured:true, updated_at}` 形态；写接口只收不发。
 - 审计：凭据写入/轮换落 `audit`（记录操作者与时间，**不记录值**）。
 
 ## 6. 限流与锁定
 
-- 登录失败：连续失败计数（内存 + `audit`）→ 达到阈值锁定并返回 **429**，锁定窗口可配置。
-- API 全局限流：按会话/IP 令牌桶；超限 429。
+- 登录失败：以 `login_attempts(username, ip, ok, ts)` 为事实来源（持久化，重启不失效）。
+  **同一用户名 15 分钟窗口内失败 ≥ 5 次** → 后续登录返回 **429**（`retryAfterSec` 提示），成功登录清零失败计数。
+  常量：`MAX_LOGIN_ATTEMPTS=5`、`ATTEMPT_WINDOW_MIN=15`（`sessions.ts`）。
+- API 全局限流：按会话/IP 令牌桶；超限 429（C6 加固）。
 - 隧道地址抖动时**发信去抖 + 失败重试上限**，避免邮件轰炸（C5）。
 
 ## 7. 审计（Audit）
 
-必须落 `audit` 的动作：登录成功/失败、账号增删改、配置变更、凭据写入/轮换、任务触发、**决策应答**、越权尝试。
-字段：`user_id, action, target, detail_json, ip, ua, ts`。查询入口 `GET /api/audit`（admin）。
+必须落 `audit` 的动作：登录成功/失败、登出、改密、账号增删改、配置变更、凭据写入/轮换、任务触发、**决策应答**、越权尝试。
+字段（v1）：`user_id`（可空）、**`actor`**（用户名文本，失败登录/未知用户也能归属）、`action`、`target`、
+`detail_json`、`ip`、`ua`、`ts`、**`ok`**（0/1）。查询入口 `GET /api/audit`（admin，`?limit=`≤500）。
+越权（403）由 `server.ts` 统一捕获并写 `action='denied'` 行。
 
 ## 8. 已知风险与兜底
 
@@ -61,5 +85,6 @@
 |---|---|
 | 自动填公众号账密登录可能触发风控（K2） | **保留二维码邮件自愈**为兜底；账密仅在有显式配置时使用 |
 | Quick Tunnel 地址公开可扫 | 强鉴权 + 限流锁定 + 可选 CF Access + 地址可轮换 |
-| master key 丢失 → 凭据不可解 | 首启提示备份；支持 `key_version` 轮换 |
+| master key 丢失 → 凭据不可解 | `--init-key` 提示备份；支持 `key_version` 轮换 |
 | 隧道/反代被误配暴露 CDP | 部署清单显式禁止；C6 只映射控制台端口 |
+| 账号热列与 entry 不一致导致约束失效 | 写入侧 `assertEntryTypes` 校验；镜像时对数字字符串容错 |

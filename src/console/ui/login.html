@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body data-page="login">
+<div class="login-wrap">
+  <div class="card">
+    <h2>wechat-flow 控制台</h2>
+    <form id="login-form" autocomplete="on">
+      <label for="username">用户名</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <div class="row" style="margin-top:14px">
+        <button class="primary" type="submit">登录</button>
+      </div>
+    </form>
+    <div id="msg" class="msg error"></div>
+  </div>
+</div>
+</body>
+</html>
