@@ -1,0 +1,33 @@
+{
+  "id": "wechat-flow-console",
+  "name": "wechat-flow-console",
+  "title": "wechat-flow-console: 公众号多账号 Web 管理控制台",
+  "description": "在现有 wechat-flow 引擎之上新增带鉴权的 Web 管理控制台：多账号 CRUD/隔离/配置继承与覆盖、邮箱与 Cloudflare 隧道地址下发、周/月内容计划与 pi 生成、类 HAPI 的 agent 会话窗口与人在环决策、草稿箱推送与重生成；技术栈 TS+bun+Bun.serve+bun:sqlite。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "gaoh",
+  "assignee": "gaoh",
+  "createdAt": "2026-10-13",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-13-console-foundation",
+    "10-13-console-scheduler",
+    "10-13-console-content-workbench",
+    "10-13-console-agent-session",
+    "10-13-console-ops-tunnel",
+    "10-13-console-deploy-hardening"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
