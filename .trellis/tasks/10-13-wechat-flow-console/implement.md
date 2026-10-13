@@ -45,9 +45,9 @@ M0 规划定稿 ──► M1 基座可登录/可管账号 ──► M2 调度+�
 - [x] P3 技术设计 → `design.md`
 - [x] P4 执行排期 → 本文件
 - [x] P5 建 6 个子任务（C1–C6）
-- [ ] P6 用户批准规划摘要（**Phase 1 收口门**）
-- [ ] P7 建 `.trellis/spec/console/` 骨架（index + api/data-model/security/agent-session）
-- [ ] P8 更新 `AGENT.md`（进度看板新增 S11+、ADR 新增 D11–D14、任务地图）
+- [x] P6 用户批准规划摘要（**Phase 1 收口门**）—— 2026-10-13 用户批准
+- [x] P7 建 `.trellis/spec/console/` 骨架（index + api/data-model/security/agent-session）—— v0 契约已产出
+- [x] P8 更新 `AGENT.md`（进度看板新增 S11+、ADR 新增 D11–D14、任务地图）—— 已完成
 
 **验证**：`.trellis/tasks/10-13-wechat-flow-console/{prd,design,implement,research}.md` 存在且非空；
 `python3 .trellis/scripts/task.py list` 显示 parent + 6 children。

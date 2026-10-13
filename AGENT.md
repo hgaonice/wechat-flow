@@ -58,6 +58,21 @@
 
 > **S10 已完成并归档**：O-B（CDP 驱动编辑器封面弹窗）在 250 真机通过——成功路径（设封面 + 持久化 + 完整发布）与降级路径（封面失败不阻断正文）均实测。开关 `cover.uploadToDraft` 默认关，需显式打开。详见 §5 与 `archive/2026-10/10-12-cover-auto-upload/implement.md`。
 
+### 控制台路线（S11+，第二阶段）
+
+> 引擎 S0–S10 完成后的第二阶段：**公众号多账号 Web 管理控制台**（父任务 `10-13-wechat-flow-console`）。
+> 复用 engine、不改发布铁律；规划真源：里程碑 M0–M5 / 子任务 C1–C6 / 验收 AC-1..AC-11 见父任务 `prd.md` 与 `.trellis/spec/console/`。
+
+| Stage | 名称 | 里程碑 | 子任务 | 状态 | GATE | 证据/产物 |
+|-------|------|--------|--------|------|------|-----------|
+| **S11** | 控制台规划定稿（spec 骨架 + AGENT 更新） | M0 | — | ✅ 完成 | — | `.trellis/spec/console/*`、本文件 §1/§3 |
+| **S12** | 控制台基座：服务/DB/鉴权/账号CRUD/配置覆盖/迁移 | M1 | C1 | 🟡 规划 | — | 子任务 `10-13-console-foundation/` |
+| **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | ⚪ 未开始 | — | 子任务 `10-13-console-scheduler/` |
+| **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱 → 重生成 | M2b | C3 | ⚪ 未开始 | G2 | 子任务 `10-13-console-content-workbench/` |
+| **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ⚪ 未开始 | — | 子任务 `10-13-console-agent-session/` |
+| **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ⚪ 未开始 | G7 | 子任务 `10-13-console-ops-tunnel/` |
+| **S17** | 部署与加固：systemd/反代/限流/备份/回归 | M5 | C6 | ⚪ 未开始 | G6/G7 | 子任务 `10-13-console-deploy-hardening/` |
+
 ---
 
 ## 2. 人工确认门（GATE）
@@ -69,6 +84,8 @@
 | G3 | 内容真源策略变更 | 确认“本地仓库为真源”或改 `--keep-remote-content` | ✅ 已确认（本地为真源） |
 | **G4** | 上下文治理交付 | 用户确认 `AGENT.md` + 分层文档 + `.trellis` 可用 | ✅ 已放行（2026-10-12） |
 | **G5** | 封面自动化方案 | 用户选定 O-A / O-B 后再动发布链路 | ✅ 已选定 **O-B** 并经 **G2 真机验收通过**（2026-10-13） |
+| **G6** | 控制台公网放行 | 强鉴权 + 限流锁定 + 审计 + 仅映射控制台端口（绝不暴露 CDP）+ 备份/回滚手册就绪；用户确认后才上线 | ⚪ 待放行（C6） |
+| **G7** | 凭据加密与隧道放行 | AES-256-GCM fail-fast + 不回显明文 + CF Quick Tunnel 地址订阅邮件可用；用户确认 | ⚪ 待放行（C5/C6） |
 
 ---
 
@@ -80,6 +97,13 @@
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
+| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 规划（M0 已收口） |
+| `10-13-console-foundation/` | S12 | C1 控制台基座 | ⚪ 规划 |
+| `10-13-console-scheduler/` | S13 | C2 调度与任务模型 | ⚪ 规划 |
+| `10-13-console-content-workbench/` | S14 | C3 内容工作台 | ⚪ 规划 |
+| `10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ⚪ 规划 |
+| `10-13-console-ops-tunnel/` | S16 | C5 运维与公网 | ⚪ 规划 |
+| `10-13-console-deploy-hardening/` | S17 | C6 部署与加固 | ⚪ 规划 |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
@@ -107,7 +131,20 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：无（S10 已交付并归档）。下一个任务见 §3 / `task.py list`。
+**当前任务**：**控制台 M0 已收口 → 进入 C1 `console-foundation` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
+
+### 当前（控制台）· M0 规划收口
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| P6 | 用户批准规划摘要 | ✅ | 2026-10-13 用户确认「确认，按这个走」 |
+| P7 | 建 `.trellis/spec/console/` 骨架 | ✅ | `.trellis/spec/console/{index,api,data-model,security,agent-session}.md`（v0 契约） |
+| P8 | 更新 `AGENT.md`（S11+ 看板 / GATE / 任务地图 / D11–D14） | ✅ | 本文件 §1/§2/§3/§8 |
+
+**下一步**：C1 规划（补 `design.md`/`implement.md`/真实 jsonl → 改动方案 + 验证命令 + 回滚点 → 用户批准 → `task.py start`）。
+**推进顺序**：C1 → C2 → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
+
+### 上一阶段（引擎 S10）
 
 | # | 步骤 | 状态 | 证据 |
 |---|------|------|------|
@@ -182,6 +219,10 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 | D8 | 上下文治理：`.trellis` + `AGENT.md` + 分层文档 + repomap | 降 Token、防幻觉、可续接 | ✅ 已交付 |
 | D9 | runtime **零依赖**；repomap 用脚本而非引入工具 | 部署机简单、易维护 | ✅ |
 | D10 | 封面走 **CDP 驱动编辑器弹窗**（O-B），不走 API | API 受 IP 白名单限制（同 D1）；封面属确定性产物，失败必须降级、不阻断发布 | ✅ 真机验收通过（2026-10-13） |
+| D11 | 控制台独立成层 `src/console/`，**engine 不反向依赖**；运行时仍**零依赖**（`Bun.serve`/`bun:sqlite`/WebCrypto） | 控制面与发布面解耦；保持 AC-10 零依赖红线 | 🟡 规划（C1） |
+| D12 | **DB 为配置真相源**，`config.json` 降级为派生产物（原子回渲染 + AC-3 逐字段比对） | 支持「全局默认 ⊕ 单账号覆盖」与 UI 可见性；不改 engine `config.ts` 旧签名 | 🟡 规划（C1） |
+| D13 | 迁移期 **控制台调度接管，systemd timer 停用但保留回退**；每账号任务**串行**（cdpPort/profile 互斥） | 避免双触发重复发布；沿用多账号隔离不变量 | 🟡 规划（C2） |
+| D14 | Agent 会话用 `pi --mode rpc` 子进程 + **严格 JSONL**（只按 `\n` 切分，禁用 readline）+ 决策卡片人在环 + 最小权限 | 进程隔离、保持零依赖；控制在环审批、不放开权限 | 🟡 规划（C4） |
 
 ---
 
@@ -189,6 +230,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-13 | **控制台 M0 规划收口（S11）**：用户批准规划摘要；新建 `.trellis/spec/console/` 骨架（`index/api/data-model/security/agent-session`，v0 契约）；更新 `AGENT.md` —— §1 新增控制台路线 S11–S17、§2 新增 G6/G7、§3 补 6 个子任务、§8 补 D11–D14 | pi |
 | 2026-10-13 | **跨环境交接约定落地**：新增 `.trellis/spec/guides/cross-env-handoff.md`（触发条件 / H1–H10 必含章节 / 证据与密钥边界 / 生命周期）；新增 `docs/handoffs/`（`TEMPLATE.md` + `README.md`），`docs/HANDOFF-CNB.md` 迁入为 `docs/handoffs/2026-10-13-cnb-console.md`（含基线 SHA 与失效条件）；AGENT.md §4、spec/guides/index.md 补入口 | pi |
 | 2026-10-13 | **S10 真机验收通过 + 归档**：250 上 `cover` 成功设封面并在重开编辑器后 `--probe` 复读为真实 `mmbiz` 背景图（持久化）；`cover.uploadToDraft=true` 后 `publish --reuse --force` 正文 + 封面均 OK；降级路径（非法图 / CDP 超时）publish 仍成功且邮件提示手动选封面。真机修正：保存点 `#js_submit button`、确认后轮询背景图、上传后等自动选中、去掉缩略图兜底。任务归档。 | pi |
 | 2026-10-13 | **S10 O-B 实现**：`setDraftCover`/`probeDraftCover`（`src/wechat.ts`）+ `cover` 命令 + `cover.uploadToDraft` 开关（默认关、失败降级）；装 devDeps 使 `tsc --noEmit` 通过；文档同步 | pi |
@@ -205,9 +247,10 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **S10 已完成并归档**：成功 + 降级双路径均过 G2；选择器已固化进 `src/wechat.ts`；验收步骤见 [`deploy/ACCEPTANCE-250.md`](./deploy/ACCEPTANCE-250.md)。
-2. **可选增强**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
-3. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。
+1. **当前主线（控制台 S11+）**：M0 已收口 → 执行 **C1 `console-foundation`** 规划（补 `design.md`/`implement.md`/jsonl → 方案与验证命令 → 批准 → `task.py start`）；后续 C2→C3→C4→C5→C6。见 §5 与父任务 `implement.md`。
+2. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
+3. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
+4. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。
 
 ---
 

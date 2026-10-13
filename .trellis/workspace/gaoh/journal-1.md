@@ -164,3 +164,41 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 
 - 可选：清理 250 上重复草稿（反复 --force 遗留）
 - 可选：cover 支持 --all 回填历史草稿；repomap 升级 AST 级
+
+---
+
+## Session 5: 控制台 M0 规划收口（S11）：spec/console 骨架 + AGENT.md 更新
+<!-- trellis-session: v=2 -->
+
+**Date**: 2026-10-13
+**Task**: 10-13-wechat-flow-console（父任务 · M0 收口）
+**Branch**: `main`
+
+### Summary
+
+用户确认「按控制台路线推进」。完成 M0 规划收口 P6–P8：新建 `.trellis/spec/console/` 五篇 v0 契约，更新 `AGENT.md` 看板（S11–S17）、GATE（G6/G7）、任务地图（C1–C6）、ADR（D11–D14），并勾选父任务 `implement.md` 的 P6–P8。
+
+### Main Changes
+
+- 新增 `.trellis/spec/console/{index,api,data-model,security,agent-session}.md`（契约先行，源=父任务 design.md + pi 官方 rpc 文档）
+- `AGENT.md`：§1 新增「控制台路线 S11–S17」表；§2 新增 G6/G7；§3 补 6 个子任务行；§5 当前任务改为「M0 已收口 → C1 规划」；§8 补 D11–D14；§9 变更日志；§10 下一步
+- 父任务 `implement.md`：P6/P7/P8 打勾（含证据）
+- 未触碰 `src/` 与发布链路
+
+### Git Commits
+
+(见随后的 chore(trellis) 提交)
+
+### Testing
+
+- [OK] `.trellis/spec/console/` 5 文件存在
+- [OK] AGENT.md 关键小节渲染正常（§1/§5）
+- [OK] 未改 `src/`、未改发布链路（本次无代码）
+
+### Status
+
+[OK] **M0 收口完成**（父任务保持 planning，子任务逐个 start）
+
+### Next Steps
+
+- C1 `console-foundation` 规划：补 design.md/implement.md/真实 jsonl → 方案 + 验证命令 + 回滚点 → 用户批准 → `task.py start`
