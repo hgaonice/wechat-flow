@@ -12,8 +12,8 @@
 - [x] 本文件就绪
 - [x] `implement.jsonl` / `check.jsonl` 写入真实条目
 - [x] 协议已核对已安装 pi 文档（`rpc.md`/`rpc-commands.md`/`rpc-extension-ui.md`/`json.md`/`extensions.md`/`cli.md`）
-- [ ] **G-C4（用户确认）**：用户「批准 C4 开工」（含同意 design D10「新增 migration v2 一列」与 D7「双层最小权限」）
-- [ ] `python3 .trellis/scripts/task.py start 10-13-console-agent-session` → `planning → in_progress`
+- [x] **G-C4（用户确认）**：用户已「批准 C4 开工」（含同意 design D10「新增 migration v2 一列 `session_file`」与 D7「双层最小权限」，替代 v0 契约的 `--no-tools`）—— 2026-10-14
+- [x] `python3 .trellis/scripts/task.py start 10-13-console-agent-session` → `planning → in_progress`（2026-10-14）
 
 > 未获 G-C4 前**不动** `src/`。本任务是**纯增量**：不触碰 `src/pi.ts` / `src/wechat.ts` / `src/publisher.ts` / 推送链路。
 
@@ -104,8 +104,20 @@ bash /tmp/wfc-c4-verify.sh
 
 ## 5. 证据（实现后填写）
 
-> 待 I4-* 完成后逐条填真实输出。
+- 静态：`tsc --noEmit` → 0 错误；`bun build --target=bun src/console/main.ts` → OK（49 modules，main.js ≈241.96 KB）；
+  零依赖断言 `package.json.dependencies` 为空；`git diff --quiet HEAD -- src/pi.ts src/wechat.ts src/publisher.ts` → `ENGINE_UNTOUCHED_OK`；
+  console bundle `grep @earendil-works` → `OK: bundle pi-free`（pi 仅由子进程运行期加载）。
+- 单测 `/tmp/wfc-c4-unit.ts`：`ALL C4 UNIT TESTS PASSED`（frames / ChatBus / chats DAO / rpc）。
+- e2e `/tmp/wfc-c4-e2e.sh`：`ALL C4 E2E TESTS PASSED`（真实 `createApp` + `Bun.serve` + `CONSOLE_PI_BIN=/tmp/fake-pi.ts`；路由 + SSE + 决策往返 + 鉴权 + 崩溃 + TTL 清算 + chat_limit）。
+- C3 回归 `/tmp/wfc-c3-verify.sh`：`pass=7 fail=0`。
+- 汇总 `bash /tmp/wfc-c4-verify.sh`：`SUMMARY: pass=8 fail=0`。
+- 独立验收：`check-report.md`（trellis-check）→ 首轮 **FAIL**，唯一阻塞 **B1**；修复后其自带对抗复现 `bun /tmp/wfc-c4-adversarial.ts`、`bun /tmp/wfc-c4-adversarial2.ts` → 均 `PROBE(S) PASSED`。
 
 ## 6. 偏差与决策（实现后填写）
 
-> 待填。
+- **B1（blocking，已修）**：`handleExit` 的 **预期关闭**分支（TTL `sweepIdle` / 删除 / `shutdown`）原只改 `chat_sessions.status`，**未清算** pending，留下"进程已死但决策卡仍 `pending`"（违反 I21）。
+  - 修复：新增 `chats.closeChatSession(db, chatId, status)`——会话状态与其全部 `pending→lost` **同事务**（I23）；`handleExit` 预期分支改用它，并对每条被判终态的决策补发 `decision.expired`；`chat.closed` 增带 `lostDecisions`。
+  - 回归：`/tmp/wfc-c4-unit.ts` 增 `closeChatSession` 原子性断言；`/tmp/wfc-c4-e2e.ts` 增 TTL 清算场景（pending → abort → TTL 关闭 → 断言无 pending / `status=idle` / `chat.closed` / `decision.expired` / 无活进程）。
+- **N1/N2/N3（non-blocking，暂不修）**：`chat-sse.ts` 重放阶段 cleanup 为 no-op（≤1 ping 周期自愈）；`ChatBus.close` 不主动通知已建 SSE 流（前端收 `chat.closed` 后自行断开）；已 aborted 的 `signal` 不触发清理。均为有界窗口，列入 C6 加固候选。
+- **`reapStaleChats` 范围**：对"任意非 live 会话"清算 pending，比 §5 的 `active|idle` 更宽（也覆盖 `closed`）——良性偏差。
+- **`console-decision.ts` 运行时 import**：`Type`/`defineTool` 为值导入（非 `import type`）；该文件只被 pi 以 `--extension` 加载，**不入** console bundle，不影响 H3。

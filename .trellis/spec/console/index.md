@@ -3,7 +3,7 @@
 > 控制面（control plane）：在既有 engine（`src/*.ts`，见 `../engine/index.md`）之上加一层**带鉴权的 Web 管理控制台**，
 > 让非命令行使用者能自助管理多账号、编排内容计划、与 pi agent 会话并在环审批。
 >
-> **状态：C1 + C2 + C3 已落地；`api.md`/`data-model.md`/`security.md` 已校准为 v3；`agent-session.md` 仍为 v0 契约（C4 校准）。**
+> **状态：C1 + C2 + C3 + C4 已落地；`api.md`/`data-model.md` 已校准为 v4；`agent-session.md` 校准为 v2。**
 > 于 M0 编写（源：父任务 `design.md`）。
 > 契约与代码冲突时：**先改本目录，再改代码**；DDL / API / 安全语义变更必须同步本目录。
 
@@ -48,10 +48,11 @@ src/console/
   db/{schema,migrate,import-config,render-config}.ts + db/dao/*.ts
   config/resolve.ts
   jobs/{queue,worker,scheduler}.ts
-  agent/{rpc,session,extensions/console-decision}.ts
+  content/generate.ts
+  agent/{frames,rpc,events,manager}.ts + agent/extensions/console-decision.ts
   tunnel/cloudflared.ts
   notify/tunnel-mail.ts
-  ui/{index.html,login.html,app.js,app.css}
+  ui/{index.html,login.html,app.js,app.css,workbench.*,chat.*}
 ```
 
 详见 `design.md` §1（架构图）/ §2（目录）。**依赖方向单向**，见 H2。
@@ -62,10 +63,10 @@ src/console/
 
 | Guide | 说明 | 状态 |
 |-------|------|------|
-| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v3（C1+C2+C3） |
-| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v3（C1+C2+C3） |
-| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v3（C1+C2+C3） |
-| [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v0 契约（C4） |
+| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v4（C1–C4） |
+| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v4（C1–C4） |
+| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v4（C1–C4） |
+| [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v2（C4） |
 
 ---
 
@@ -103,4 +104,8 @@ src/console/
 | API 读接口把 `secrets` 明文/密文返回前端 | 凭据泄露 | H7 |
 | 无 `CONSOLE_MASTER_KEY` 时降级为明文存储 | 静默降级，违反 H5/H7 | `security.md` |
 | 用 `readline` 解析 pi RPC 帧 | 会按行缓冲丢/并帧；必须只在 `\n` 切分 | `agent-session.md` |
+| SSE 订阅晚于 `prompt`，或用 `agent_end` 当轮次结束 | 漏掉快速事件 / 提前判完；必须先订阅、认 `agent_settled` | `agent-session.md` §4 |
+| 会话失联时把会话与 pending 决策分两个事务清 | 崩溃/中断会留下悬挂决策 | `agent-session.md` §5、`data-model.md` I23 |
+| 预期关闭（TTL `sweepIdle` / 删除 / 退出）只改会话状态、不清 pending | 进程已死但决策卡仍 `pending`（I21），直到下次重启才回收 | `agent-session.md` §1/§5 |
+| `ChatManager` 缺失时把 `/api/chats*` 降级为 200 空结果 | 伪装成功，调用方误以为无会话 | `api.md` §2.4（应 503 `chat_unavailable`） |
 | 经隧道暴露 CDP 端口或监听 `0.0.0.0` | 远程接管 Chrome | H8、`security.md` |

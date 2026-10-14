@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 05:38:27
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 15:17:05
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -21,6 +21,12 @@ wechat-flow/
 src/browser.ts
 src/cli.ts
 src/config.ts
+src/console/agent/events.ts
+src/console/agent/extensions/console-decision.ts
+src/console/agent/extensions/pi-ambient.d.ts
+src/console/agent/frames.ts
+src/console/agent/manager.ts
+src/console/agent/rpc.ts
 src/console/auth/rbac.ts
 src/console/auth/sessions.ts
 src/console/auth/users.ts
@@ -31,11 +37,13 @@ src/console/crypto/secrets.ts
 src/console/db/dao/accounts.ts
 src/console/db/dao/articles.ts
 src/console/db/dao/audit.ts
+src/console/db/dao/chats.ts
 src/console/db/dao/settings.ts
 src/console/db/import-config.ts
 src/console/db/migrate.ts
 src/console/db/render-config.ts
 src/console/db/schema.ts
+src/console/http/chat-sse.ts
 src/console/http/respond.ts
 src/console/http/router.ts
 src/console/http/sse.ts
@@ -80,6 +88,36 @@ src/wechat.ts
 ### `src/config.ts`  (342 行)
 
 导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
+
+### `src/console/agent/events.ts`  (96 行)
+> In-process chat event bus (C4, I4-5 / design.md D5).
+
+导出：`ChatEvent, Replay, ChatListener, ChatBus`
+
+### `src/console/agent/extensions/console-decision.ts`  (169 行)
+> Console decision extension for a console-spawned `pi --mode rpc` session
+
+导出：`READ_ONLY_TOOLS, isReadOnly, isForbidden, needsApproval, AskKind, ConsoleAskParams`
+
+### `src/console/agent/extensions/pi-ambient.d.ts`  (83 行)
+> Local ambient declarations for the pi packages an extension may import.
+
+导出：（无，或为可执行入口）
+
+### `src/console/agent/frames.ts`  (40 行)
+> Strict JSONL frame decoder for the pi RPC transport (C4, I4-1).
+
+导出：`FrameDecoder, createFrameDecoder`
+
+### `src/console/agent/manager.ts`  (820 行)
+> Chat session manager (C4, I4-5 / design.md D1, D3, D4, D6, D8, D9, D13).
+
+导出：`ChatActor, ChatManagerDeps, SessionView, MessageView, DecisionView, ChatDetail, ChatManager, chatEventName`
+
+### `src/console/agent/rpc.ts`  (282 行)
+> Long-lived `pi --mode rpc` client (C4, I4-2 / design.md D2, D3).
+
+导出：`RpcRecord, RpcExitInfo, SpawnRpcOptions, SendOptions, RpcHandle, spawnRpc`
 
 ### `src/console/auth/rbac.ts`  (47 行)
 >  Central RBAC decision point. Handlers must not re-implement these rules.
@@ -131,6 +169,11 @@ src/wechat.ts
 
 导出：`AuditEntry, recordAudit, AuditRow, recentAudit`
 
+### `src/console/db/dao/chats.ts`  (386 行)
+> Chat sessions / messages / decisions DAO (C4, I4-3 / design.md D10, D6).
+
+导出：`CHAT_STATUSES, ChatStatus, DECISION_METHODS, DecisionMethod, DecisionStatus, ChatSessionRow, ChatMessageRow, DecisionRow, CreateChatSessionInput, createChatSession, getChatSession, listChatSessions, listLiveChatSessions, setChatStatus, touchChatSession, setChatPiRefs, deleteChatSession, ChatMessageInput, insertChatMessage, listChatMessages, DecisionInput, InsertDecisionResult, insertDecision, getDecision, getDecisionByRequest, ListDecisionsOptions, listDecisions, AnswerDecisionInput, answerDecision, expireDecision, loseDecisionsForSession, ChatLostCounts, markChatLost, closeChatSession, countPendingDecisions, pendingCountsForAccount, reapStaleChats`
+
 ### `src/console/db/dao/settings.ts`  (42 行)
 > Global config (`settings` key = 'global') storage.
 
@@ -151,10 +194,15 @@ src/wechat.ts
 
 导出：`RenderResult, renderConfig`
 
-### `src/console/db/schema.ts`  (247 行)
+### `src/console/db/schema.ts`  (257 行)
 > v1 schema baseline for the console DB.
 
 导出：`Migration, MIGRATIONS`
+
+### `src/console/http/chat-sse.ts`  (80 行)
+> SSE bridge for chat sessions (C4, I4-6 / design.md D5).
+
+导出：`ChatSseOptions, streamChatEvents`
 
 ### `src/console/http/respond.ts`  (64 行)
 >  Uniform HTTP responses + the single error type handlers throw (spec/console/api.md §1).
@@ -171,7 +219,7 @@ src/wechat.ts
 
 导出：`StreamOptions, streamJobEvents`
 
-### `src/console/http/static.ts`  (43 行)
+### `src/console/http/static.ts`  (44 行)
 >  Static UI serving from `src/console/ui` (no bundler, no dependencies).
 
 导出：`serveUi`
@@ -201,12 +249,12 @@ src/wechat.ts
 
 导出：`WorkerHandle, WorkerOptions, executeJob, startWorker`
 
-### `src/console/main.ts`  (247 行)
+### `src/console/main.ts`  (252 行)
 > wechat-flow console entry point (C1).
 
 导出：（无，或为可执行入口）
 
-### `src/console/server.ts`  (847 行)
+### `src/console/server.ts`  (1044 行)
 > Console HTTP app: routing, session middleware, CSRF, RBAC, and the C1 API.
 
 导出：`AppState, Ctx, App, createApp`

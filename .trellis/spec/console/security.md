@@ -1,6 +1,6 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v3（已随 C1 + C2 + C3 校准）**。C5/C6 落地后继续校准。
+> 状态：**v4（已随 C1 + C2 + C3 + C4 校准）**。C5/C6 落地后继续校准。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
@@ -51,6 +51,13 @@
 - **审计（C3）**：重生成写 `audit(action='article.regenerate', target='article:<id>')`；其余任务仍走 `job_enqueue`。
 - **机密可见性**：非 admin 的 `GET /api/accounts/:id` **不下发 `global`**，且从 `effective`/`overrides` 剔除
   `notify`/`proxy`/`piBin`/`bunBin`/`skillDir`（H7，见 `server.ts#accountDetail`）。
+- **会话/决策路由（C4）**：`/api/chats/:id`、`/api/chats/:id/stream`、`/api/decisions/:id` 均**不信任 URL**——
+  `server.ts#loadChat` / `POST /api/decisions/:id` 先取行，再用 **行内 `account_id`** 走 `assertAccountAccess`；
+  `GET /api/decisions` 用 `visibleAccountIds` 过滤（admin 无过滤，owner 仅授权账号）。
+- **agent 子进程最小权限（C4，R3.5）**：`pi` 子进程以 `--tools read,grep,find,ls,console_ask` 启动，
+  并由 `console-decision.ts` 经 `pi.on("tool_call")` 对 `wechat*/publish*/mail*/backup*` **硬阻断**、其余非只读工具**逐次人工确认**。
+  控制台**不提供**「完全放开」开关；发布/发信/备份能力**绝不下放**给会话（详见 `agent-session.md` §6）。
+  注入的 `agent-context-*.txt` **不含任何微信/邮箱/密码/密钥**。
 
 ## 4. 会话与 CSRF
 
@@ -83,6 +90,9 @@
 ## 7. 审计（Audit）
 
 必须落 `audit` 的动作：登录成功/失败、登出、改密、账号增删改、配置变更、凭据写入/轮换、任务触发、**决策应答**、越权尝试。
+C4 补充：`chat.create`/`chat.close`/`chat.prompt`/`chat.abort`/`chat.fork`/`chat.clone`/`chat.model.set`、
+`agent.tool`（含 `phase`/`toolName`）、`agent.decision.pending`/`agent.decision.answer`/`agent.decision.cancel`/`agent.decision.expired`、
+`chat.lost`（附退出 `code`/`signal` 与丢失决策数）。
 字段（v1）：`user_id`（可空）、**`actor`**（用户名文本，失败登录/未知用户也能归属）、`action`、`target`、
 `detail_json`、`ip`、`ua`、`ts`、**`ok`**（0/1）。查询入口 `GET /api/audit`（admin，`?limit=`≤500）。
 越权（403）由 `server.ts` 统一捕获并写 `action='denied'` 行；**`actor` 取该请求会话的真实用户名**

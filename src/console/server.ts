@@ -46,10 +46,13 @@ import * as queue from "./jobs/queue.ts";
 import { EXECUTABLE_KINDS, isJobKind, parseItems, parseJobPayload, type JobRow, type PlanRow } from "./jobs/types.ts";
 import { serveUi } from "./http/static.ts";
 import { streamJobEvents } from "./http/sse.ts";
+import { streamChatEvents } from "./http/chat-sse.ts";
+import type { ChatActor, ChatManager } from "./agent/manager.ts";
+import type { ChatSessionRow } from "./db/dao/chats.ts";
 import * as articles from "./db/dao/articles.ts";
 import * as users from "./auth/users.ts";
 import * as sess from "./auth/sessions.ts";
-import { assertAccountAccess, assertAdmin, authContextOf, isAdmin, type AuthContext } from "./auth/rbac.ts";
+import { assertAccountAccess, assertAdmin, authContextOf, isAdmin, visibleAccountIds, type AuthContext } from "./auth/rbac.ts";
 
 const ALIAS_RE = /^[A-Za-z0-9_-]{2,32}$/;
 
@@ -216,6 +219,17 @@ function syncConfigFile(db: Database): void {
 }
 
 /** Public shape of a job row (payload parsed, camelCase keys). */
+function parseOptions(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is string => typeof v === "string");
+  } catch {
+    return [];
+  }
+}
+
 function jobView(row: JobRow): JsonObject {
   return {
     id: row.id,
@@ -284,7 +298,7 @@ function draftView(row: articles.DraftRow): JsonObject {
 
 // ── app ─────────────────────────────────────────────────────────────────────
 
-export function createApp(state: AppState): App {
+export function createApp(state: AppState, chat?: ChatManager): App {
   const { db } = state;
   const router = new Router<Ctx>();
 
@@ -455,6 +469,27 @@ export function createApp(state: AppState): App {
     if (!job) throw notFound("任务不存在");
     assertAccountAccess(ctx.auth, job.account_id);
     return job;
+  };
+
+  // ---- chat sessions (C4) --------------------------------------------------
+
+  const requireChat = (): ChatManager => {
+    if (!chat) throw new HttpError(503, "chat_unavailable", "会话功能未启用（服务未初始化 Agent 管理器）");
+    return chat;
+  };
+
+  const chatActor = (ctx: Ctx): ChatActor => ({
+    userId: ctx.auth?.user.id ?? null,
+    username: ctx.auth?.user.username ?? null,
+    ip: clientIp(ctx.req),
+    ua: ctx.req.headers.get("user-agent"),
+  });
+
+  /** Load a chat row and enforce that the caller may access its account. */
+  const loadChat = (manager: ChatManager, ctx: Ctx): ChatSessionRow => {
+    const row = manager.requireSession(intParam(ctx));
+    assertAccountAccess(ctx.auth, row.account_id);
+    return row;
   };
 
   router.add("GET", "/api/accounts/:id/plans", (ctx) => {
@@ -676,6 +711,168 @@ export function createApp(state: AppState): App {
         "x-accel-buffering": "no",
       },
     });
+  });
+
+  // ---- chat sessions (C4, human-in-the-loop) -------------------------------
+
+  router.add("GET", "/api/accounts/:id/chats", (ctx) => {
+    const manager = requireChat();
+    const accountId = intParam(ctx);
+    if (!getAccountById(db, accountId)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, accountId);
+    return ok({ chats: manager.listSessions(accountId) });
+  });
+
+  router.add("POST", "/api/accounts/:id/chats", async (ctx) => {
+    const manager = requireChat();
+    const accountId = intParam(ctx);
+    if (!getAccountById(db, accountId)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, accountId);
+    const body = await readJson(ctx.req);
+    const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : "";
+    const created = manager.createSession(accountId, { title: title || undefined, actor: chatActor(ctx) });
+    return ok({ chat: created }, 201);
+  });
+
+  router.add("GET", "/api/chats/:id", (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    return ok(manager.detail(row.id));
+  });
+
+  router.add("DELETE", "/api/chats/:id", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    await manager.deleteSession(row.id, chatActor(ctx));
+    return ok({ deleted: true, id: row.id });
+  });
+
+  router.add("POST", "/api/chats/:id/messages", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const body = await readJson(ctx.req);
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) throw badRequest("message 不能为空");
+    if (message.length > 20_000) throw badRequest("message 过长（上限 20000 字符）");
+    const result = await manager.prompt(row, message, chatActor(ctx));
+    return ok({ disposition: result.disposition, busy: result.busy });
+  });
+
+  router.add("POST", "/api/chats/:id/steer", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const body = await readJson(ctx.req);
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) throw badRequest("message 不能为空");
+    const result = await manager.steer(row, message, chatActor(ctx));
+    return ok({ disposition: result.disposition });
+  });
+
+  router.add("POST", "/api/chats/:id/follow-up", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const body = await readJson(ctx.req);
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) throw badRequest("message 不能为空");
+    const result = await manager.followUp(row, message, chatActor(ctx));
+    return ok({ disposition: result.disposition });
+  });
+
+  router.add("POST", "/api/chats/:id/abort", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    await manager.abort(row, chatActor(ctx));
+    return ok({ aborted: true });
+  });
+
+  router.add("POST", "/api/chats/:id/model", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const body = await readJson(ctx.req);
+    const provider = typeof body.provider === "string" ? body.provider.trim() : "";
+    const modelId = typeof body.modelId === "string" ? body.modelId.trim() : "";
+    if (!provider || !modelId) throw badRequest("provider 与 modelId 必填");
+    const model = await manager.setModel(row, provider, modelId, chatActor(ctx));
+    return ok({ model });
+  });
+
+  router.add("POST", "/api/chats/:id/fork", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const body = await readJson(ctx.req);
+    const entryId = typeof body.entryId === "string" ? body.entryId.trim() : "";
+    if (!entryId) throw badRequest("entryId 必填");
+    const result = await manager.fork(row, entryId, chatActor(ctx));
+    return ok(result);
+  });
+
+  router.add("POST", "/api/chats/:id/clone", async (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const result = await manager.clone(row, chatActor(ctx));
+    return ok(result);
+  });
+
+  router.add("GET", "/api/chats/:id/stream", (ctx) => {
+    const manager = requireChat();
+    const row = loadChat(manager, ctx);
+    const qp = ctx.url.searchParams.get("last_event_id");
+    const header = ctx.req.headers.get("last-event-id");
+    const parsed = Number(qp ?? header ?? 0);
+    const lastEventId = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    // Lazy spawn (D1) so events are ready before the first prompt; a spawn
+    // failure (e.g. concurrency cap) must not fail the stream itself.
+    void manager.ensureSpawn(row).catch(() => {});
+    const stream = streamChatEvents(manager.bus, row.id, lastEventId, { signal: ctx.req.signal });
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      },
+    });
+  });
+
+  router.add("POST", "/api/decisions/:id", async (ctx) => {
+    const manager = requireChat();
+    const id = intParam(ctx);
+    const decision = manager.getDecision(id);
+    if (!decision) throw notFound("决策不存在");
+    const chatRow = manager.getSession(decision.chat_session_id);
+    if (!chatRow) throw notFound("会话不存在");
+    assertAccountAccess(ctx.auth, chatRow.account_id);
+    const body = await readJson(ctx.req);
+    const input: { value?: string; confirmed?: boolean; cancelled?: boolean } = {};
+    if (body.cancelled === true) {
+      input.cancelled = true;
+    } else if (decision.method === "confirm") {
+      input.confirmed = body.confirmed === true;
+    } else if (decision.method === "select") {
+      if (typeof body.value !== "string" || !body.value) throw badRequest("value 必填");
+      const options = parseOptions(decision.options_json);
+      if (options.length > 0 && !options.includes(body.value)) throw badRequest("value 不在 options 中");
+      input.value = body.value;
+    } else {
+      if (typeof body.value !== "string") throw badRequest("value 需为字符串");
+      input.value = body.value.slice(0, 20_000);
+    }
+    const view = manager.answerDecision(id, input, chatActor(ctx));
+    return ok({ decision: view });
+  });
+
+  router.add("GET", "/api/decisions", (ctx) => {
+    const manager = requireChat();
+    const status = ctx.url.searchParams.get("status") ?? undefined;
+    const allowed = ["pending", "answered", "cancelled", "expired", "lost"] as const;
+    if (status && !allowed.includes(status as (typeof allowed)[number])) throw badRequest("status 非法");
+    const vis = visibleAccountIds(db, ctx.auth!);
+    const decisions = manager.listDecisions({
+      status: status as (typeof allowed)[number] | undefined,
+      accountIds: vis === "all" ? undefined : vis,
+      limit: 100,
+    });
+    return ok({ decisions });
   });
 
   // ---- global settings -----------------------------------------------------

@@ -69,10 +69,11 @@
 | **S12** | 控制台基座：服务/DB/鉴权/账号CRUD/配置覆盖/迁移 | M1 | C1 | ✅ 完成 | — | `src/console/**`、`archive/2026-10/10-13-console-foundation/`、spec v1 |
 | **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | ✅ 完成 | — | `src/console/jobs/**`、`deploy/console-scheduler.md`、`deploy/systemd/`、spec v2 |
 | **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱推送 → 重生成/版本历史 | M2b | C3 | ✅ 完成 | G2（真机待 250） | `src/console/{content,db/dao/articles,http/sse,ui/workbench.*}`、`archive/2026-10/10-13-console-content-workbench/`、spec v3 |
-| **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | 🟡 规划（下一步） | — | 子任务 `10-13-console-agent-session/` |
-| **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ⚪ 未开始 | — | 子任务 `10-13-console-agent-session/` |
+| **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ✅ 完成 | G2（真机待 250） | `src/console/agent/**`、`src/console/ui/chat.*`、`archive/2026-10/10-13-console-agent-session/`、spec v4（agent-session v2） |
 | **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ⚪ 未开始 | G7 | 子任务 `10-13-console-ops-tunnel/` |
 | **S17** | 部署与加固：systemd/反代/限流/备份/回归 | M5 | C6 | ⚪ 未开始 | G6/G7 | 子任务 `10-13-console-deploy-hardening/` |
+
+> **C4 已完成并归档（S15/M3，2026-10-14）**：每账号多会话 ↔ `pi --mode rpc` 长活子进程；严格 JSONL 切帧（禁 readline）；进程内 `ChatBus` → SSE 流式；`extension_ui_request` → 决策卡片（`pending→{answered,cancelled,expired,lost}`，**预期/异常关闭均同事务清算 pending**，无悬挂，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + `console-decision.ts` 硬阻断 `wechat*/publish*/mail*/backup*`）。engine 零改动；`CONSOLE_CHAT_MAX`(3)/`CONSOLE_CHAT_TTL_MS`(30min)。详见 §5。
 
 ---
 
@@ -98,11 +99,11 @@
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
-| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（M1 已收口） |
+| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（4/6：C1–C4 ✅，待 C5/C6） |
 | `archive/2026-10/10-13-console-foundation/` | S12 | C1 控制台基座（服务/DB/鉴权/RBAC/配置继承/迁移） | ✅ 已归档（2026-10-13） |
 | `archive/2026-10/10-13-console-scheduler/` | S13 | C2 调度与任务模型（plans/jobs/queue/worker/scheduler + timer 迁移脚本） | ✅ 已归档（2026-10-14） |
-| `10-13-console-content-workbench/` | S14 | C3 内容工作台 | ✅ 已交付（2026-10-14） |
-| `10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ⚪ 规划（下一步） |
+| `archive/2026-10/10-13-console-content-workbench/` | S14 | C3 内容工作台 | ✅ 已归档（2026-10-14） |
+| `archive/2026-10/10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ✅ 已归档（2026-10-14） |
 | `10-13-console-ops-tunnel/` | S16 | C5 运维与公网 | ⚪ 规划 |
 | `10-13-console-deploy-hardening/` | S17 | C6 部署与加固 | ⚪ 规划 |
 
@@ -132,9 +133,31 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：**控制台 C2 `console-scheduler` 已完成并归档 → 下一步 C3 `console-content-workbench` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
+**当前任务**：**控制台 C4 `console-agent-session` 已完成并归档 → 下一步 C5 `console-ops-tunnel` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
 
-### 当前（控制台）· C3 内容工作台（M2b）
+### 当前（控制台）· C4 Agent 会话窗口与人在环（M3）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| I4-1 | `agent/frames.ts` 严格 JSONL 切帧（只按 `\n`，剥 `\r`，U+2028/2029 不切，禁 readline） | ✅ | 单测：跨 chunk 半帧 / CRLF / 空行 / U+2028 / 大帧 |
+| I4-2 | `agent/rpc.ts` 极简 RPC（按 `id` 关联、`writeChain` 背压、stderr 200 行 ring、有序/意外退出可区分） | ✅ | 8 条命令 round-trip；`close()` 后 exit 不算 `lost` |
+| I4-3 | migration v2（`chat_sessions.session_file`）+ `db/dao/chats.ts`（终态不可逆 I20 / 同事务 lost I23 / `closeChatSession`） | ✅ | 旧库 v1→v2 不丢数据；`answerDecision` 非 pending 返回 `null`；`closeChatSession` 原子性断言 |
+| I4-4 | `agent/extensions/console-decision.ts`（`console_ask` 唯一通道 + fail-safe 拦截 + 永久拒绝名单） | ✅ | 单测断言危险工具无应答**必 block**；`--tools` 白名单可查 |
+| I4-5 | `agent/events.ts`（ChatBus 500 环 + seq）+ `agent/manager.ts`（懒 spawn/TTL/上限/`handleExit`/`reapStale`） | ✅ | fake-pi e2e：`delta→message→settled`、决策往返、崩溃 lost、TTL 清算、`chat_limit` |
+| I4-6 | `http/chat-sse.ts` + 12 条路由（复数 `/api/chats/*`、CSRF、RBAC、`Last-Event-ID` 重放 + `chat.resync`） | ✅ | HTTP e2e：201/200/403/409 + SSE + 重放 |
+| I4-7 | `ui/chat.{html,css,js}` + `index.html` 入口 | ✅ | `bun build` 含新资源；浏览器手工加载**待 250/本地浏览器** |
+| AC-6 | 流式可见 + 决策卡片人在环 + 超时/取消明确 + **无悬挂 pending** | ✅ | B1 修复后 TTL 清算 e2e（pending→0）；对抗复现 `PROBE(S) PASSED` |
+| 失败显形 | 异常退出 → 会话/决策同事务 `lost` + SSE `chat.lost` + 非空 `reason` | ✅ | fake-pi `CRASH` e2e：`status='lost'`、`decisions=['lost']`、横幅 |
+| 最小权限 | `--tools` 白名单 + 扩展硬阻断 + **无放开开关** | ✅ | 单测 + 启动参数断言 + `audit(agent.tool)` |
+| AC-10 | 零新增运行时依赖 / tsc / bun build / engine 未动 | ✅ | `dependencies=undefined`、`tsc --noEmit` 0 错、`bun build` 49 modules、`git diff -- src/pi.ts src/wechat.ts src/publisher.ts` 空 |
+| 独立复核 | trellis-check | ✅ | `check-report.md`：首轮 **FAIL**（唯一阻塞 B1 已修复并复审 **PASS**） |
+| spec | 校准 console spec v3→v4（`agent-session.md` v2 + I19–I23） | ✅ | `.trellis/spec/console/{agent-session,index,api,data-model,security}.md` |
+
+**下一步**：C5 `console-ops-tunnel` 规划（邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员全局视图，G7）。
+**真机待验（G2）**：真实 `pi` 流式 + 真实 `pi --extension` 加载 + 浏览器手工加载 `/chat`（需 250 主机）。
+**推进顺序**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → C5 → C6。
+
+### 上一子任务（控制台）· C3 内容工作台（M2b）
 
 | # | 步骤 | 状态 | 证据 |
 |---|------|------|------|
@@ -203,6 +226,7 @@
 **上一任务（S9 上下文治理）**：✅ 已交付并经用户确认 → `archive/2026-10/10-12-context-governance/`
 
 **Checkpoint（下次开工先看这里）**
+- **C4 已完成（S15/M3，2026-10-14）**：`pi --mode rpc` 会话窗口在 `src/console/agent/**`（`frames`/`rpc`/`events`/`manager`）+ `db/dao/chats.ts` + `http/chat-sse.ts` + `ui/chat.*`。关键点：**严格 JSONL**（只按 `\n` 切、禁 readline）；命令按 `id` 关联、`prompt` 流式带 `streamingBehavior:"steer"`、`disposition==="handled"` 不等 `agent_settled`；进程内 `ChatBus`（500 环、`seq`=`SSE id:`、`Last-Event-ID` 重放、落后发 `chat.resync`）；决策 `pending→{answered,cancelled,expired,lost}`，**预期关闭（TTL/删除/退出）与异常退出都必须把 pending 与会话状态在同一事务清算**（`chats.closeChatSession`/`markChatLost`，I21/I23）——否则悬挂（B1 教训）；双层最小权限（`--tools read,grep,find,ls,console_ask` + `console-decision.ts` fail-safe 硬阻断 `wechat*/publish*/mail*/backup*`，无放开开关）；`CONSOLE_CHAT_MAX`=3、`CONSOLE_CHAT_TTL_MS`=30min、`CONSOLE_PI_BIN` 可注入 fake-pi。engine 零改动。
 - **C3 已完成（S14/M2b，2026-10-14）**：内容工作台在 `src/console/content/generate.ts` + `db/dao/articles.ts` + `http/sse.ts` + `ui/workbench.*`；engine `src/publisher.ts` 抽出 `runArticleGeneration`/`buildArticlePrompt`（空反馈 **字节一致**），`runPublish` 调用它——**推送路径/成功判定未变**。
 - **版本链（I15–I18）**：engine base（`<date>-<slug>.md`）恒=**最新**（发布读它）；每版快照 `<base>.v<N>.md` **不可变**；`articles` 每版一行（`version` 单调、`parent_id` 链、v1=NULL）；`drafts.verified` **仅镜像** `runPublish.ok`（`verifyDetail = res.error ?? "ok"`），UI 绝不自判。生成失败 → **不落行** + job `failed` + 非空 `error`。
 - **SSE（D18）**：`GET /api/jobs/:id/stream`；事件 `job.progress`/`job.log`（`id:`=`job_logs.id`）/`job.done`；15s `: ping`；终态关流；`Last-Event-ID` 续传不重不漏；`serve` 的 `idleTimeout=120`（默认 10s 会断流）。
@@ -212,11 +236,11 @@
 - **调度到期推导**（无新列）：publish = 当天在 `plans` 内 && `hour≥publishHour` && 未发布（engine `state/published.json` 优先）&& 无 live job；plan = `weekday===planWeekday` && 本周无 DB 计划 && 无 live plan job。时区固定 `Asia/Shanghai`；`settings.schedule={enabled,publishHour,planWeekday,tickSec}`。
 - **计划真源（I13）**：`plans` 表为唯一真源 → `materializePlans` 原子物化 `data/<alias>/plans/<week>.json`；反向 `fillMissingPlansFromFiles`（**仅 DB 缺该周时采纳，故控制台编辑永不被回灌**）与 `importPlansFromFiles`（plan 任务后，跳过 `*.dryrun.json`）。
 - **迁移**：systemd timer 停用（`deploy/systemd/disable-timer.sh`，不删 unit、可 `enable-timer.sh` 回退）；说明 `deploy/console-scheduler.md`。
-- **下一步**：C4 `console-agent-session` 规划（pi RPC + 严格 JSONL 流式 + 决策卡片 + 最小权限）。复现证据：C3 `cat .trellis/tasks/archive/2026-10/10-13-console-content-workbench/{prd,design,implement}.md`、`check-report.md`；C2/C1 同上目录。
+- **下一步**：C5 `console-ops-tunnel` 规划（邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员全局视图，G7）。复现证据：C4 `cat .trellis/tasks/archive/2026-10/10-13-console-agent-session/{prd,design,implement,check-report}.md`；C3/C2/C1 同上目录。
 - **两条数据脉络**：① 配置真相源 = DB（`settings(global)` + `accounts.overrides_json` **逐字节 verbatim**）→ 回渲染 `config.json`；回渲染 = `.bak`(不覆盖) + tmp→fsync→rename。② 账号热列（`cdp_port`/`enabled`…）仅为约束/查询镜像，由单一写路径同步。
 - **关键不变量**：`alias`/`cdp_port` 唯一（API 409 + 端口建议）；owner 仅 `account_grants` 账号且**看不到 global 机密**；无 master key / 无管理员 → fail-fast 拒绝启动；写请求必须 CSRF。
 - **坑**：`.gitignore` 的 `console/` 必须写成 `/console/`（否则会吞掉 `src/console/`）；引擎 `model` 回退是**按嵌套 kind**，`cover`/`math` 是**整对象**回退，`null` 等价缺失（继承）。
-- **C6 待办（C2 遗留，非阻塞）**：计划 job 持续失败无退避（默认 tick 60s 会重试，D2）；调度只认 DB 计划（已加文件桥缓解，D3）。
+- **C6 待办（遗留，非阻塞）**：C2 —— 计划 job 持续失败无退避（D2）、调度只认 DB 计划（已加文件桥，D3）；C4 —— `chat-sse.ts` 重放阶段 cleanup 为 no-op（N1）、`ChatBus.close` 不主动通知已建 SSE 流（N2）、已 aborted 的 `signal` 不触发清理（N3）。
 - 若上下文过长：按 §6 规则把新进展写回本节 → `/clear` → 重读本文件 §5 继续。
 
 ---
@@ -272,11 +296,14 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 | D11 | 控制台独立成层 `src/console/`，**engine 不反向依赖**；运行时仍**零依赖**（`Bun.serve`/`bun:sqlite`/`node:crypto`） | 控制面与发布面解耦；保持 AC-10 零依赖红线 | ✅ 已实现（C1） |
 | D12 | **DB 为配置真相源**，`config.json` 降级为派生产物（原子回渲染 + AC-3 逐字段比对） | 支持「全局默认 ⊕ 单账号覆盖」与 UI 可见性；不改 engine `config.ts` 旧签名 | ✅ 已实现（C1） |
 | D13 | 迁移期 **控制台调度接管，systemd timer 停用但保留回退**；每账号任务**串行**（cdpPort/profile 互斥） | 避免双触发重复发布；沿用多账号隔离不变量 | ✅ 已实现（C2；`deploy/systemd/{disable,enable}-timer.sh`） |
-| D14 | Agent 会话用 `pi --mode rpc` 子进程 + **严格 JSONL**（只按 `\n` 切分，禁用 readline）+ 决策卡片人在环 + 最小权限 | 进程隔离、保持零依赖；控制在环审批、不放开权限 | 🟡 规划（C4） |
+| D14 | Agent 会话用 `pi --mode rpc` 子进程 + **严格 JSONL**（只按 `\n` 切分，禁用 readline）+ 决策卡片人在环 + 最小权限 | 进程隔离、保持零依赖；控制在环审批、不放开权限 | ✅ 已实现（C4） |
 | D15 | **调度器/worker 内嵌 `serve` 进程**（不再用 systemd timer）；计划真源 = `plans` 表，engine 计划文件为派生物；到期时刻由数据推导而非新列 | 一个进程易部署可观测；避免双触发；保留 timer 回退 | ✅ 已实现（C2） |
 | D16 | 内容生成抽出 `runArticleGeneration(cfg,{date?,feedback?,reuse?})`（engine **附加式**重构，`runPublish` 调用它）；`feedback` 仅**追加** `## 修改要求（用户反馈）`，空反馈时 prompt **字节不变** | 控制台需「先出稿、再推送、可重生成」，但必须守住发布铁律与唯一真相源；纯抽取可回归比对 | ✅ 已实现（C3） |
 | D17 | 版本链：engine base（`<date>-<slug>.md`）恒=最新；每版快照 `<base>.v<N>.md`（不可变）；`articles` 每版一行（`parent_id` 链）；推送结果由 `drafts.verified` 镜像 `verifyDraftBody` | 发布读 base 保持 engine 语义不变；历史可回滚可 diff；UI 绝不自判成功 | ✅ 已实现（C3） |
 | D18 | SSE 用「同进程 + 无事件总线」的 ~700ms 轮询 `jobs`/`job_logs`，`id:`=`job_logs.id` 支持 `Last-Event-ID` 续传；Bun `serve` `idleTimeout:120` | 零依赖、崩溃可续；默认 10s idle 会切断 15s 心跳间隔的流 | ✅ 已实现（C3） |
+| D19 | 会话事件用**进程内 EventBus**（`ChatBus`，500 条环形 + 单调 `seq`=`SSE id:`），DB 只存 `message_end` 权威消息 | 同进程零延迟、零依赖；断线 `Last-Event-ID` 重放、落后发 `chat.resync` | ✅ 已实现（C4） |
+| D20 | 决策**终态不可逆**且**无悬挂**：`pending→{answered,cancelled,expired,lost}`；**任何**会话终止路径（异常 / 预期关闭 / 启动回收）都把 pending 与会话状态**同事务**清算 | AC-6「无悬挂」；分事务会在崩溃/中断留下可点的死卡片（B1） | ✅ 已实现（C4） |
+| D21 | 最小权限**双层且不可放开**：CLI `--tools` 白名单 + 扩展 `pi.on("tool_call")` fail-safe 硬阻断 `wechat*/publish*/mail*/backup*` | R3.5；发布/外发能力绝不下放给会话，且不提供 `dangerouslyAllowAll` | ✅ 已实现（C4） |
 
 ---
 
@@ -284,6 +311,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-14 | **控制台 C4 Agent 会话窗口与人在环交付并归档（S15/M3）**：新增 `src/console/agent/**`（`frames`/`rpc`/`events`/`manager` + `extensions/console-decision.ts`）、`db/dao/chats.ts`、`http/chat-sse.ts`、`ui/chat.{html,css,js}`；`schema.ts` 加 migration v2（`chat_sessions.session_file`，纯加法）；12 条复数路由 `/api/chats/*`、`/api/decisions`（CSRF + 按行 `account_id` 鉴权）。实现：`pi --mode rpc` 长活子进程 + 严格 JSONL 切帧（禁 readline）；按 `id` 关联命令、`prompt` 流式 `streamingBehavior:"steer"`；进程内 `ChatBus`（`seq`=`SSE id:`、`Last-Event-ID` 重放 + `chat.resync`）；`extension_ui_request` → 决策卡片，`pending→{answered,cancelled,expired,lost}`；**异常退出/预期关闭/启动回收均同事务清算 pending**（`closeChatSession`/`markChatLost`，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + 扩展硬阻断 `wechat*/publish*/mail*/backup*`，无放开开关）。验证：`tsc --noEmit` 0 错、`bun build` 49 modules、零依赖、engine **零改动**、单测 + fake-pi e2e + C3 回归全绿（`pass=8 fail=0`）；`trellis-check` 首轮 **FAIL**（唯一阻塞 **B1**：预期关闭未清算 pending）→ 修复（`closeChatSession` 同事务）→ 对抗复现 `PROBE(S) PASSED` + 复审 **PASS**。console spec 校准 v3→v4（`agent-session.md` v2、I19–I23）。真机（250/G2）流式/扩展/浏览器 `/chat` 待验。 | pi |
 | 2026-10-14 | **控制台 C3 内容工作台交付（S14/M2b）**：engine **附加式**重构——`src/publisher.ts` 抽出 `runArticleGeneration`/`buildArticlePrompt`，`runPublish` 改为调用它；空 `feedback` 时 prompt **字节一致（3012B）**、`runPublish` 生成后区段 diff 与 HEAD 相同（发布铁律与 `verifyDraftBody` 未动）；新增 `src/console/content/generate.ts`（`snapshotVersion`/`generateArticle`/`recordDraftResult`）与 `db/dao/articles.ts`（版本链 DAO），`http/sse.ts`（零依赖 SSE：~700ms 轮询 + 15s 心跳 + `Last-Event-ID` 续传），`ui/workbench.{html,css,js}`（计划编辑/生成/推送/版本链/对比/反馈重生成/失败面板）；worker 真执行 `generate`/`regenerate`，publish 分支补写 `drafts`（`verified` **仅镜像** engine 判决，I18）+ `articles.status='pushed'`；新增 5 条路由并开放 `POST /jobs` 的 `generate`/`regenerate`；`main.ts` `serve` 加 `idleTimeout:120`（SSE 必需）。验证：30 项单测、HTTP e2e（401/403/CSRF、SSE 不重不漏）、失败路径 e2e、假 `pi` worker e2e、字节一致比对，`tsc`/`bun build`/零依赖全绿；`trellis-check` 独立复核 **PASS**（8/8 必验；4 项非阻塞观察）。真机（250/G2）的「真 `pi` 生成 + 草稿推送 + 封面 + 浏览器 UI」待验。console spec 校准 v2→v3（I15–I18、SSE §3） | pi |
 | 2026-10-14 | **控制台 C2 调度与任务模型交付并归档（S13/M2a）**：新增 `src/console/jobs/**`（`types`/`plans`/`queue`/`worker`/`scheduler`，886 行）+ 7 条路由 + `main.ts` 生命周期（`serve` 内联调度、`--no-worker`、`--worker` 无头、SIGTERM 优雅退出）；新增 `deploy/console-scheduler.md` 与 `deploy/systemd/{disable,enable}-timer.sh`（不删 unit、可回退）；新增 `fillMissingPlansFromFiles` 迁移桥（**DB 优先**，控制台编辑不被文件回灌）。AC-5/AC-10/AC-11 实测：任务层单测 **35 passed/0 failed**、HTTP e2e（CSRF 403 / 400 / 401 / 403 / 201 / 409 全符合）、调度 e2e（启动即 tick → 1 条 publish，`actor=scheduler`，再 tick 仍 1）、失败必显形（`status=failed` + 非空 `error`）。`trellis-check` 独立复核 **PASS-with-issues**（无阻塞缺陷；直接修 1）死代码/未用导出 5 处、2）403 `denied` 审计 `actor` 改为请求局部——消除共享可变状态；本轮另修 D3/D4/D7：文件计划迁移桥、`worker.stop()` 有界 drain（`CONSOLE_WORKER_DRAIN_MS`）、`readSchedule` 布尔强校验 + 失败保留进度）。engine **零改动**；console spec 校准 v1→v2 并补 `design.md` I13（计划物化契约） | pi |
 | 2026-10-13 | **控制台 C1 基座交付并归档（S12/M1）**：新增 `src/console/**`（`Bun.serve` + `bun:sqlite` WAL + argon2id 会话/CSRF/RBAC + 账号CRUD/配置覆盖/导入回渲染 + 静态 UI，**零新增运行时依赖**）；`src/config.ts` 仅新增 `resolveConfig(raw,alias)` 导出（`loadConfig` 行为不变）；`.gitignore` 增 `/console/`。AC-1/2/3/4/10 实测通过（`--verify-ac3` 逐字段一致、`loadConfig` 前后**字节一致**、17+9 项 curl 断言）；`trellis-check` 独立复核 **PASS**（5 项缺陷已修并回归：cdpPort 字符串绕过 UNIQUE / owner 详情泄露 global / 畸形 Cookie 500 / 不存在 grant id 的 FK 500 + 孤儿用户 / CSP·HSTS 缺失）；engine `doctor --all`/`publish --dry-run` 未回退；console spec 校准 v0→v1 | pi |
@@ -304,11 +332,11 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → C3 ✅ → 规划并实施 **C4 `console-agent-session`**（pi RPC 子进程 + 严格 JSONL 流式 + 决策卡片人在环 + 最小权限），随后 C5 → C6。见 §5 与父任务 `implement.md`。
-2. **C3 真机待验（G2，需 250）**：真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench。
-2. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
-3. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
-4. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。
+1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → 规划并实施 **C5 `console-ops-tunnel`**（邮箱 + Cloudflare 隧道地址下发 + 凭据加密 + 管理员全局视图，G7），随后 C6。见 §5 与父任务 `implement.md`。
+2. **真机待验（G2，需 250）**：C3 —— 真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench；C4 —— 真实 `pi` 流式、`pi --extension` 加载、浏览器 `/chat`（流式 + 决策卡片）。
+3. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
+4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
+5. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。
 
 ---
 

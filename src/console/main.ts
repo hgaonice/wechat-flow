@@ -38,6 +38,7 @@ import { listAccountRows } from "./db/dao/accounts.ts";
 import { createApp, type AppState } from "./server.ts";
 import { startScheduler, type SchedulerHandle } from "./jobs/scheduler.ts";
 import { startWorker, type WorkerHandle } from "./jobs/worker.ts";
+import { ChatManager } from "./agent/manager.ts";
 
 const VERSION = "0.1.0";
 const DB_PATH = process.env.CONSOLE_DB ?? path.join(APP_DIR, "console", "console.db");
@@ -114,7 +115,10 @@ async function cmdServe(args: string[]): Promise<void> {
     secureCookies: process.env.CONSOLE_ALLOW_INSECURE_COOKIE !== "1",
     masterKey,
   };
-  const app = createApp(state);
+  const chat = new ChatManager({ db });
+  const app = createApp(state, chat);
+  // C4: reap sessions whose subprocess died with a previous console process.
+  chat.reapStale();
   const server = Bun.serve({
     port: PORT,
     hostname: HOST,
@@ -155,6 +159,7 @@ async function cmdServe(args: string[]): Promise<void> {
     console.log(`\n[console] ${signal} → 停止调度/worker…`);
     scheduler?.stop();
     await worker?.stop();
+    await chat.shutdown();
     try {
       server.stop(true);
     } catch {

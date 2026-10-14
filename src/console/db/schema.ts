@@ -244,4 +244,14 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);
 `;
 
-export const MIGRATIONS: Migration[] = [{ version: 1, name: "baseline", sql: V1 }];
+export const MIGRATIONS: Migration[] = [
+  { version: 1, name: "baseline", sql: V1 },
+  {
+    // C4: `session_file` cannot be derived from `pi_session_id` (the path is
+    // owned by the `--session-dir` layout), so it is stored explicitly to make
+    // fork/clone/resume reachable. Additive only — no CHECK changes.
+    version: 2,
+    name: "chat_session_file",
+    sql: `ALTER TABLE chat_sessions ADD COLUMN session_file TEXT;`,
+  },
+];

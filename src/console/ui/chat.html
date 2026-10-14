@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 会话 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/chat.css">
+<script src="/app.js" defer></script>
+<script src="/chat.js" defer></script>
+</head>
+<body data-page="chat">
+<header>
+  <span class="brand">wechat-flow console</span>
+  <a href="/app">账号</a>
+  <a href="/workbench">内容工作台</a>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+  <button id="logout" class="ghost">退出</button>
+</header>
+<main class="chat-main">
+  <aside class="card chat-side">
+    <h2>会话</h2>
+    <div class="row">
+      <select id="account"></select>
+      <button id="reload" class="ghost">刷新</button>
+    </div>
+    <button id="new-chat" class="primary">+ 新建会话</button>
+    <ul id="chat-list" class="chat-list"></ul>
+    <div class="muted tip">
+      只读工具：read / grep / find / ls；任何写操作都会弹卡等你确认。
+    </div>
+  </aside>
+
+  <section class="chat-pane">
+    <div class="card chat-bar">
+      <strong id="chat-title">未选择会话</strong>
+      <span id="chat-status" class="badge">—</span>
+      <span id="chat-busy" class="badge busy" hidden>运行中</span>
+      <span id="chat-model" class="muted mono"></span>
+      <span class="spacer"></span>
+      <button id="model" class="ghost">模型</button>
+      <button id="fork" class="ghost">分叉</button>
+      <button id="clone" class="ghost">克隆</button>
+      <button id="abort" class="ghost" hidden>中止</button>
+      <button id="delete-chat" class="danger">删除</button>
+    </div>
+
+    <div id="banner" class="fail" hidden>
+      <span id="banner-msg"></span>
+      <button id="banner-close" class="ghost">关闭</button>
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="card composer">
+      <textarea id="composer-input" rows="3" placeholder="输入消息。Enter 发送，Shift+Enter 换行。"></textarea>
+      <div class="row">
+        <button id="send" class="primary">发送</button>
+        <button id="steer" class="ghost" title="在当前回合中插入引导">引导</button>
+        <button id="followup" class="ghost" title="排到当前回合之后">追问</button>
+        <span class="spacer"></span>
+        <span id="hint" class="muted"></span>
+      </div>
+    </div>
+    <div id="msg" class="msg"></div>
+  </section>
+</main>
+</body>
+</html>

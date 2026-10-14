@@ -1,6 +1,6 @@
 # Data Model（SQLite / `bun:sqlite`）
 
-> 状态：**v3（已随 C1+C2+C3 校准）**。C1 落地后本文以 `src/console/db/schema.ts` 为唯一 DDL 真相源，
+> 状态：**v4（已随 C1+C2+C3+C4 校准）**。C1 落地后本文以 `src/console/db/schema.ts` 为唯一 DDL 真相源，
 > 本文只描述**语义契约 + 与设计稿的差异**，不再复制整段 DDL（避免双写漂移）。
 > 存储：`console/console.db`（`CONSOLE_DB` 可覆盖，不入 git）；
 > 连接期固定 `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout`（见 `db/migrate.ts#openDb`）。
@@ -34,9 +34,11 @@
 
 ---
 
-## 2. DDL（v1，唯一真相 = `src/console/db/schema.ts`）
+## 2. DDL（v2，唯一真相 = `src/console/db/schema.ts`）
 
-- 迁移：`MIGRATIONS[]` 顺序前滚，`PRAGMA user_version` 记录版本（当前 = 1）；DDL 幂等（`IF NOT EXISTS`）。
+- 迁移：`MIGRATIONS[]` 顺序前滚，`PRAGMA user_version` 记录版本（**当前 = 2**）；DDL 幂等（`IF NOT EXISTS`）。
+- **v2 增量（C4，纯加法）**：`ALTER TABLE chat_sessions ADD COLUMN session_file TEXT;`
+  —— pi 持久化会话文件路径（`--session <file>`），用于 idle 回收后**续接**同一对话（D9）。不改任何既有列/CHECK。
 - 表清单（18 张，另有索引与 `sqlite_sequence`）：
   - 身份鉴权：`users`、`login_sessions`、`login_attempts`、`account_grants`
   - 配置：`settings`、`accounts`、`account_email`
@@ -90,6 +92,11 @@
 | I8 | `tunnels` 变更留链：新行 `replaced_by` 指旧行，旧行 `expired` | `tunnel/cloudflared.ts` |
 | I9 | 账号热列（`cdp_port`/`enabled`/`display_name`…）由单一写路径从 entry **镜像**，仅用于约束/查询 | `db/dao/accounts.ts#mirror`；写入侧 `assertEntryTypes` 校验类型 |
 | I10 | 非管理员不可见全局机密（`notify`/`proxy`/`piBin`/`bunBin`/`skillDir`） | `server.ts#accountDetail` 按 `asAdmin` 剔除 |
+| I19 | `decisions.request_id` **全局唯一**；pi 重复投递同一 `extension_ui_request` 只落一行 | `INSERT OR IGNORE` + 写前 `getDecisionByRequest` 预检；`manager.handleUiRequest` 见 `created=false` 直接返回 |
+| I20 | 决策终态**不可逆**：`pending` 之外不可再变更 | `chats.answerDecision/expireDecision` 均先检查 `status==='pending'`，否则返回 `undefined`（路由 → 409） |
+| I21 | 会话有 `pending` 决策时必有活子进程；反之进程不在则 `pending` 必须被清算 | `manager.handleExit`（意外退出）/ `reapStale`（启动）/ `sweepIdle` 均把 `pending`→`lost`，与 `chat_sessions.status` 同事务（I23） |
+| I22 | `chat_messages` 只见**权威完整消息**：assistant 仅在 `message_end` 落库；用户消息在 prompt 受理时立即落库 | `manager.handleRecord`：`role!=='assistant'` 的 `message_end` 直接跳过；流式 `text_delta/thinking_delta` **不落库** |
+| I23 | 会话失联 → 会话与 `pending` 决策在**同一事务**内一起置 `lost` | `chats.markChatLost`（`db.transaction`）；`reapStaleChats` 亦同事务批量处理 |
 
 ---
 
@@ -103,3 +110,4 @@
   `fillMissingPlansFromFiles`（**仅当 DB 无该周计划**，故控制台编辑永不被文件回灌覆盖），采纳后即可自动发布。
   timer 的停用/回退见 `deploy/console-scheduler.md` 与 `deploy/systemd/{disable,enable}-timer.sh`。
 - 回滚：恢复 `config.json.bak` + DB 快照（`VACUUM INTO`）；见 `implement.md` §3。
+- **C4 迁移说明**：v2 仅 `ALTER TABLE ... ADD COLUMN`（SQLite 原生支持、幂等可重跑）；不含数据回填，故回滚只需 `user_version` 降到 1（列保留无害，代码不再读）。

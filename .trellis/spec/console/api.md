@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v3（C1+C2+C3 已校准；C4–C6 端点仍为契约先验）**，源 `design.md` §5。
+> 状态：**v4（C1+C2+C3+C4 已校准；C5–C6 端点仍为契约先验）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -39,7 +39,8 @@
 > 任务失败会表现在 **`job.status='failed'` + `job.error`**（`jobs` 表无 `ok` 列）。前端**必须按 `status` 渲染**，不得以 `envelope.ok` 判成败。
 >
 > **落地状态**：§2.1、§2.2 已随 **C1** 实现（另含 `GET /api/meta`、`GET /api/users`、`POST /api/users`、`PUT /api/users/:id`）；
-> §2.3 的**计划 CRUD + 入队/查询/取消已随 C2 落地**；**`generate`/`regenerate` 与 articles + SSE 已随 C3 落地**；§2.4 属 **C4**，§2.5 属 **C5**。
+> §2.3 的**计划 CRUD + 入队/查询/取消已随 C2 落地**；**`generate`/`regenerate` 与 articles + SSE 已随 C3 落地**；
+> **§2.4 已随 C4 落地**（路径为**复数** `/api/chats/*`，见下，取代早期单数草案）；§2.5 属 **C5**。
 
 ---
 
@@ -100,16 +101,30 @@
 - **版本链**：`articles.version` 每 (account,date) 单调；`parent_id` 指向上一版；`file_path` 指向不可变快照 `<base>.v<N>.md`，而 engine base（`<date>-<slug>.md`）恒为最新一版——发布读 base。
 - **推送结果**：`drafts.verified` 仅镜像 engine `verifyDraftBody` 结果（`runPublish.ok`）；UI 不得自判成功。
 
-### 2.4 会话与人在环
+### 2.4 会话与人在环（**已落地（C4）**，复数路径）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/accounts/:id/chat` | 新建会话（起 pi RPC 子进程） |
-| GET | `/api/chat/:id` | 会话信息 + 历史消息 + pending 决策 |
-| POST | `/api/chat/:id/message` | 发消息（流式中转 `streamingBehavior:"steer"`；可 `follow_up`） |
-| GET | `/api/chat/:id/stream` | SSE：`chat.delta` / `chat.settled` / `decision.pending` / `notify` / `status` |
-| POST | `/api/chat/:id/abort` | 中止当前轮次 |
-| POST | `/api/decisions/:id` | 应答决策 → 写回 `extension_ui_response` |
+| GET | `/api/accounts/:id/chats` | 列出该账号会话（含 `live`/`busy`/`pendingDecisions`） |
+| POST | `/api/accounts/:id/chats` | 新建会话 → `201 {chat}`（**懒启动**：此时不起子进程） |
+| GET | `/api/chats/:id` | 详情 `{session,messages,decisions,live,busy}` |
+| DELETE | `/api/chats/:id` | 删除并关闭子进程（`expected` 退出 → `closed`） |
+| POST | `/api/chats/:id/messages` | 发消息（`{message}` ≤20000）→ `{disposition,busy}`；懒惰 spawn |
+| POST | `/api/chats/:id/steer` | 追加（运行中）→ `{disposition}` |
+| POST | `/api/chats/:id/follow-up` | 后续轮次 → `{disposition}` |
+| POST | `/api/chats/:id/abort` | 中止 → `{aborted:true}` |
+| POST | `/api/chats/:id/model` | 换模型（`{provider,modelId}` 必填）→ `{model}` |
+| POST | `/api/chats/:id/fork` | 分支（`{entryId}`）→ `{text,cancelled}` |
+| POST | `/api/chats/:id/clone` | 克隆 → `{cancelled}` |
+| GET | `/api/chats/:id/stream` | **SSE**（见 §3） |
+| POST | `/api/decisions/:id` | 作答 → 写回 `extension_ui_response`；非 `pending` → **409 `decision_not_pending`** |
+| GET | `/api/decisions?status=` | 决策列表（`status` 限 `pending/answered/cancelled/expired/lost`；按账号可见性过滤；limit 100） |
+
+- 鉴权：`/api/chats/*` 先 `requireSession` 取行，再用 `row.account_id` 过 `assertAccountAccess`（不信任 URL）。
+- `ChatManager` 未注入时全部返回 **503 `chat_unavailable`**。
+- 决策校验：`select` 的 `value` 必须在 `options_json` 内（否则 400）；`confirm` 取 `confirmed`；`input`/`editor` 取字符串 `value`（截断 20000）；`cancelled:true` 优先。
+- 审计：`chat.create/close/prompt/abort/fork/clone/model.set`、`agent.tool`、`agent.decision.pending/answer/cancel/expired`、`chat.lost`。
+> 早期单数草案（`/api/accounts/:id/chat`、`/api/chat/:id`…）**已废弃**；实现一律用上表复数路径。
 
 ### 2.5 运维 / 管理员
 
@@ -134,9 +149,16 @@
 - 实现为 `ReadableStream` + ~700ms 轮询 `jobs`/`job_logs`（worker 与 server 同进程但**无事件总线**，零依赖且崩溃后可续）；状态进入终态即发 `job.done` 并关流；客户端断开（`cancel`）会清理定时器。
 - 鉴权：先 `loadJob`（由 `job.account_id` 反查 `assertAccountAccess`）→ 401/403。
 
-**待落地（C4）**：`/api/chat/:id/stream`（会话流）。
+**已落地（C4）**：`GET /api/chats/:id/stream`（实现 `src/console/http/chat-sse.ts`）。
+
+- **不走 DB 轮询**：事件来自**进程内** `agent/events.ts#ChatBus`（pi 子进程与 server 同进程）；每会话 500 条环形缓冲，`id:` = 单调 `seq`。
+- 事件名：`chat.open`、`chat.delta`、`chat.thinking`、`chat.block_end`、`chat.tool_call`、`chat.message`、`chat.tool`、`chat.busy`、`chat.settled`、`chat.aborted`、`chat.forked`、`chat.cloned`、`chat.notify`、`chat.status`、`chat.title`、`chat.closed`、`chat.lost`、`chat.resync`、`decision.pending`、`decision.answered`、`decision.expired`。
+- 续传：`Last-Event-ID`（或 `?last_event_id=`）→ 回放 `seq > after`；若 `after>0` 且已落后于缓冲窗口，先发 `chat.resync`（`gap:true`）让前端重取全量。
+- 建流即**懒启动**子进程（`ensureSpawn` fire-and-forget；spawn 失败不影响本流）。心跳每 15s `ping`。响应头 `no-store` + `x-accel-buffering:no`。
+- 鉴权：`loadChat` → `assertAccountAccess`（401/403）。
 
 ## 4. 静态 UI
 
 - `src/console/ui/` 下静态文件由 `server.ts` 直接送出；无打包。
+- 页面路由（`http/static.ts#ROUTES`）：`/`、`/login`、`/app`、`/account`、`/settings`、`/workbench`、**`/chat`**（C4）。
 - 所有动态数据经上述 JSON API / SSE 获取；**不在 HTML 内嵌任何凭据**。
