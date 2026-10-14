@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-agent-session/design.md", "reason": "C4 技术设计：帧协议/命令关联/事件映射/决策生命周期/最小权限双层/数据模型与路由"}
+{"file": ".trellis/tasks/10-13-console-agent-session/implement.md", "reason": "C4 实施清单 I4-1..I4-8、验收命令、G-C4 确认门与回滚点"}
+{"file": ".trellis/tasks/10-13-console-agent-session/prd.md", "reason": "C4 需求 R3.4/R3.5 与 AC-6（流式/决策卡片/无悬挂/失败显形/最小权限）"}
+{"file": ".trellis/spec/console/agent-session.md", "reason": "v0 契约：进程模型/严格 JSONL 帧/命令与事件映射/决策状态机/最小权限硬约束"}
+{"file": ".trellis/spec/console/api.md", "reason": "C1-C3 既有端点与统一错误包/鉴权模式，C4 增量路由需沿用"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "chat_sessions/chat_messages/decisions 表结构 + migration 机制 + 不变量写法"}
+{"file": ".trellis/spec/console/security.md", "reason": "CSRF/RBAC/审计/越权 403 的既有约定，C4 必须一致"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 层 Quality Check 清单与反模式（零依赖、失败显形）"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11/H5 失败必须显形：会话 lost 与 chat.error 不得伪成功"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "src/ 目录与模块职责约定，新增 console/agent 需保持一致"}

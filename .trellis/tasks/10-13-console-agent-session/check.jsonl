@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-agent-session/implement.md", "reason": "C4 验收命令与 AC-6 映射（逐条核对，含失败路径）"}
+{"file": ".trellis/tasks/10-13-console-agent-session/design.md", "reason": "C4 不变量 I19-I23、决策状态机、最小权限双层与回滚点"}
+{"file": ".trellis/spec/console/agent-session.md", "reason": "帧协议硬约束（仅 LF 切帧/禁 readline）、按 id 关联、agent_settled 语义、无提权开关"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "decisions.request_id 唯一 + 终态不可逆 + 会话 lost 与 pending 同事务"}
+{"file": ".trellis/spec/console/api.md", "reason": "C4 端点契约与错误包（400/403/404/409）、SSE 鉴权与 Last-Event-ID"}
+{"file": ".trellis/spec/console/security.md", "reason": "审计落库、越权 403、CSRF、不向会话暴露凭据"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 清单与反模式"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源原则；UI 状态必须来自真实事件/引擎结果"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（lost + chat.error + 非空 reason）"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "实现后必跑命令与零依赖/构建健康基线"}
