@@ -350,3 +350,44 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 - C4 `console-agent-session` 规划：pi RPC + 严格 JSONL 流式 + 决策卡片人在环 + 最小权限
 - C3 遗留：真实推送与 UI 手工项需 250（G2）；`publish` 以 `reuse=false` 绕过 UI 触发时草稿可能挂旧版快照（已记录，UI 固定 `reuse=true`）
 - C2 遗留（C6 加固）：计划 job 持续失败无退避（D2）
+
+
+## Session 9: 控制台 C4 Agent 会话窗口与人在环交付并归档（S15/M3）
+<!-- trellis-session: v=2 fp=6172bc8396273f8f -->
+
+**Date**: 2026-10-14
+**Task**: 控制台 C4 Agent 会话窗口与人在环交付并归档（S15/M3）
+**Branch**: `main`
+
+### Summary
+
+实现「类 HAPI 精简版」：每账号多会话 ↔ `pi --mode rpc` 长活子进程，流式 SSE、extension_ui_request 决策卡片人在环、双层最小权限；engine 与推送链路零改动，零新增运行时依赖。
+
+### Main Changes
+
+- 新增 `src/console/agent/{frames,rpc,events,manager}.ts`：严格 JSONL 切帧（禁 readline）、极简 RPC（按 id 关联）、进程内 ChatBus（500 环 + seq）、会话生命周期（懒 spawn / CONSOLE_CHAT_MAX / CONSOLE_CHAT_TTL_MS / handleExit / reapStale）
+- 新增 `agent/extensions/console-decision.ts`（pi 侧最小权限：console_ask 唯一通道 + fail-safe 硬阻断 wechat*/publish*/mail*/backup*）、`db/dao/chats.ts`、`http/chat-sse.ts`、`ui/chat.{html,css,js}`
+- `schema.ts` 加 migration v2（chat_sessions.session_file，纯加法）；`server.ts` 加 12 条复数路由 /api/chats/*、/api/decisions（CSRF + 按行 account_id 鉴权）；`main.ts`/`http/static.ts`/`ui/index.html`/`ui/workbench.html` 接线
+- 决策 pending→{answered,cancelled,expired,lost}；异常退出/预期关闭/启动回收均同事务清算 pending（I21/I23，closeChatSession/markChatLost），无悬挂
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `58d27db` | feat(console): C4 Agent 会话窗口与人在环（S15/M3）+ spec v4 |
+
+### Testing
+
+- [OK] [OK] `tsc --noEmit` 0 错误；`bun build` 49 modules；`dependencies=undefined`；engine `src/pi.ts`/`wechat.ts`/`publisher.ts` 零改动
+- [OK] [OK] 单测 /tmp/wfc-c4-unit.ts（frames/ChatBus/chats DAO/rpc 含 closeChatSession 原子性）；fake-pi e2e /tmp/wfc-c4-e2e.sh（流式/决策往返/崩溃 lost/TTL 清算/chat_limit）
+- [OK] [OK] `bash /tmp/wfc-c4-verify.sh` → pass=8 fail=0；C3 回归 pass=7 fail=0；trellis-check 首轮 FAIL（唯一阻塞 B1）→ 修复 → 对抗复现 PROBE(S) PASSED + 复审 PASS
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- C5 `console-ops-tunnel` 规划：邮箱 + Cloudflare 隧道地址下发 + 凭据加密 + 管理员全局视图（G7）
+- 真机（250/G2）待验：真实 pi 流式、pi --extension 加载、浏览器 /chat 手工加载
+- C6 加固候选：chat-sse 重放阶段 cleanup no-op（N1）、ChatBus.close 不通知已建 SSE 流（N2）、已 abort 的 signal 不触发清理（N3）

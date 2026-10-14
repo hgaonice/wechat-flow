@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-10-12
+- **Total Sessions**: 9
+- **Last Active**: 2026-10-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~166 | Active |
+| `journal-1.md` | ~393 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-10-14 | 控制台 C4 Agent 会话窗口与人在环交付并归档（S15/M3） | `58d27db` | `main` |
 | 4 | 2026-10-12 | S10 真机验收通过 + 归档：封面自动上传 O-B（250） | - | `main` |
 | 3 | 2026-10-12 | S10 O-B 实现：封面自动上传（CDP 封面弹窗） | - | `-` |
 | 2 | 2026-10-12 | S9 归档 + S10 封面自动上传调研（G5 待选型） | - | `main` |
