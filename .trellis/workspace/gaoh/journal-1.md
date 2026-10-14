@@ -391,3 +391,44 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 - C5 `console-ops-tunnel` 规划：邮箱 + Cloudflare 隧道地址下发 + 凭据加密 + 管理员全局视图（G7）
 - 真机（250/G2）待验：真实 pi 流式、pi --extension 加载、浏览器 /chat 手工加载
 - C6 加固候选：chat-sse 重放阶段 cleanup no-op（N1）、ChatBus.close 不通知已建 SSE 流（N2）、已 abort 的 signal 不触发清理（N3）
+
+
+## Session 10: 控制台 C5 运维与公网交付并归档（S16/M4）
+<!-- trellis-session: v=2 fp=829fbca4ad638676 -->
+
+**Date**: 2026-10-14
+**Task**: 控制台 C5 运维与公网交付并归档（S16/M4）
+**Branch**: `main`
+
+### Summary
+
+CF Quick Tunnel 监督（TunnelSupervisor）+ 地址变更邮件下发（账号邮箱 ∪ 管理员副本）+ 凭据加密存取 + 管理员总览；隧道构造期强校验目标（回环 + 控制台端口 + 非 CDP）；engine 与推送链路零改动，零新增运行时依赖。
+
+### Main Changes
+
+- 新增 src/console/tunnel/cloudflared.ts（TunnelSupervisor：spawn cloudflared + stderr 逐行解析禁 readline + 单次健康失败即 down + 退出码映射 + 退避重启 + 地址去抖；构造期强校验 host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port = I27/T1）
+- 新增 src/console/notify/tunnel-mail.ts（notifyTunnelChange：收件人=账号 account_email ∪ 管理员副本 settings(global).notify.email.to；按 tunnels.id 去重 + 重试封顶后停发；复用 engine sendMail 不改 engine）
+- 新增 db/dao/{emails,secrets,tunnels}.ts；schema.ts 加 migration v3（tunnels.notified_at/notify_attempts，纯加法）；openTunnel 单事务「插新 up + 旧 up/down → expired + replaced_by=新 id」（I24）
+- server.ts 加 11 条路由 + createApp(state, chat?, ops?:{tunnel?})（ops.tunnel 缺失 → 503 tunnel_unavailable）；main.ts 接线（CONSOLE_TUNNEL=1）+ 关闭顺序 scheduler→worker→chat→tunnel→server→db
+- UI：account 邮箱/凭据表单 + /admin 总览页 + 导航「运维」；凭据 API 只回元数据（{kind,configured,keyVersion,updatedAt}）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db1ef5a` | feat(console): C5 运维与公网（S16/M4）+ spec v5 |
+
+### Testing
+
+- [OK] tsc --noEmit 0 错；bun build 通过；dependencies=undefined；engine 四文件 git diff --quiet = 空
+- [OK] bash /tmp/wfc-c5-verify.sh → pass=22 fail=0（含 C3 7/0、C4 8/0 回归）
+- [OK] 独立复核两轮：首轮 PASS-with-issues（1 高：I27 隧道端口未校验 → 可暴露 CDP）→ 修复（构造期端口校验）→ 复审 PASS，独立断言 196/0（unit 53/http 50/tunnel 26/static 14/deviations 18/extra 4/smtp 7/recheck 24）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- C6 console-deploy-hardening：systemd/反代/限流/备份/端到端回归 + 携带遗留观察项（C2 plan-job 失败无退避、C4 N1–N3、decision.expired 命名）
+- 真机（250/G2）待验：真实 cloudflared quick tunnel + 真实 email-sender 发信 + 浏览器 /admin；C3/C4 真实 pi 生成/流式与微信草稿推送
