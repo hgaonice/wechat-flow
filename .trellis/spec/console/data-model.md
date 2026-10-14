@@ -55,6 +55,11 @@
   `idx_job_logs_job`、`idx_articles_acc`、`idx_chat_messages_s`、`idx_decisions_status`、`idx_audit_ts`。
 
 > `period_key` 形态：周 `2026-W42`（ISO 周）/ 月 `2026-10`；周条目 `items_json` **≤ 7 天**（C2 约束）。
+>
+> **C2 实际形态（v2）**：`plans.items_json = {week?, days:[{date:"YYYY-MM-DD", topic, weekday?}]}`，`weekday` 由服务端按 engine `date.ts` 补齐；
+> `plans.status` 当前恒为 `draft`（发布态由 engine `state/published.json` 决定，不在此表）。
+> `jobs.payload_json`：`plan`=`{date?,dryRun?}`（调度器另附 `{periodKey}` 供排查）、`publish`=`{date?,dryRun?,reuse?,force?}`；
+> 去重 SQL 靠 `json_extract(payload_json,'$.date')`，**故 date 必须写在 payload 顶层**。
 > `jobs.kind`：`plan` | `generate` | `publish` | `regenerate`（见 `api.md` §2.3）。
 
 ---
@@ -65,9 +70,14 @@
 |---|---|---|
 | I1 | `accounts.alias` 唯一、`accounts.cdp_port` 唯一（非空时） | `UNIQUE` 约束 + API 409（含可用端口提示） |
 | I2 | 每账号 `data_dir` 独立，形如 `data/<alias>/` | 新建时派生，不手填；删账号**只注销**，不删目录 |
-| I3 | `jobs` 状态机单向：`queued→running→{succeeded,failed,canceled}` | `queue.ts` 认领/心跳/超时回收；非法迁移拒绝 |
-| I4 | **每账号同时最多 1 个 `running` job**（`cdpPort`/profile 独占） | `worker.ts` 认领前按 `account_id` 加锁；全局并发上限另计 |
-| I5 | 幂等：同账号 + 同日期已有 `succeeded` job 则跳过 | 双重去重（engine `state/published.json` + `jobs` 表） |
+| I3 | `jobs` 状态机单向：`queued→running→{succeeded,failed,canceled}` | `queue.ts`：`claimNext`/`finish`/`cancel` 全为带 `WHERE status=...` 的条件 UPDATE；非法迁移返回 false，终态不可再迁移 |
+| I4 | **每账号同时最多 1 个 `running` job**（`cdpPort`/profile 独占） | `queue.ts#claimNext` 的 `NOT EXISTS(...r.status='running')` 子查询（SQL 原子）**+** `worker.ts` 进程内 `runningAccounts:Set` 双保险；全局并发 `CONSOLE_MAX_CONCURRENCY`（默认 2） |
+| I5 | 幂等：同账号 + 同日期不重复发布 | 双重去重：**engine `state/published.json` 优先**（`isPublished` → `succeeded`）**+** `jobs` 表 `hasPublishJobForDate`（含 `succeeded`；`canceled`/`failed` 不算 live） |
+| I5′ | 调度与手动入队均不产生重复 job | `hasPublishJobForDate` / `hasActivePlanJob`；`schedulerTick` 重入由 `ticking` 标志挡住 |
+| I11 | 重启后无遗留 `running` | `worker.ts#startWorker` 启动即 `reapStartup`：遗留 `running` → `failed('interrupted by restart')` |
+| I12 | 任务/计划变更均可审计 | `enqueue` 写 `audit(action='job_enqueue')`；计划变更写 `plan.upsert`；取消写 `job_cancel`；越权写 `denied`（含真实 `actor`） |
+| I13 | `plans` 表为计划**唯一真源**，engine 计划文件为**派生物** | `plans.ts#materializePlans`（DB→`data/<alias>/plans/<week>.json`，`tmp`+`rename` 原子）；反向 `fillMissingPlansFromFiles`（仅 DB 缺该周时采纳，**DB 优先**）与 `importPlansFromFiles`（plan 任务后吸收，跳过 `*.dryrun.json`），两者都再过 `validatePlanInput` |
+| I14 | 调度「到期」由 `plans` + `settings.schedule` 推导，无需新列 | `scheduler.ts#schedulerTick`：publish = 当天在计划内 && `hour≥publishHour` && 未发布 && 无 live job；plan = `weekday===planWeekday` && 本周无计划 && 无 live plan job。时区固定 `Asia/Shanghai` |
 | I6 | `decisions` 状态机：`pending→{answered,cancelled,expired,lost}` | 应答/超时/进程失联各自落终态，**不留悬挂** |
 | I7 | `secrets` 只存 `ciphertext`+`nonce`+`key_version`，**无明文列** | `crypto/secrets.ts`；读接口不回显 |
 | I8 | `tunnels` 变更留链：新行 `replaced_by` 指旧行，旧行 `expired` | `tunnel/cloudflared.ts` |
@@ -82,4 +92,7 @@
 - 失败处理：迁移失败 → **中止启动**并显式报错（不半应用）。
 - 首次导入：`db/import-config.ts` 读现有 `config.json` → `settings`(global) + `accounts`（条目 verbatim），
   并写 `config.json.bak`（一次）。legacy 顶层 `account` 字段用于推断既有默认账号（默认 `"second"`，与引擎一致）。
+- **从 systemd timer 迁移（C2）**：engine 目录里遗留的周计划文件不会丢失——`scheduler.ts` 每轮先跑
+  `fillMissingPlansFromFiles`（**仅当 DB 无该周计划**，故控制台编辑永不被文件回灌覆盖），采纳后即可自动发布。
+  timer 的停用/回退见 `deploy/console-scheduler.md` 与 `deploy/systemd/{disable,enable}-timer.sh`。
 - 回滚：恢复 `config.json.bak` + DB 快照（`VACUUM INTO`）；见 `implement.md` §3。

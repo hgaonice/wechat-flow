@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-scheduler/implement.md", "reason": "C2 验收命令与 AC-5/AC-11 映射（逐条核对）"}
+{"file": ".trellis/tasks/10-13-console-scheduler/design.md", "reason": "C2 不变量 I3′/I4′/I5′/I11/I12 与回滚点"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "jobs 状态机单向、每账号 ≤1 running、幂等去重"}
+{"file": ".trellis/spec/console/api.md", "reason": "C2 端点契约与错误包（400/403/404）"}
+{"file": ".trellis/spec/console/security.md", "reason": "审计落库、越权 403、CSRF"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 清单与反模式"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（failed + error，不 succeeded）"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "engine 改动后必跑命令与健康基线"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源；本任务不触碰发布链路需复核"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/prd.md", "reason": "AC-5/AC-11 定义"}

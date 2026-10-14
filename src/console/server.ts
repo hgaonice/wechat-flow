@@ -18,7 +18,7 @@ import {
   tooMany,
   unauthorized,
 } from "./http/respond.ts";
-import { asObject, isPlainObject, type JsonObject } from "./types.ts";
+import { asObject, isPlainObject, type Json, type JsonObject } from "./types.ts";
 import { getGlobalRaw, setGlobalRaw } from "./db/dao/settings.ts";
 import {
   accountIdsForUser,
@@ -38,6 +38,10 @@ import {
 import { recentAudit, recordAudit } from "./db/dao/audit.ts";
 import { effectiveAccount, keySource, overrideKeys, removeOverride } from "./config/resolve.ts";
 import { renderConfig } from "./db/render-config.ts";
+import { loadConfig } from "../config.ts";
+import * as plans from "./jobs/plans.ts";
+import * as queue from "./jobs/queue.ts";
+import { EXECUTABLE_KINDS, isJobKind, parseItems, parseJobPayload, type JobRow, type PlanRow } from "./jobs/types.ts";
 import { serveUi } from "./http/static.ts";
 import * as users from "./auth/users.ts";
 import * as sess from "./auth/sessions.ts";
@@ -207,6 +211,39 @@ function syncConfigFile(db: Database): void {
   renderConfig(db);
 }
 
+/** Public shape of a job row (payload parsed, camelCase keys). */
+function jobView(row: JobRow): JsonObject {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    kind: row.kind,
+    status: row.status,
+    progress: row.progress,
+    message: row.message,
+    error: row.error,
+    attempts: row.attempts,
+    payload: parseJobPayload(row) as unknown as Json,
+    queuedAt: row.queued_at,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    pid: row.pid,
+  };
+}
+
+/** Public shape of a plan row (items parsed). */
+function planView(row: PlanRow): JsonObject {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    periodType: row.period_type,
+    periodKey: row.period_key,
+    status: row.status,
+    items: parseItems(row) as unknown as Json,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // ── app ─────────────────────────────────────────────────────────────────────
 
 export function createApp(state: AppState): App {
@@ -373,6 +410,118 @@ export function createApp(state: AppState): App {
     return ok(accountDetail(db, getAccountById(db, id)!, isAdmin(ctx.auth)));
   });
 
+  // ---- plans + jobs (C2) ---------------------------------------------------
+
+  const loadJob = (ctx: Ctx, id: number): JobRow => {
+    const job = queue.getJob(db, id);
+    if (!job) throw notFound("任务不存在");
+    assertAccountAccess(ctx.auth, job.account_id);
+    return job;
+  };
+
+  router.add("GET", "/api/accounts/:id/plans", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const periodType = ctx.url.searchParams.get("period_type") ?? undefined;
+    const periodKey = ctx.url.searchParams.get("period_key") ?? undefined;
+    return ok({ plans: plans.listPlans(db, id, { periodType, periodKey }).map(planView) });
+  });
+
+  router.add("PUT", "/api/accounts/:id/plans", async (ctx) => {
+    const id = intParam(ctx);
+    const row = getAccountById(db, id);
+    if (!row) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+
+    const body = await readJson(ctx.req);
+    const periodType = typeof body.period_type === "string" ? body.period_type : typeof body.periodType === "string" ? body.periodType : "";
+    const periodKey = typeof body.period_key === "string" ? body.period_key : typeof body.periodKey === "string" ? body.periodKey : "";
+    const checked = plans.validatePlanInput(periodType, periodKey, body.items);
+    if (!checked.ok || !checked.items) throw badRequest(checked.error ?? "计划校验失败");
+
+    const planId = plans.upsertPlan(db, id, periodType as plans.PeriodType, periodKey, checked.items, ctx.auth!.user.id);
+    try {
+      plans.materializePlans(db, loadConfig(row.alias), id);
+    } catch (err) {
+      throw new HttpError(500, "internal", `计划已入库但同步到 engine 失败：${(err as Error).message}`);
+    }
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "plan.upsert",
+      target: `${row.alias}:${periodType}:${periodKey}`,
+      detail: { days: checked.items.days.length },
+      ok: true,
+    });
+    return ok({ id: planId, periodType, periodKey, items: checked.items as unknown as Json });
+  });
+
+  router.add("GET", "/api/accounts/:id/plans/find", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const date = ctx.url.searchParams.get("date") ?? "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest("date 需为 YYYY-MM-DD");
+    const found = plans.findPlanDay(db, id, date);
+    if (!found) return ok({ found: false, date });
+    return ok({
+      found: true,
+      date,
+      planId: found.plan.id,
+      periodKey: found.plan.period_key,
+      day: found.day as unknown as Json,
+    });
+  });
+
+  router.add("POST", "/api/accounts/:id/jobs", async (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+
+    const body = await readJson(ctx.req);
+    const kind = body.kind;
+    if (!isJobKind(kind)) throw badRequest("kind 必须是 plan|publish|generate|regenerate");
+    if (!EXECUTABLE_KINDS.includes(kind)) throw badRequest(`kind not supported yet: ${kind}`);
+    const payload = isPlainObject(body.payload) ? (body.payload as JsonObject) : {};
+    if (typeof payload.date === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(payload.date)) {
+      throw badRequest("payload.date 需为 YYYY-MM-DD");
+    }
+
+    const jobId = queue.enqueue(db, id, kind, payload, {
+      createdBy: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+    });
+    return ok({ job: jobView(queue.getJob(db, jobId)!) }, 201);
+  });
+
+  router.add("GET", "/api/accounts/:id/jobs", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const status = ctx.url.searchParams.get("status") ?? undefined;
+    const limit = Number(ctx.url.searchParams.get("limit") ?? 50) || 50;
+    return ok({ jobs: queue.listJobsForAccount(db, id, { status, limit }).map(jobView) });
+  });
+
+  router.add("GET", "/api/jobs/:id", (ctx) => {
+    const job = loadJob(ctx, intParam(ctx));
+    return ok({ job: jobView(job), logs: queue.listJobLogs(db, job.id, 100) });
+  });
+
+  router.add("POST", "/api/jobs/:id/cancel", (ctx) => {
+    const job = loadJob(ctx, intParam(ctx));
+    if (!queue.cancel(db, job.id)) throw conflict(`任务当前状态为 ${job.status}，仅 queued 可取消`);
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "job_cancel",
+      target: `job:${job.id}`,
+      ok: true,
+    });
+    return ok({ job: jobView(queue.getJob(db, job.id)!) });
+  });
+
   // ---- global settings -----------------------------------------------------
 
   router.add("GET", "/api/settings", (ctx) => {
@@ -487,22 +636,39 @@ export function createApp(state: AppState): App {
 
     const token = sess.parseCookie(req.headers.get("cookie"), sess.SESSION_COOKIE);
     const session = sess.lookupSession(db, token);
-    const isLogin = pathname === "/api/login";
+    try {
+      const isLogin = pathname === "/api/login";
 
-    if (!isLogin && !session) throw unauthorized("未登录");
-    if (!isLogin && method !== "GET" && method !== "HEAD" && !sess.csrfEqual(session!.csrfToken, req.headers.get("x-csrf-token"))) {
-      throw forbidden("CSRF 校验失败");
-    }
+      if (!isLogin && !session) throw unauthorized("未登录");
+      if (!isLogin && method !== "GET" && method !== "HEAD" && !sess.csrfEqual(session!.csrfToken, req.headers.get("x-csrf-token"))) {
+        throw forbidden("CSRF 校验失败");
+      }
 
-    const ctx: Ctx = { req, url, params: {}, state, session, auth: session ? authContextOf(session) : null };
-    const allowed: string[] = [];
-    const m = router.match(method, pathname, allowed);
-    if (!m) {
-      if (allowed.length) throw new HttpError(405, "method_not_allowed", `仅支持 ${allowed.join(", ")}`);
-      throw notFound("接口不存在");
+      const ctx: Ctx = { req, url, params: {}, state, session, auth: session ? authContextOf(session) : null };
+      const allowed: string[] = [];
+      const m = router.match(method, pathname, allowed);
+      if (!m) {
+        if (allowed.length) throw new HttpError(405, "method_not_allowed", `仅支持 ${allowed.join(", ")}`);
+        throw notFound("接口不存在");
+      }
+      ctx.params = m.params;
+      return await m.handler(ctx);
+    } catch (err) {
+      // Attribute a 403 denial to *this* request's session (kept request-local so
+      // concurrent requests can never cross-attribute the audit `actor`).
+      if (err instanceof HttpError && err.status === 403) {
+        recordAudit(db, {
+          userId: session?.user.id,
+          actor: session?.user.username ?? "unknown",
+          action: "denied",
+          target: `${method} ${pathname}`,
+          ok: false,
+          ip: clientIp(req),
+          detail: err.message,
+        });
+      }
+      throw err;
     }
-    ctx.params = m.params;
-    return await m.handler(ctx);
   }
 
   async function handle(req: Request): Promise<Response> {
@@ -510,10 +676,6 @@ export function createApp(state: AppState): App {
       return securityHeaders(await route(req), state.secureCookies);
     } catch (err) {
       if (err instanceof HttpError) {
-        if (err.status === 403) {
-          const pathname = new URL(req.url).pathname;
-          recordAudit(db, { actor: "unknown", action: "denied", target: `${req.method} ${pathname}`, ok: false, ip: clientIp(req), detail: err.message });
-        }
         return securityHeaders(fail(err.status, err.code, err.message, err.detail), state.secureCookies);
       }
       console.error("[console]", err);

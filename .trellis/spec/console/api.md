@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v1（C1 已校准；C2–C6 端点仍为契约先验）**，源 `design.md` §5。
+> 状态：**v2（C1+C2 已校准；C3–C6 端点仍为契约先验）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -33,10 +33,13 @@
 | 500 | `internal` | 未预期错误（**不得**吞成成功） |
 
 > **失败显形**：任何业务失败必须 `ok:false` + `code` + 可读 `message`；禁止 200 + 伪装成功。
-> 409 冲突可带 `detail.suggestions:number[]`（如可用 `cdpPort` 列表）；403 由服务端统一写 `audit(action='denied')`。
+> 409 冲突可带 `detail.suggestions:number[]`（如可用 `cdpPort` 列表）；403 由服务端统一写 `audit(action='denied')`，并记真实 `actor`（未登录时为 `unknown`）。
+>
+> **任务失败 ≠ HTTP 失败**（C3 UI 必读）：`POST /api/accounts/:id/jobs` 成功受理就返回 `201` 且外层 `ok:true`；
+> 任务失败会表现在 **`job.status='failed'` + `job.error`**（`jobs` 表无 `ok` 列）。前端**必须按 `status` 渲染**，不得以 `envelope.ok` 判成败。
 >
 > **落地状态**：§2.1、§2.2 已随 **C1** 实现（另含 `GET /api/meta`、`GET /api/users`、`POST /api/users`、`PUT /api/users/:id`）；
-> §2.3 属 **C2/C3**，§2.4 属 **C4**，§2.5 属 **C5**。
+> §2.3 的**计划 CRUD + 入队/查询/取消已随 C2 落地**（`articles`、`regenerate`、SSE 属 C3）；§2.4 属 **C4**，§2.5 属 **C5**。
 
 ---
 
@@ -66,12 +69,25 @@
 
 ### 2.3 计划 / 任务
 
+**已落地（C2）**
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/accounts/:id/plans` | 计划列表（可按 `period_type`/`period_key` 过滤） |
-| PUT | `/api/accounts/:id/plans` | 创建/覆盖周（≤7 条目）或月摘要计划 |
-| POST | `/api/accounts/:id/jobs` | 入队 `{kind: plan\|generate\|publish\|regenerate, payload}` |
-| GET | `/api/jobs/:id` | 任务状态（`queued→running→succeeded/failed/canceled`）+ progress |
+| GET | `/api/accounts/:id/plans` | 计划列表（可选 `period_type`/`period_key`/`limit`）；返回 `items` 已解析 |
+| PUT | `/api/accounts/:id/plans` | 创建/覆盖计划；**校验**：week 为 `YYYY-Www` 且 `days.length∈[1,7]` 且日期落在该周内；month 为 `YYYY-MM`；每条需 `topic`；`weekday` 服务端自动补齐。入库后**物化**回 `data/<alias>/plans/<week>.json`。写 `audit(plan.upsert)` |
+| GET | `/api/accounts/:id/plans/find?date=YYYY-MM-DD` | 反查该日的计划条目 → `{found,planId,periodKey,day}` 或 `{found:false}` |
+| POST | `/api/accounts/:id/jobs` | 入队 `{kind, payload}`；C2 仅执行 `plan`/`publish`（`generate`/`regenerate` 返回 400，C3 开放）→ `201 {job}`；写 `audit(job_enqueue)` |
+| GET | `/api/accounts/:id/jobs?status=&limit=` | 该账号任务列表（默认 50） |
+| GET | `/api/jobs/:id` | `{job, logs[]}`；`job.status∈{queued,running,succeeded,failed,canceled}`、`progress`、`message`、`error`、`attempts`、`pid`、`payload` |
+| POST | `/api/jobs/:id/cancel` | 仅 `queued` 可取消；否则 **409**；写 `audit(job_cancel)` |
+
+- `job` 路由鉴权：由 `job.account_id` 反查（`loadJob()`）而非信任 URL；越权 → 403。
+- `payload`：`plan` = `{date?, dryRun?}`；`publish` = `{date?, dryRun?, reuse?, force?}`。
+
+**C3 计划**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
 | GET | `/api/jobs/:id/stream` | SSE：`job.progress` / `job.log` / `job.done`（`Last-Event-ID` 续传） |
 | GET | `/api/accounts/:id/articles` | 产物列表（md/封面/校验结果、版本链） |
 | POST | `/api/articles/:id/regenerate` | 重生成 `{feedback}` → 新 `version`，`parent_id` 指向旧版 |

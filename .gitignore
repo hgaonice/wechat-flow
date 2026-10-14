@@ -11,6 +11,7 @@ articles/
 imgs/
 state/
 config.json
+config.json.bak
 .env
 
 # local dev session pointer (docs/session.md)

@@ -36,6 +36,8 @@ import {
 import { getGlobalRaw } from "./db/dao/settings.ts";
 import { listAccountRows } from "./db/dao/accounts.ts";
 import { createApp, type AppState } from "./server.ts";
+import { startScheduler, type SchedulerHandle } from "./jobs/scheduler.ts";
+import { startWorker, type WorkerHandle } from "./jobs/worker.ts";
 
 const VERSION = "0.1.0";
 const DB_PATH = process.env.CONSOLE_DB ?? path.join(APP_DIR, "console", "console.db");
@@ -85,7 +87,7 @@ async function cmdCreateAdmin(args: string[]): Promise<void> {
   db.close();
 }
 
-async function cmdServe(): Promise<void> {
+async function cmdServe(args: string[]): Promise<void> {
   const masterKey = loadMasterKey(); // fail-fast when missing/insecure
   const db = openAt();
   const userCount = countUsers(db);
@@ -127,6 +129,64 @@ async function cmdServe(): Promise<void> {
   });
   console.log(`wechat-flow console v${VERSION} → http://${HOST}:${server.port}  (db=${DB_PATH})`);
   console.log(`secure cookies: ${state.secureCookies ? "on" : "off（CONSOLE_ALLOW_INSECURE_COOKIE=1）"}`);
+
+  // C2: in-process scheduler + worker (disable with --no-worker).
+  let scheduler: SchedulerHandle | null = null;
+  let worker: WorkerHandle | null = null;
+  if (!args.includes("--no-worker")) {
+    scheduler = startScheduler(db, {
+      onActions: (actions) => {
+        for (const a of actions) console.log(`[scheduler] enqueue ${a.kind} job#${a.jobId} for ${a.alias} (${a.reason})`);
+      },
+    });
+    worker = startWorker(db);
+    console.log("scheduler + worker: on（--no-worker 可关闭）");
+  } else {
+    console.log("scheduler + worker: off（--no-worker）");
+  }
+
+  let closing = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (closing) return;
+    closing = true;
+    console.log(`\n[console] ${signal} → 停止调度/worker…`);
+    scheduler?.stop();
+    await worker?.stop();
+    try {
+      server.stop(true);
+    } catch {
+      /* ignore */
+    }
+    db.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+}
+
+/** Headless worker: scheduler + queue only, no HTTP server. */
+async function cmdWorker(): Promise<void> {
+  const db = openAt();
+  const scheduler = startScheduler(db, {
+    onActions: (actions) => {
+      for (const a of actions) console.log(`[scheduler] enqueue ${a.kind} job#${a.jobId} for ${a.alias} (${a.reason})`);
+    },
+  });
+  const worker = startWorker(db);
+  console.log(`wechat-flow console worker → db=${DB_PATH}（scheduler + worker，无 HTTP）`);
+
+  let closing = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (closing) return;
+    closing = true;
+    console.log(`\n[console.worker] ${signal} → 停止…`);
+    scheduler.stop();
+    await worker.stop();
+    db.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
 function cmdStatus(): void {
@@ -173,7 +233,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  return cmdServe();
+  if (has("--worker")) return cmdWorker();
+
+  return cmdServe(args);
 }
 
 main().catch((err) => {

@@ -247,3 +247,63 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 ### Next Steps
 
 - C2 `console-scheduler` 规划：周/月计划表 + jobs + 调度器 + 每账号互斥 → 父任务 `implement.md` M2
+
+---
+
+## Session 7: 控制台 C2 调度与任务模型交付并归档（S13/M2a）
+<!-- trellis-session: v=2 -->
+
+**Date**: 2026-10-14
+**Task**: C2 调度与任务模型（`10-13-console-scheduler`）
+**Branch**: `main`
+
+### Summary
+
+在 C1 基座上落地调度与任务模型（`src/console/jobs/**`，886 行）：周/月计划表 + 任务队列 + 进程内 worker（每账号互斥）+ 定时调度器；新增 7 条 API 路由与 `main.ts` 生命周期开关；新增 systemd timer 停用/回退脚本与迁移文档。AC-5/AC-10/AC-11 实测通过，trellis-check 独立复核 PASS-with-issues（无阻塞），engine **零改动**；console spec 校准 v1→v2，任务归档。
+
+### Main Changes
+
+- 新增 `src/console/jobs/{types,plans,queue,worker,scheduler}.ts`
+  - `queue`：`enqueue`(+audit) / `getJob` / `listJobsForAccount` / `appendLog` / `setProgress` / `claimNext`（单条原子 `UPDATE ... WHERE NOT EXISTS(running) ... RETURNING`）/ `finish`（仅 `running`）/ `cancel`（仅 `queued`）/ `reapStartup` / `hasPublishJobForDate` / `hasActivePlanJob`（`json_extract(payload_json,'$.date')` 去重）
+  - `plans`：`validatePlanInput`（week `YYYY-Www` 且 days∈[1,7] 且日期落在该周内）/ `upsertPlan` / `findPlanDay` / `materializePlans`（DB→文件，tmp+rename 原子）/ `importPlansFromFiles`（跳过 `*.dryrun.json`）/ **`fillMissingPlansFromFiles`（迁移桥，仅 DB 缺该周时采纳 → 控制台编辑永不被回灌）**
+  - `worker`：`executeJob`（`plan`→`runPlan`+导入；`publish`→`isPublished`+物化+`runPublish`；`generate`/`regenerate` 在 C2 落 400/`failed`，不伪装成功）/ 启动 `reapStartup` / `stop()` **有界 drain**（`CONSOLE_WORKER_DRAIN_MS`，默认 30s）
+  - `scheduler`：单一时钟 `Asia/Shanghai`；publish = 当天在计划内 && `hour≥publishHour` && 未发布 && 无 live job；plan = `weekday===planWeekday` && 本周无计划 && 无 live plan job；`ticking` 防重入 + **启动即 tick**
+- `src/console/server.ts`：7 条路由（`GET/PUT /api/accounts/:id/plans`、`GET /api/accounts/:id/plans/find`、`POST/GET /api/accounts/:id/jobs`、`GET /api/jobs/:id`、`POST /api/jobs/:id/cancel`）+ `jobView`/`planView`/`loadJob`；403 `denied` 审计改为**请求局部** `actor`（消除 C1 写死 `unknown` 与共享可变状态）
+- `src/console/main.ts`：`serve` 内联 `startScheduler`+`startWorker`（`--no-worker` 关闭）；新增 `--worker` 无头模式；SIGINT/SIGTERM 优雅退出
+- `deploy/console-scheduler.md` + `deploy/systemd/{disable,enable}-timer.sh`（`--dry-run` 幂等、不删 unit、可回退）
+- `.gitignore` 增 `config.json.bak`
+- spec 校准：`.trellis/spec/console/{index,api,data-model,security}.md` → **v2**；`design.md` 补 **I13 计划物化契约**
+- 收口：`AGENT.md` §1（S13 ✅ / S14 🟡）/§3/§5/§8（D11–D13 ✅、新增 D15）/§9/§10；本 journal
+
+### 关键决策（本会话新增）
+
+- 调度/worker **内嵌 `serve` 进程**，不再依赖 systemd timer（保留 timer 停用/回退脚本）
+- **计划真源 = `plans` 表**，engine 计划文件为派生物（`materializePlans`）；迁移民桥 `fillMissingPlansFromFiles` **DB 优先**
+- 到期时刻由数据推导，**不新增表列**（不破坏 C1 已冻结 schema）
+- 崩溃安全：启动 reaper 把遗留 `running` 置 `failed('interrupted by restart')`
+- `bun:sqlite` 无行返回 `null` 而非 `undefined` → 在 `queue`/`plans` 归一为 `?? undefined`
+
+### Git Commits
+
+- (本次收口提交) feat(console): C2 调度与任务模型（S13/M2a）+ spec v2
+
+### Testing
+
+- [OK] `node_modules/.bin/tsc --noEmit` 0 错误；`bun build --target=bun src/console/main.ts` OK；`dependencies=undefined`
+- [OK] 任务层单测 `bun /tmp/wfc-c2-jobs.ts`：**35 passed, 0 failed**（状态机单向 / 每账号 running≤1 / cancel 仅 queued / reap / 去重 / schedule clamp）
+- [OK] HTTP e2e `bash /tmp/wfc-c2-http.sh`：CSRF 403、计划校验 200/400、`kind=generate` 400、**AC-11 `failed + error='no plan entry for 1999-01-01; run "plan" first'`**、`queued→running→failed(planner agent failed: timeout)`、互斥 `[(1,1)]`、cancel 200/409、RBAC owner(alpha 403 / beta 200 / settings 403 / POST users 403 / POST beta job 201 / POST alpha job 403)、匿名 401
+- [OK] 调度 e2e `bash /tmp/wfc-c2-sched.sh`：启动即刻 tick → 1 条 publish（`created_by=NULL`、`audit actor='scheduler'`、`detail.source='scheduler'`）；再 +12s 仍为 1（幂等）
+- [OK] 迁移桥：`fillMissingPlansFromFiles` 首采 1 / 二次 0 / DB 优先；集成实测「仅存在引擎文件计划 → 调度器自动入队 publish，再 tick 为 0」
+- [OK] 启动模式：`--no-worker`（不注册调度）/ `--worker`（不监听 HTTP）/ SIGTERM 优雅退出 均实测
+- [OK] 失败显形 H5：engine 真调模型遇上游 503 → `status=failed` 且 `error` 非空
+- [OK] `bash -n` + `--dry-run`（可重复）systemd timer 脚本；engine 零改动（`git status --porcelain src/ | grep -v src/console/` 为空）
+- [OK] trellis-check 独立复核 PASS-with-issues（直接修 5 处死代码 + 403 审计 actor 局部化；D3/D4/D7 本轮同修）
+
+### Status
+
+[OK] **C2 完成并归档**（父任务 M2a 收口）
+
+### Next Steps
+
+- C3 `console-content-workbench` 规划：计划编辑 UI → pi 生成 → 草稿箱推送 → 重生成/版本历史（含 SSE、`articles`/`drafts` 落地）→ 父任务 `implement.md` M2b
+- C2 遗留（C6 加固）：计划 job 持续失败无退避（D2）

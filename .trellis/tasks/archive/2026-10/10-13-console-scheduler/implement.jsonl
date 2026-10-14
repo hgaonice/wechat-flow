@@ -1,0 +1,17 @@
+{"file": ".trellis/tasks/10-13-console-scheduler/design.md", "reason": "C2 技术设计：queue/worker/scheduler 组件、互斥与幂等、到期判定、迁移与回滚"}
+{"file": ".trellis/tasks/10-13-console-scheduler/implement.md", "reason": "C2 实施清单 I2-1..I2-9 与验收命令"}
+{"file": ".trellis/tasks/10-13-console-scheduler/prd.md", "reason": "C2 需求 R3.1-R3.3 与 AC-5/AC-11"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/design.md", "reason": "父设计：任务模型 §4 与调度 §5.3"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/implement.md", "reason": "父排期 M2a（C2 步骤 I2-1..I2-7）与可并行点"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "plans/jobs/job_logs v1 DDL 与不变量 I3/I4/I5"}
+{"file": ".trellis/spec/console/api.md", "reason": "端点契约、错误包、CSRF/RBAC 约定（C2 增量端点）"}
+{"file": ".trellis/spec/console/security.md", "reason": "审计/越权/CSRF 要求（入队与计划变更落 audit）"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 硬约束 H1-H8（不改发布链路 / engine 不反向依赖）"}
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 技术栈与零依赖红线（AC-10）"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败显形：ok:false + 原因，不伪装成功"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "发布真相源 verifyDraftBody；worker 只调用不改写"}
+{"file": "src/planner.ts", "reason": "runPlan/findEntryForDate/Plan 契约（worker kind=plan 调用面）"}
+{"file": "src/publisher.ts", "reason": "runPublish/PublishRunResult 契约（worker kind=publish 调用面）"}
+{"file": "src/state.ts", "reason": "isPublished/state/published.json 幂等真源"}
+{"file": "src/console/db/schema.ts", "reason": "plans/jobs/job_logs 实际 DDL（复用，不加列）"}
+{"file": "src/console/config/resolve.ts", "reason": "buildRawConfig/accountEntry：worker 取每账号 AppConfig 的路径"}

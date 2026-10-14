@@ -1,6 +1,6 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v1（已随 C1 校准）**。C5/C6 落地后继续校准。
+> 状态：**v2（已随 C1 + C2 校准）**。C5/C6 落地后继续校准。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
@@ -41,6 +41,8 @@
 - 每次请求装载 `{user, role, grantedAccounts}` 后判定：
   - 未登录 → **401 `unauthorized`**；跨账号/角色不足 → **403 `forbidden`** 且落 `audit`（`action='denied'`）。
 - 授权判定集中在 `auth/rbac.ts`（`assertAdmin` / `assertAccountAccess`），禁止各 handler 自行判断。
+- **任务类路由（C2）**：`/api/jobs/:id` 与 `/api/jobs/:id/cancel` **不信任 URL**——先查 `jobs` 行，再用
+  `job.account_id` 走 `assertAccountAccess`；不存在 → 404（在鉴权之前）。越权 → 403 且落 `denied`。
 - **机密可见性**：非 admin 的 `GET /api/accounts/:id` **不下发 `global`**，且从 `effective`/`overrides` 剔除
   `notify`/`proxy`/`piBin`/`bunBin`/`skillDir`（H7，见 `server.ts#accountDetail`）。
 
@@ -77,7 +79,8 @@
 必须落 `audit` 的动作：登录成功/失败、登出、改密、账号增删改、配置变更、凭据写入/轮换、任务触发、**决策应答**、越权尝试。
 字段（v1）：`user_id`（可空）、**`actor`**（用户名文本，失败登录/未知用户也能归属）、`action`、`target`、
 `detail_json`、`ip`、`ua`、`ts`、**`ok`**（0/1）。查询入口 `GET /api/audit`（admin，`?limit=`≤500）。
-越权（403）由 `server.ts` 统一捕获并写 `action='denied'` 行。
+越权（403）由 `server.ts` 统一捕获并写 `action='denied'` 行；**`actor` 取该请求会话的真实用户名**
+（`try/catch` 在 `route()` 内、用请求局部 `session`；未登录/无会话时为 `unknown`）。C2 修正了 C1 曾写死 `actor='unknown'` 的问题。
 
 ## 8. 已知风险与兜底
 

@@ -67,7 +67,8 @@
 |-------|------|--------|--------|------|------|-----------|
 | **S11** | 控制台规划定稿（spec 骨架 + AGENT 更新） | M0 | — | ✅ 完成 | — | `.trellis/spec/console/*`、本文件 §1/§3 |
 | **S12** | 控制台基座：服务/DB/鉴权/账号CRUD/配置覆盖/迁移 | M1 | C1 | ✅ 完成 | — | `src/console/**`、`archive/2026-10/10-13-console-foundation/`、spec v1 |
-| **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | 🟡 规划（下一步） | — | 子任务 `10-13-console-scheduler/` |
+| **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | ✅ 完成 | — | `src/console/jobs/**`、`deploy/console-scheduler.md`、`deploy/systemd/`、spec v2 |
+| **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱推送 → 重生成/版本历史 | M2b | C3 | 🟡 规划（下一步） | — | 子任务 `10-13-console-content-workbench/` |
 | **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱 → 重生成 | M2b | C3 | ⚪ 未开始 | G2 | 子任务 `10-13-console-content-workbench/` |
 | **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ⚪ 未开始 | — | 子任务 `10-13-console-agent-session/` |
 | **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ⚪ 未开始 | G7 | 子任务 `10-13-console-ops-tunnel/` |
@@ -99,8 +100,8 @@
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
 | `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（M1 已收口） |
 | `archive/2026-10/10-13-console-foundation/` | S12 | C1 控制台基座（服务/DB/鉴权/RBAC/配置继承/迁移） | ✅ 已归档（2026-10-13） |
-| `10-13-console-scheduler/` | S13 | C2 调度与任务模型 | ⚪ 规划 |
-| `10-13-console-content-workbench/` | S14 | C3 内容工作台 | ⚪ 规划 |
+| `archive/2026-10/10-13-console-scheduler/` | S13 | C2 调度与任务模型（plans/jobs/queue/worker/scheduler + timer 迁移脚本） | ✅ 已归档（2026-10-14） |
+| `10-13-console-content-workbench/` | S14 | C3 内容工作台 | ⚪ 规划（下一步） |
 | `10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ⚪ 规划 |
 | `10-13-console-ops-tunnel/` | S16 | C5 运维与公网 | ⚪ 规划 |
 | `10-13-console-deploy-hardening/` | S17 | C6 部署与加固 | ⚪ 规划 |
@@ -131,9 +132,26 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：**控制台 C1 `console-foundation` 已完成并归档 → 下一步 C2 `console-scheduler` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
+**当前任务**：**控制台 C2 `console-scheduler` 已完成并归档 → 下一步 C3 `console-content-workbench` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
 
-### 当前（控制台）· C1 基座收口（M1）
+### 当前（控制台）· C2 调度与任务模型（M2a）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| I2-1..I2-7 | `src/console/jobs/{types,plans,queue,worker,scheduler}.ts`（886 行）+ 路由 + `main.ts` 生命周期 | ✅ | `archive/2026-10/10-13-console-scheduler/implement.md` §6 证据索引 |
+| AC-5 | 任务状态机 `queued→running→{succeeded,failed,canceled}` + 每账号互斥 + 取消 | ✅ | 单测 **35 passed / 0 failed**（`/tmp/wfc-c2-jobs.ts`）；e2e `failed + error='no plan entry…'`、cancel 200/409 |
+| AC-11 | 失败必显形（`status='failed'` + 非空 `error`），绝不伪装成功 | ✅ | `kind=plan` 实测 `status=failed`、`err='planner agent failed: timeout'` |
+| AC-10 | 零新增运行时依赖 / tsc / bun build | ✅ | `dependencies=undefined`、`tsc --noEmit` 0 错、`bun build` OK |
+| 调度 | `Asia/Shanghai` 到期推导 + 去重 + 启动即 tick | ✅ | 调度 e2e：1 条 publish（`actor=scheduler`）、再 tick 仍 1 |
+| 迁移 | 计划文件→DB 桥（DB 优先）+ systemd timer 停用/回退脚本 | ✅ | `fillMissingPlansFromFiles` 3 项单测；D3 集成实测「仅文件计划 → 自动入队 publish」；脚本 `bash -n` + `--dry-run` 幂等 |
+| 独立复核 | trellis-check | ✅ | `check-report.md`（PASS-with-issues；直接修 2 项；D1–D8 中 D3/D4/D7 本轮已修） |
+| 发布链路 | engine 零改动 | ✅ | `git status --porcelain src/ \| grep -v src/console/` 为空 |
+| spec | 校准 console spec v1→v2 + `design.md` 补 I13 | ✅ | `.trellis/spec/console/{index,api,data-model,security}.md` |
+
+**下一步**：C3 `console-content-workbench` 规划（计划编辑 UI → pi 生成 → 草稿箱推送 → 重生成/版本历史；含 SSE、`articles`/`drafts` 表落地）→ 见父任务 `implement.md` M2b 与子任务 `prd.md`。
+**推进顺序**：C1 ✅ → C2 ✅ → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
+
+### 上一子任务（控制台）· C1 基座收口（M1）
 
 | # | 步骤 | 状态 | 证据 |
 |---|------|------|------|
@@ -145,8 +163,8 @@
 | 迁移期兼容 | engine 未回退 | ✅ | `doctor --all` / `publish --dry-run` 均可用 |
 | spec | 校准 console spec v0→v1 | ✅ | `.trellis/spec/console/{index,api,data-model,security}.md` |
 
-**下一步**：C2 `console-scheduler` 规划（周/月计划表 + jobs + 调度器 + 每账号互斥）→ 见父任务 `implement.md` M2 与子任务 `prd.md`。
-**推进顺序**：C1 ✅ → C2 → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
+**下一步**：C3 `console-content-workbench` 规划。
+**推进顺序**：C1 ✅ → C2 ✅ → C3 → C4 → C5 → C6（C4 与 C2 均只依赖 C1，可并行；C3 依赖 C2；C6 依赖 C1–C5）。
 
 ### 上一阶段（引擎 S10）
 
@@ -167,11 +185,16 @@
 **上一任务（S9 上下文治理）**：✅ 已交付并经用户确认 → `archive/2026-10/10-12-context-governance/`
 
 **Checkpoint（下次开工先看这里）**
-- **C1 已完成并归档（S12/M1）**：控制台基座在 `src/console/**`（`bun` 运行、零新增依赖）。子命令：`bun src/console/main.ts --init-key | --import-config | --create-admin <name> | serve | --status | --verify-ac3`。
+- **C2 已完成并归档（S13/M2a）**：调度与任务模型在 `src/console/jobs/**`（`types`/`plans`/`queue`/`worker`/`scheduler`，886 行）。`main.ts` 默认 `serve`=HTTP+调度+worker；`--no-worker` 只 HTTP；`--worker` 无头只调度+执行。
+- **任务模型**：`jobs.status∈{queued,running,succeeded,failed,canceled}`；**每账号 ≤1 个 `running`**（SQL `NOT EXISTS` + 进程内 Set 双保险）；认领/终结/取消均为条件 UPDATE（终态不可再迁移）；重启 `reap` 遗留 `running` → `failed('interrupted by restart')`。全局并发 `CONSOLE_MAX_CONCURRENCY`（默认 2）。
+- **调度到期推导**（无新列）：publish = 当天在 `plans` 内 && `hour≥publishHour` && 未发布（engine `state/published.json` 优先）&& 无 live job；plan = `weekday===planWeekday` && 本周无 DB 计划 && 无 live plan job。时区固定 `Asia/Shanghai`；`settings.schedule={enabled,publishHour,planWeekday,tickSec}`。
+- **计划真源（I13）**：`plans` 表为唯一真源 → `materializePlans` 原子物化 `data/<alias>/plans/<week>.json`；反向 `fillMissingPlansFromFiles`（**仅 DB 缺该周时采纳，故控制台编辑永不被回灌**）与 `importPlansFromFiles`（plan 任务后，跳过 `*.dryrun.json`）。
+- **迁移**：systemd timer 停用（`deploy/systemd/disable-timer.sh`，不删 unit、可 `enable-timer.sh` 回退）；说明 `deploy/console-scheduler.md`。
+- **下一步**：C3 `console-content-workbench` 规划。复现证据：`cat .trellis/tasks/archive/2026-10/10-13-console-scheduler/{prd,design,implement}.md`、`check-report.md`；C1 同上目录 `10-13-console-foundation/`。
 - **两条数据脉络**：① 配置真相源 = DB（`settings(global)` + `accounts.overrides_json` **逐字节 verbatim**）→ 回渲染 `config.json`；回渲染 = `.bak`(不覆盖) + tmp→fsync→rename。② 账号热列（`cdp_port`/`enabled`…）仅为约束/查询镜像，由单一写路径同步。
 - **关键不变量**：`alias`/`cdp_port` 唯一（API 409 + 端口建议）；owner 仅 `account_grants` 账号且**看不到 global 机密**；无 master key / 无管理员 → fail-fast 拒绝启动；写请求必须 CSRF。
 - **坑**：`.gitignore` 的 `console/` 必须写成 `/console/`（否则会吞掉 `src/console/`）；引擎 `model` 回退是**按嵌套 kind**，`cover`/`math` 是**整对象**回退，`null` 等价缺失（继承）。
-- **下一步**：C2 `console-scheduler` 规划。复现证据：`cat .trellis/tasks/archive/2026-10/10-13-console-foundation/{prd,design,implement}.md`、`check-report.md`。
+- **C6 待办（C2 遗留，非阻塞）**：计划 job 持续失败无退避（默认 tick 60s 会重试，D2）；调度只认 DB 计划（已加文件桥缓解，D3）。
 - 若上下文过长：按 §6 规则把新进展写回本节 → `/clear` → 重读本文件 §5 继续。
 
 ---
@@ -224,9 +247,11 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 | D8 | 上下文治理：`.trellis` + `AGENT.md` + 分层文档 + repomap | 降 Token、防幻觉、可续接 | ✅ 已交付 |
 | D9 | runtime **零依赖**；repomap 用脚本而非引入工具 | 部署机简单、易维护 | ✅ |
 | D10 | 封面走 **CDP 驱动编辑器弹窗**（O-B），不走 API | API 受 IP 白名单限制（同 D1）；封面属确定性产物，失败必须降级、不阻断发布 | ✅ 真机验收通过（2026-10-13） |
-| D11 | 控制台独立成层 `src/console/`，**engine 不反向依赖**；运行时仍**零依赖**（`Bun.serve`/`bun:sqlite`/WebCrypto） | 控制面与发布面解耦；保持 AC-10 零依赖红线 | 🟡 规划（C1） |
-| D12 | **DB 为配置真相源**，`config.json` 降级为派生产物（原子回渲染 + AC-3 逐字段比对） | 支持「全局默认 ⊕ 单账号覆盖」与 UI 可见性；不改 engine `config.ts` 旧签名 | 🟡 规划（C1） |
-| D13 | 迁移期 **控制台调度接管，systemd timer 停用但保留回退**；每账号任务**串行**（cdpPort/profile 互斥） | 避免双触发重复发布；沿用多账号隔离不变量 | 🟡 规划（C2） |
+| D11 | 控制台独立成层 `src/console/`，**engine 不反向依赖**；运行时仍**零依赖**（`Bun.serve`/`bun:sqlite`/`node:crypto`） | 控制面与发布面解耦；保持 AC-10 零依赖红线 | ✅ 已实现（C1） |
+| D12 | **DB 为配置真相源**，`config.json` 降级为派生产物（原子回渲染 + AC-3 逐字段比对） | 支持「全局默认 ⊕ 单账号覆盖」与 UI 可见性；不改 engine `config.ts` 旧签名 | ✅ 已实现（C1） |
+| D13 | 迁移期 **控制台调度接管，systemd timer 停用但保留回退**；每账号任务**串行**（cdpPort/profile 互斥） | 避免双触发重复发布；沿用多账号隔离不变量 | ✅ 已实现（C2；`deploy/systemd/{disable,enable}-timer.sh`） |
+| D14 | Agent 会话用 `pi --mode rpc` 子进程 + **严格 JSONL**（只按 `\n` 切分，禁用 readline）+ 决策卡片人在环 + 最小权限 | 进程隔离、保持零依赖；控制在环审批、不放开权限 | 🟡 规划（C4） |
+| D15 | **调度器/worker 内嵌 `serve` 进程**（不再用 systemd timer）；计划真源 = `plans` 表，engine 计划文件为派生物；到期时刻由数据推导而非新列 | 一个进程易部署可观测；避免双触发；保留 timer 回退 | ✅ 已实现（C2） |
 | D14 | Agent 会话用 `pi --mode rpc` 子进程 + **严格 JSONL**（只按 `\n` 切分，禁用 readline）+ 决策卡片人在环 + 最小权限 | 进程隔离、保持零依赖；控制在环审批、不放开权限 | 🟡 规划（C4） |
 
 ---
@@ -235,6 +260,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-14 | **控制台 C2 调度与任务模型交付并归档（S13/M2a）**：新增 `src/console/jobs/**`（`types`/`plans`/`queue`/`worker`/`scheduler`，886 行）+ 7 条路由 + `main.ts` 生命周期（`serve` 内联调度、`--no-worker`、`--worker` 无头、SIGTERM 优雅退出）；新增 `deploy/console-scheduler.md` 与 `deploy/systemd/{disable,enable}-timer.sh`（不删 unit、可回退）；新增 `fillMissingPlansFromFiles` 迁移桥（**DB 优先**，控制台编辑不被文件回灌）。AC-5/AC-10/AC-11 实测：任务层单测 **35 passed/0 failed**、HTTP e2e（CSRF 403 / 400 / 401 / 403 / 201 / 409 全符合）、调度 e2e（启动即 tick → 1 条 publish，`actor=scheduler`，再 tick 仍 1）、失败必显形（`status=failed` + 非空 `error`）。`trellis-check` 独立复核 **PASS-with-issues**（无阻塞缺陷；直接修 1）死代码/未用导出 5 处、2）403 `denied` 审计 `actor` 改为请求局部——消除共享可变状态；本轮另修 D3/D4/D7：文件计划迁移桥、`worker.stop()` 有界 drain（`CONSOLE_WORKER_DRAIN_MS`）、`readSchedule` 布尔强校验 + 失败保留进度）。engine **零改动**；console spec 校准 v1→v2 并补 `design.md` I13（计划物化契约） | pi |
 | 2026-10-13 | **控制台 C1 基座交付并归档（S12/M1）**：新增 `src/console/**`（`Bun.serve` + `bun:sqlite` WAL + argon2id 会话/CSRF/RBAC + 账号CRUD/配置覆盖/导入回渲染 + 静态 UI，**零新增运行时依赖**）；`src/config.ts` 仅新增 `resolveConfig(raw,alias)` 导出（`loadConfig` 行为不变）；`.gitignore` 增 `/console/`。AC-1/2/3/4/10 实测通过（`--verify-ac3` 逐字段一致、`loadConfig` 前后**字节一致**、17+9 项 curl 断言）；`trellis-check` 独立复核 **PASS**（5 项缺陷已修并回归：cdpPort 字符串绕过 UNIQUE / owner 详情泄露 global / 畸形 Cookie 500 / 不存在 grant id 的 FK 500 + 孤儿用户 / CSP·HSTS 缺失）；engine `doctor --all`/`publish --dry-run` 未回退；console spec 校准 v0→v1 | pi |
 | 2026-10-13 | **控制台 M0 规划收口（S11）**：用户批准规划摘要；新建 `.trellis/spec/console/` 骨架（`index/api/data-model/security/agent-session`，v0 契约）；更新 `AGENT.md` —— §1 新增控制台路线 S11–S17、§2 新增 G6/G7、§3 补 6 个子任务、§8 补 D11–D14 | pi |
 | 2026-10-13 | **跨环境交接约定落地**：新增 `.trellis/spec/guides/cross-env-handoff.md`（触发条件 / H1–H10 必含章节 / 证据与密钥边界 / 生命周期）；新增 `docs/handoffs/`（`TEMPLATE.md` + `README.md`），`docs/HANDOFF-CNB.md` 迁入为 `docs/handoffs/2026-10-13-cnb-console.md`（含基线 SHA 与失效条件）；AGENT.md §4、spec/guides/index.md 补入口 | pi |
@@ -253,7 +279,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（控制台 S11+）**：C1 ✅ → 规划并实施 **C2 `console-scheduler`**（周/月计划表 + jobs + 调度器 + 每账号互斥），随后 C3 → C4 → C5 → C6。见 §5 与父任务 `implement.md`。
+1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → 规划并实施 **C3 `console-content-workbench`**（计划编辑 UI → pi 生成 → 草稿箱推送 → 重生成/版本历史；含 SSE 与 `articles`/`drafts` 落地），随后 C4 → C5 → C6。见 §5 与父任务 `implement.md`。
 2. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
 3. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
 4. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。

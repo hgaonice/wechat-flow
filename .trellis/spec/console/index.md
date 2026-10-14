@@ -3,7 +3,7 @@
 > 控制面（control plane）：在既有 engine（`src/*.ts`，见 `../engine/index.md`）之上加一层**带鉴权的 Web 管理控制台**，
 > 让非命令行使用者能自助管理多账号、编排内容计划、与 pi agent 会话并在环审批。
 >
-> **状态：C1 已落地；`api.md`/`data-model.md`/`security.md` 已校准为 v1；`agent-session.md` 仍为 v0 契约（C4 校准）。**
+> **状态：C1 + C2 已落地；`api.md`/`data-model.md`/`security.md` 已校准为 v2；`agent-session.md` 仍为 v0 契约（C4 校准）。**
 > 于 M0 编写（源：父任务 `design.md`）。
 > 契约与代码冲突时：**先改本目录，再改代码**；DDL / API / 安全语义变更必须同步本目录。
 
@@ -62,9 +62,9 @@ src/console/
 
 | Guide | 说明 | 状态 |
 |-------|------|------|
-| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v1（C1） |
-| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v1（C1） |
-| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v1（C1） |
+| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v2（C1+C2） |
+| [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v2（C1+C2） |
+| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v2（C1+C2） |
 | [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v0 契约（C4） |
 
 ---
