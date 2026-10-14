@@ -1,0 +1,12 @@
+{"file": ".trellis/tasks/10-13-console-content-workbench/design.md", "reason": "C3 技术设计：runArticleGeneration 附加式重构、版本链快照、SSE 契约、推送真相源"}
+{"file": ".trellis/tasks/10-13-console-content-workbench/implement.md", "reason": "C3 实施清单 I3-1..I3-7、验收命令、G-C3 确认门与回滚点"}
+{"file": ".trellis/tasks/10-13-console-content-workbench/prd.md", "reason": "C3 需求 R3.1-R3.3/R3.6 与 AC-5/AC-7/AC-11"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/design.md", "reason": "父设计 §5.4 内容工作台（计划编辑 → 生成 → 草稿箱 → 版本链）"}
+{"file": ".trellis/tasks/10-13-wechat-flow-console/implement.md", "reason": "父排期 M2b（C3 步骤与依赖 C2）"}
+{"file": ".trellis/spec/console/api.md", "reason": "端点契约、错误包、SSE 约定、CSRF/RBAC（C3 增量端点）"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "articles/drafts DDL 与不变量 I15-I18（版本链）"}
+{"file": ".trellis/spec/console/security.md", "reason": "审计/越权/CSRF（articles 反查鉴权、regenerate 落 audit）"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 硬约束 H1-H8（不改发布链路判定 / engine 不反向依赖）"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源 verifyDraftBody；C3 只读引擎结果不自行判成功"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（failed + error）"}
+{"file": ".trellis/tasks/archive/2026-10/10-13-console-scheduler/design.md", "reason": "C2 依赖面：jobs/worker 的 executeJob 扩展点（generate/regenerate 占位）"}

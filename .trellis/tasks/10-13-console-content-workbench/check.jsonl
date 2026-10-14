@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-content-workbench/implement.md", "reason": "C3 验收命令与 AC-5/AC-7/AC-11 映射（逐条核对）"}
+{"file": ".trellis/tasks/10-13-console-content-workbench/design.md", "reason": "C3 不变量 I15-I18、SSE 契约、engine 接口与回滚点"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "articles 版本链单调 + parent_id 链；drafts.verified 记录真相源结果"}
+{"file": ".trellis/spec/console/api.md", "reason": "C3 端点契约（articles/regenerate/SSE）与错误包（400/403/404）"}
+{"file": ".trellis/spec/console/security.md", "reason": "审计落库、越权 403、CSRF、SSE 鉴权"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 清单与反模式"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源：UI 显示的成功/失败必须来自引擎 verifyDraftBody 结果"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（failed + error，不 succeeded）"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "engine 改动（publisher.ts 提取）后必跑命令与健康基线"}
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 层规约；确认提取不改成功判定"}
