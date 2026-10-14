@@ -11,9 +11,9 @@
 - [x] `design.md` 就绪（本目录）
 - [x] 本文件就绪
 - [x] `implement.jsonl` / `check.jsonl` 写入真实条目
-- [ ] **G-C5（用户确认）**：用户确认 D-C5-2（复用 engine `sendMail`，不改 engine）、
-      D-C5-3（`smtp` kind 保留入库但 C5 不消费）、D-C5-4（管理员副本默认开）后，方可进入实现 —— 待确认
-- [ ] `python3 .trellis/scripts/task.py start 10-13-console-ops-tunnel` → `planning → in_progress`
+- [x] **G-C5（用户确认）**：用户已于 2026-10-14 确认 D-C5-2（复用 engine `sendMail` + 共享 SMTP，不改 engine）、
+      D-C5-3（SMTP 全局共用；每账号接收邮箱动态配置；`smtp` kind 保留入库不消费）、D-C5-4（管理员副本默认开）—— 已确认 ✅
+- [x] `python3 .trellis/scripts/task.py start 10-13-console-ops-tunnel` → `planning → in_progress`
 
 > 未获 G-C5 前**不动** `src/`。本任务是**纯增量**：不触碰 `src/pi.ts` / `src/wechat.ts` / `src/publisher.ts` / `src/mailer.ts` / 推送链路。
 > **依赖 C1 已交付**（`account_email`/`secrets`/`tunnels` 表、`crypto/secrets.ts`、`auth/rbac.ts`、`AppState.masterKey`）。

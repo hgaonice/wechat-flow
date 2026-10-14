@@ -149,6 +149,8 @@ export async function notifyTunnelChange(
 - **管理员副本**（D-C5-4）：若 `adminCopy`，把 `settings(global).notify.to` 列表并入收件人（去重）。
 - **发送**：`send(cfg, {subject, body})`，`cfg` = 由 `settings(global)` 有效 `notify` 构造的 `EmailConfig`
   （`skill.dir` 等原样），`to` 用上面算出的收件人覆盖。**engine `mailer.ts` 保持不变**（D-C5-2）。
+  > **D-C5-3（已确认）**：SMTP **全局共用**（`email-sender` skill）；**每账号接收邮箱可动态配置**（`account_email`，随改随生效）；
+  > `smtp` kind 仍接受入库（write-only、永不回显）但**当前不参与发信**（reserved，待未来改 engine 后启用每账号 SMTP）。
 - **去重 / 重试（I26）**：进入前 `if (tunnel.notified_at) return {sent:false, skipped:"already-notified"}`。
   成功 → `markNotified` + `audit('tunnel.mail', ok:true)`；失败 → `bumpNotifyAttempts`，
   达上限 → `setTunnelStatus(...,'error', detail)` + `audit('tunnel.mail', ok:false, detail)`，否则交给退避重试。
@@ -238,7 +240,7 @@ tunnel?.start();                 // 在 server 起来之后
 | 决策 | 取舍 |
 |------|------|
 | 全局单隧道 vs 每账号隧道 | 选全局：一个控制台一个入口，符合 R2.2；代价是地址共享 |
-| 复用 engine `sendMail` vs 自造 SMTP | 选复用：零依赖、不改 engine；代价是不能每账号独立 SMTP（D-C5-3） |
+| 复用 engine `sendMail` vs 自造 SMTP | 选复用：零依赖、不改 engine；SMTP **全局共用**，每账号**接收邮箱动态配置**（D-C5-3 已确认）；代价是不能每账号独立 SMTP |
 | 邮件只发「该账号邮箱」 | 安全优先；管理员要全局就靠副本与 `/admin`，不把 A 的账密发 B |
 | 去重键放 `tunnels.notified_at` | 简单、事务内一致；不引入新表 |
 | 监督进程复用 C4 形态 | 一致的心智模型与 fail-surfacing，测试可注入 |

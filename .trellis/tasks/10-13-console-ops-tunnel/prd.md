@@ -41,11 +41,17 @@
 
 ## 关键决策 / 待确认（G-C5 门，动工前需用户确认）
 
+> **G-C5 已确认（2026-10-14）**：用户对三项决策答复——
+> 1. **D-C5-2 ✅ 同意**：复用 engine `mailer.ts` + `email-sender` skill 的共享 SMTP，收件人由 `account_email` 覆盖，**不改 engine**。
+> 2. **D-C5-3 ✅ 同意**：**SMTP 可共用**（全局共享 SMTP）；**每个独立账号的接收邮箱可动态配置**；`smtp` kind 保留入库（write-only、永不回显、当前不参与发信，标记 reserved）。
+> 3. **D-C5-4 ✅ 同意**：地址变更邮件默认向全局 `settings(global).notify.to` 发管理员副本，`CONSOLE_TUNNEL_MAIL_ADMIN=0` 可关。
+> 其余 D-C5-1（仅 Quick Tunnel）、D-C5-5（全局单隧道）、D-C5-6（v3 纯加法）、D-C5-7（`ops` 注入 + 503）、D-C5-8（UI）随方案默认生效。
+
 | # | 决策 | 建议 | 影响 |
 |---|------|------|------|
 | D-C5-1 | 隧道形态 | **仅 Quick Tunnel**（`kind='quick'`，无自有域名）；`named` 仅预留（父 K3 已定） | — |
 | D-C5-2 | 发信通道 | **复用 engine `mailer.ts` + `email-sender` skill 的共享 SMTP**，收件人由 `account_email` 覆盖；**不改 engine** | 决定了是否触碰 engine |
-| D-C5-3 | `smtp` secret kind | C5 **不消费**每账号 SMTP（需改 engine 才能用）。建议：**保留该 kind 入库但标记为 reserved**（write-only、永不回显），不做每账号发信 | 需求是否缩水 |
+| D-C5-3 | `smtp` secret kind | C5 **不消费**每账号 SMTP（需改 engine 才能用）。**决定：`smtp` 视为共享/保留**——全局 SMTP 共用（`email-sender` skill），每账号**接收邮箱动态配置**，`smtp` kind 保留入库（write-only、永不回显、当前不参与发信） | 需求是否缩水 |
 | D-C5-4 | 管理员副本 | 默认向 `settings(global).notify.to` 列表发副本；`CONSOLE_TUNNEL_MAIL_ADMIN=0` 可关 | 收件范围 |
 | D-C5-5 | 隧道粒度 | **全局单例**（一个 `cloudflared` 映射 8787；`tunnels` 无 `account_id`），非每账号一隧道 | 数据模型 |
 | D-C5-6 | 迁移 | **v3 纯加法**：`tunnels.notified_at TEXT`、`tunnels.notify_attempts INTEGER DEFAULT 0` | 回滚 |

@@ -84,6 +84,8 @@ ALTER TABLE tunnels ADD COLUMN notify_attempts INTEGER NOT NULL DEFAULT 0;   -- 
 - 仅 `accounts.enabled != 0` 的账号发信。
 - 正文三段：服务器信息（hostname/内网 IP/端口/时间）、当前地址、该账号 `wechat_login`（解密；未配置则显式标注）。
 - 发送经 engine `sendMail(cfg, {subject, body})`；`cfg` 来自全局 `notify` 有效配置，`to` 覆盖为上面的收件人（**不改 engine**）。
+- **D-C5-3（已确认）**：SMTP **全局共用**（`email-sender` skill）；**每账号接收邮箱可动态配置**（改 `account_email` 即时生效）；
+  `smtp` kind 仍接受入库（write-only、永不回显）但**当前不参与发信**（reserved）。
 - 去重：`notified_at` 已存在 → `skipped:"already-notified"`，不发。
 - 失败：`bumpNotifyAttempts`；`attempts >= maxNotifyAttempts` → `tunnels.status='error'` + detail + `audit('tunnel.mail', ok:false)`。
 - 审计：`tunnel.change` / `tunnel.exit` / `tunnel.mail`，`detail_json` **不含正文与账密**。
