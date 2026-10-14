@@ -432,3 +432,48 @@ CF Quick Tunnel 监督（TunnelSupervisor）+ 地址变更邮件下发（账号�
 
 - C6 console-deploy-hardening：systemd/反代/限流/备份/端到端回归 + 携带遗留观察项（C2 plan-job 失败无退避、C4 N1–N3、decision.expired 命名）
 - 真机（250/G2）待验：真实 cloudflared quick tunnel + 真实 email-sender 发信 + 浏览器 /admin；C3/C4 真实 pi 生成/流式与微信草稿推送
+
+
+## Session 11: 控制台 C6 部署与加固交付并归档（S17/M5，第二阶段收官）
+<!-- trellis-session: v=2 fp=60463b89779e3ece -->
+
+**Date**: 2026-10-14
+**Task**: 控制台 C6 部署与加固交付并归档（S17/M5，第二阶段收官）
+**Branch**: `main`
+
+### Summary
+
+systemd（Mode A 主 / Mode B 互斥）+ 安装/备份/恢复脚本 + 反代示例 + 部署与验收手册；API 限流（仅 /api/*，429+Retry-After，不写审计）；/health 收紧为 {status,version,uptimeSec,db,tunnel}；调度失败退避；修复 C4/C5 遗留 N1–N3。engine 零改动、零新增运行时依赖；父任务 6/6。
+
+### Main Changes
+
+- 新增 src/console/http/ratelimit.ts（令牌桶 109 行）+ server.ts#handle 仅对 /api/* 限流（429 rate_limited + Retry-After，不写审计，/health/静态豁免；key=u:<userId> 否则 ip:<clientKey>，CONSOLE_TRUST_CF→CF-Connecting-IP）
+- /health 收紧为 {status,version,uptimeSec,db,tunnel}（db:ok|error 仍 200；tunnel 优先最新 DB 行 status，回落 supervisor 存活；不泄账号/队列/密钥）
+- jobs/{queue,scheduler}.ts 失败退避：countFailed/lastFailureAt 按 (account,kind)+当日/期 key；CONSOLE_JOB_MAX_ATTEMPTS(3)/CONSOLE_JOB_RETRY_COOLDOWN_MIN(30) 预算+冷却
+- 修复 C4/C5 遗留 N1–N3：ChatBus.close 先广播 chat.closed 再清监听；chat-sse cleanup 前置 + 已 abort 立即 done + 重放失败清理；ui/chat.js 收 chat.closed/chat.lost 关流
+- main.ts 新增 --backup（VACUUM INTO tmp→integrity_check→原子 rename）与 --restore-check（只读）
+- 新增 deploy/{systemd/wechat-console.service,systemd/cloudflared.service,systemd/wechat-console.env.example,install-console.sh,console-backup.sh,console-restore.sh,nginx-console.conf.example,console-deploy.md,console-acceptance.md}；保守沙箱（不加 ProtectSystem=strict）+ 仅映射 127.0.0.1:8787、绝不暴露 CDP
+- spec 校准 v5→v6：api.md/security.md v6、index.md 状态行、新增 ops-deploy.md v1（I29–I34 / D28–D33）；README.md、docs/操作手册.md §10.5、src/README.md、TREE.md（383 行）同步
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ec502c` | feat(console): C6 部署与加固（限流/健康检查/退避/备份恢复/部署产物） |
+
+### Testing
+
+- [OK] [OK] bash /tmp/wfc-c6-verify.sh → pass=12 fail=0（static 5 + C6 specials 6 + C1–C5 回归 1）
+- [OK] [OK] 专项：ratelimit 38/0、backoff 23/0（29 tick 0 新增）、health 20/0、sse 20/0、backup 17/0、deploy-artifacts 37/0
+- [OK] [OK] tsc --noEmit 0 错；bun build OK；dependencies=undefined；engine 四文件 git diff --quiet=空；bash -n 三个脚本通过
+- [OK] [OK] trellis-check 独立复核：第 1 轮 PASS-with-issues（F1 AGENT.md 未更新 / F2 TREE.md 不新鲜 / F3 clientKey 回落措辞 / F4 /health 信封）→ 修复 → 第 2 轮 PASS（自写探针 51/0 + 聚合 12/0）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 真机（250）按 deploy/console-acceptance.md 跑 AC-1…AC-11（G2/G6/G7），随后请用户确认放行
+- 父任务 10-13-wechat-flow-console 保留在 planning（6/6 子任务已交付），待真机验收后归档
+- 可选：README L53 顶层树已补 console-*；repomap 升级为 AST 级（非阻塞）
