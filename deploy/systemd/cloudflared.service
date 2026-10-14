@@ -1,0 +1,34 @@
+# =============================================================================
+# Mode B (OPTIONAL / NOT RECOMMENDED) — cloudflared managed by systemd.
+# -----------------------------------------------------------------------------
+# The console supervises cloudflared IN-PROCESS (Mode A, CONSOLE_TUNNEL=1); that
+# is the supported deployment (see deploy/console-deploy.md and design.md D28).
+#
+# This unit is MUTUALLY EXCLUSIVE with Mode A. If you enable it you MUST set
+# CONSOLE_TUNNEL=0, otherwise two tunnels race. Choosing Mode B ALSO DISABLES:
+#   · C5 /api/tunnels status & history (no supervisor sees this tunnel)
+#   · the tunnel-address change notification email (G7)
+#
+# Leave this unit disabled unless you have a specific reason to manage the
+# tunnel outside the console.
+# =============================================================================
+[Unit]
+Description=cloudflared quick tunnel for wechat-flow console (Mode B, optional)
+Documentation=file:/root/wechat-flow/deploy/console-deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Maps ONLY the console port; it MUST listen on loopback and NEVER expose the
+# Chrome CDP port (see .trellis/spec/console/ops-deploy.md, I27/I34).
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

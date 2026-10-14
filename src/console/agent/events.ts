@@ -87,8 +87,22 @@ export class ChatBus {
     return this.buffers.has(sessionId) || this.listeners.has(sessionId);
   }
 
-  /** Drop all state for a finished session (listeners included). */
-  close(sessionId: number): void {
+  /**
+   * Broadcast a terminal `chat.closed` event to any attached SSE subscribers and
+   * drop all state for a finished session (I5/D33, finding N2). Doing this
+   * *before* clearing listeners prevents an open stream from hanging forever
+   * when the caller closes without a prior `emit`. Best-effort: a throwing
+   * subscriber must not abort the cleanup.
+   */
+  close(sessionId: number, payload: unknown = { status: "closed" }): void {
+    const subs = this.listeners.get(sessionId);
+    if (subs && subs.size > 0) {
+      try {
+        this.emit(sessionId, "chat.closed", payload);
+      } catch {
+        /* best-effort terminal broadcast */
+      }
+    }
     this.buffers.delete(sessionId);
     this.lastSeq.delete(sessionId);
     this.listeners.delete(sessionId);

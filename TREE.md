@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 16:54:55
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 17:54:57
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -47,6 +47,7 @@ src/console/db/migrate.ts
 src/console/db/render-config.ts
 src/console/db/schema.ts
 src/console/http/chat-sse.ts
+src/console/http/ratelimit.ts
 src/console/http/respond.ts
 src/console/http/router.ts
 src/console/http/sse.ts
@@ -94,7 +95,7 @@ src/wechat.ts
 
 导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
 
-### `src/console/agent/events.ts`  (96 行)
+### `src/console/agent/events.ts`  (110 行)
 > In-process chat event bus (C4, I4-5 / design.md D5).
 
 导出：`ChatEvent, Replay, ChatListener, ChatBus`
@@ -219,10 +220,15 @@ src/wechat.ts
 
 导出：`Migration, MIGRATIONS`
 
-### `src/console/http/chat-sse.ts`  (80 行)
+### `src/console/http/chat-sse.ts`  (106 行)
 > SSE bridge for chat sessions (C4, I4-6 / design.md D5).
 
 导出：`ChatSseOptions, streamChatEvents`
+
+### `src/console/http/ratelimit.ts`  (109 行)
+> In-process token-bucket rate limiter (C6, I29 / design.md D29).
+
+导出：`RateLimitResult, RateLimiterOptions, RateLimiter`
 
 ### `src/console/http/respond.ts`  (64 行)
 >  Uniform HTTP responses + the single error type handlers throw (spec/console/api.md §1).
@@ -249,12 +255,12 @@ src/wechat.ts
 
 导出：`PeriodType, PlanValidation, validatePlanInput, PlanFilter, listPlans, getPlan, upsertPlan, findPlanDay, materializePlans, fillMissingPlansFromFiles, importPlansFromFiles`
 
-### `src/console/jobs/queue.ts`  (177 行)
+### `src/console/jobs/queue.ts`  (211 行)
 > Job queue: enqueue, atomic claim, progress, and terminal transitions.
 
-导出：`EnqueueOptions, enqueue, getJob, ListJobsOptions, listJobsForAccount, listJobLogs, appendLog, setProgress, claimNext, finish, cancel, reapStartup, hasPublishJobForDate, hasActivePlanJob`
+导出：`EnqueueOptions, enqueue, getJob, ListJobsOptions, listJobsForAccount, listJobLogs, appendLog, setProgress, claimNext, finish, cancel, reapStartup, hasPublishJobForDate, hasActivePlanJob, countFailed, lastFailureAt`
 
-### `src/console/jobs/scheduler.ts`  (165 行)
+### `src/console/jobs/scheduler.ts`  (219 行)
 > Scheduler: scan due plans on a timer and enqueue jobs (idempotently).
 
 导出：`TZ, ScheduleConfig, readSchedule, ScheduleAction, schedulerTick, SchedulerHandle, SchedulerOptions, startScheduler`
@@ -269,7 +275,7 @@ src/wechat.ts
 
 导出：`WorkerHandle, WorkerOptions, executeJob, startWorker`
 
-### `src/console/main.ts`  (266 行)
+### `src/console/main.ts`  (352 行)
 > wechat-flow console entry point (C1).
 
 导出：（无，或为可执行入口）
@@ -279,7 +285,7 @@ src/wechat.ts
 
 导出：`SendFn, NotifyOpts, NotifyResult, internalIpv4, consolePort, WechatLogin, decryptWechatLogin, formatStamp, TunnelMailBody, buildTunnelMail, notifyTunnelChange`
 
-### `src/console/server.ts`  (1325 行)
+### `src/console/server.ts`  (1411 行)
 > Console HTTP app: routing, session middleware, CSRF, RBAC, and the C1 API.
 
 导出：`AppState, OpsDeps, Ctx, App, createApp`

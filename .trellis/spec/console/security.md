@@ -1,6 +1,6 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v5（已随 C1 + C2 + C3 + C4 + C5 校准）**。C6 落地后继续校准。
+> 状态：**v6（已随 C1 + C2 + C3 + C4 + C5 + C6 校准）**。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
@@ -85,7 +85,7 @@
 - 登录失败：以 `login_attempts(username, ip, ok, ts)` 为事实来源（持久化，重启不失效）。
   **同一用户名 15 分钟窗口内失败 ≥ 5 次** → 后续登录返回 **429**（`retryAfterSec` 提示），成功登录清零失败计数。
   常量：`MAX_LOGIN_ATTEMPTS=5`、`ATTEMPT_WINDOW_MIN=15`（`sessions.ts`）。
-- API 全局限流：按会话/IP 令牌桶；超限 429（C6 加固）。
+- API 全局限流（C6/I29）：**进程内令牌桶**，仅作用 `/api/*`；容量 `CONSOLE_RATE_BURST`（默认 120），速率 `CONSOLE_RATE_PER_MIN`（默认 600）/分钟，`PER_MIN=0` 关闭。key：已登录 `u:<userId>`，未登录 `ip:<clientKey>`（`CONSOLE_TRUST_CF=1` 时取 `CF-Connecting-IP`，否则 `x-forwarded-for` 首段，再退 `x-real-ip`/`local`）。超限 **429** `rate_limited` + `Retry-After`；**限流不写审计**（避免 429 被放大成审计洪泛）；`/health` 与静态资源豁免。
 - 隧道地址抖动时**发信去抖 + 失败重试上限**，避免邮件轰炸：去重键 `tunnels.id`（`notified_at IS NULL`），失败累加 `notify_attempts`，上限 `CONSOLE_TUNNEL_MAIL_MAX_ATTEMPTS`（默认 3）后置于 `detail` **停发**（I26）。
 
 ## 7. 审计（Audit）

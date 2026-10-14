@@ -174,4 +174,38 @@ export function hasActivePlanJob(db: Database, accountId: number): boolean {
   return countJobs(db, accountId, "plan", null, ["queued", "running"]) > 0;
 }
 
+// ── failure backoff (C6, I32 / design.md D31) ──────────────────────────────
+
+/**
+ * Count `failed` jobs for an account+kind matching the scheduling key. The key
+ * matches the job's `payload.date` (publish) or `payload.periodKey` (plan) so
+ * the same helper serves both schedulers.
+ */
+export function countFailed(db: Database, accountId: number, kind: JobKind, key: string): number {
+  const row = db
+    .query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM jobs
+        WHERE account_id = ? AND kind = ? AND status = 'failed'
+          AND (json_extract(payload_json, '$.date') = ? OR json_extract(payload_json, '$.periodKey') = ?)`,
+    )
+    .get(accountId, kind, key, key);
+  return row?.n ?? 0;
+}
+
+/**
+ * Most recent failure time for an account+kind+key as a SQLite UTC string
+ * (`ended_at ?? queued_at`), or `null` when there has never been a failure.
+ */
+export function lastFailureAt(db: Database, accountId: number, kind: JobKind, key: string): string | null {
+  const row = db
+    .query<{ t: string | null }>(
+      `SELECT COALESCE(ended_at, queued_at) AS t FROM jobs
+        WHERE account_id = ? AND kind = ? AND status = 'failed'
+          AND (json_extract(payload_json, '$.date') = ? OR json_extract(payload_json, '$.periodKey') = ?)
+        ORDER BY id DESC LIMIT 1`,
+    )
+    .get(accountId, kind, key, key);
+  return row?.t ?? null;
+}
+
 export { parseJobPayload };

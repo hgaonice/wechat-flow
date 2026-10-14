@@ -1,0 +1,38 @@
+[Unit]
+Description=wechat-flow console (HTTP API + scheduler + worker + Cloudflare tunnel)
+Documentation=file:/root/wechat-flow/deploy/console-deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/wechat-flow
+
+# ---- runtime env (mirrors the legacy publish timer; Chrome/CDP needs these) ----
+Environment=HOME=/root
+Environment=PATH=/root/.nvm/versions/node/v24.14.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=http_proxy=http://127.0.0.1:7890
+Environment=https_proxy=http://127.0.0.1:7890
+Environment=no_proxy=127.0.0.1,localhost,192.168.0.0/16,10.0.0.0/8,::1,192.168.0.251
+Environment=DISPLAY=:99
+Environment=XDG_RUNTIME_DIR=/tmp/runtime-root
+
+# ---- console-specific (template: deploy/systemd/wechat-console.env.example) ----
+EnvironmentFile=-/etc/default/wechat-console
+EnvironmentFile=-/root/wechat-flow/.env
+
+ExecStart=/root/.nvm/versions/node/v24.14.1/bin/bun src/console/main.ts
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# ---- conservative sandbox --------------------------------------------------
+# Do NOT add ProtectSystem=strict / ProtectHome / PrivateDevices here: the worker
+# spawns Chrome (CDP) and pi, which need a writable HOME/profile and /tmp.
+NoNewPrivileges=true
+ReadWritePaths=/root/wechat-flow /root/.wechat-console /root/.nvm
+
+[Install]
+WantedBy=multi-user.target

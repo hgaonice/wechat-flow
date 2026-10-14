@@ -6,6 +6,8 @@
  *   --init-key                create ~/.wechat-console/master.key (0600)
  *   --import-config           import existing config.json into the DB
  *   --verify-ac3              prove DB-derived config == original loadConfig()
+ *   --backup <file>           atomic VACUUM INTO snapshot + integrity check
+ *   --restore-check <file>    read-only integrity/version/row-count pre-flight
  *   --create-admin <name>     create/promote an admin (password via env or --password)
  *   --status                  print DB/schema/row counts
  *   (default)                 start the HTTP server
@@ -16,7 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { APP_DIR } from "../config.ts";
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { migrate, openDb, schemaVersion } from "./db/migrate.ts";
 import { importConfig } from "./db/import-config.ts";
 import { renderConfig } from "./db/render-config.ts";
@@ -60,6 +62,87 @@ function flagValue(args: string[], name: string): string | undefined {
 
 function openAt(): Database {
   return open();
+}
+
+interface IntegrityReport {
+  ok: boolean;
+  userVersion: number;
+  tables: Record<string, number>;
+}
+
+/** Read-only integrity + version/table-count probe for backup/restore (I30/I31). */
+function integrityCheck(file: string): IntegrityReport {
+  const ro = new Database(file, { readonly: true });
+  try {
+    const rows = ro.query<{ integrity_check: string }>("PRAGMA integrity_check").all();
+    const ok = rows.length === 1 && rows[0]?.integrity_check === "ok";
+    const userVersion = ro.query<{ user_version: number }>("PRAGMA user_version").get()?.user_version ?? 0;
+    const tables: Record<string, number> = {};
+    if (ok) {
+      for (const name of ["users", "accounts", "jobs", "tunnels"]) {
+        try {
+          tables[name] = ro.query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${name}`).get()?.n ?? 0;
+        } catch {
+          tables[name] = 0;
+        }
+      }
+    }
+    return { ok, userVersion, tables };
+  } finally {
+    ro.close();
+  }
+}
+
+/**
+ * `--backup <file>` (I30/D30): `VACUUM INTO` a temp file, verify it, then atomically
+ * rename into place. A failure removes the temp file and exits non-zero.
+ */
+function cmdBackup(args: string[]): void {
+  const file = flagValue(args, "--backup");
+  if (!file || file.startsWith("--")) throw new Error("用法: --backup <file>");
+  if (!fs.existsSync(DB_PATH)) throw new Error(`数据库不存在: ${DB_PATH}`);
+  fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+
+  const db = openAt();
+  const tmp = `${file}.tmp`;
+  try {
+    fs.rmSync(tmp, { force: true });
+    try {
+      db.run("VACUUM INTO ?", tmp);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
+    let report: IntegrityReport;
+    try {
+      report = integrityCheck(tmp);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
+    if (!report.ok) {
+      fs.rmSync(tmp, { force: true });
+      throw new Error(`备份完整性校验失败（integrity_check != ok）: ${file}`);
+    }
+    fs.renameSync(tmp, file);
+    console.log(`已备份: ${file}`);
+    console.log(`  integrity_check=ok user_version=${report.userVersion}`);
+  } finally {
+    db.close();
+  }
+}
+
+/** `--restore-check <file>`: read-only pre-flight before replacing a live DB (I31). */
+function cmdRestoreCheck(args: string[]): void {
+  const file = flagValue(args, "--restore-check");
+  if (!file || file.startsWith("--")) throw new Error("用法: --restore-check <file>");
+  if (!fs.existsSync(file)) throw new Error(`文件不存在: ${file}`);
+  const report = integrityCheck(file);
+  console.log(`restore-check: ${file}`);
+  console.log(`  integrity_check=${report.ok ? "ok" : "FAIL"}`);
+  console.log(`  user_version=${report.userVersion}`);
+  for (const [name, count] of Object.entries(report.tables)) console.log(`  ${name}=${count}`);
+  if (!report.ok) throw new Error("restore-check 失败: integrity_check != ok");
 }
 
 async function cmdCreateAdmin(args: string[]): Promise<void> {
@@ -254,6 +337,9 @@ async function main(): Promise<void> {
     process.exitCode = report.ok ? 0 : 1;
     return;
   }
+
+  if (has("--backup")) return cmdBackup(args);
+  if (has("--restore-check")) return cmdRestoreCheck(args);
 
   if (has("--worker")) return cmdWorker();
 

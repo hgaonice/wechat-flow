@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v5（C1+C2+C3+C4+C5 已校准；仅 C6 端点仍为契约先验）**，源 `design.md` §5。
+> 状态：**v6（C1+C2+C3+C4+C5+C6 已校准）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -29,7 +29,7 @@
 | 403 | `forbidden` | 越权（跨账号或角色不足）——同时落 `audit` |
 | 404 | `not_found` | 资源不存在 |
 | 409 | `conflict` | 唯一约束冲突（`alias` / `cdp_port`） |
-| 429 | `rate_limited` | 限流 / 登录锁定 |
+| 429 | `rate_limited` | 限流 / 登录锁定；C6 起 API 全局限流响应带 `Retry-After: <sec>`（仅 `/api/*`）|
 | 500 | `internal` | 未预期错误（**不得**吞成成功） |
 
 > **失败显形**：任何业务失败必须 `ok:false` + `code` + 可读 `message`；禁止 200 + 伪装成功。
@@ -130,7 +130,7 @@
 
 | 方法 | 路径 | 授权 | 说明 |
 |---|---|---|---|
-| GET | `/health` | **免鉴权** | `{status,version,uptimeSec}`（**非** db/tunnel/queue 摘要；隧道/队列摘要见 `/api/admin/overview` 与 `/api/meta`） |
+| GET | `/health` | **免鉴权** | `{status,version,uptimeSec,db,tunnel}`（在 `{ok,data}` 信封内；C6 起含 `db:ok\|error` 与 `tunnel:up\|down\|expired\|error\|null`；**不含**账号/队列/密钥；摘要见 `/api/admin/overview` 与 `/api/meta`） |
 | GET | `/api/accounts/:id/email` | owner(账号)/admin | `{configured,to[],cc[],subjectPrefix}`（无则 `{configured:false,to:[],cc:[],subjectPrefix:null}`；**无 `updatedAt`**，表无该列） |
 | PUT | `/api/accounts/:id/email` | owner(账号)/admin | body `{to[],cc[],subjectPrefix?}`；`to+cc` 至少一个邮箱，否则 400；audit `email.upsert` |
 | DELETE | `/api/accounts/:id/email` | owner(账号)/admin | `{deleted:n}`（**幂等**）；audit `email.delete` |

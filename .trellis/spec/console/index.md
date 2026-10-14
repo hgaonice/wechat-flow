@@ -3,7 +3,7 @@
 > 控制面（control plane）：在既有 engine（`src/*.ts`，见 `../engine/index.md`）之上加一层**带鉴权的 Web 管理控制台**，
 > 让非命令行使用者能自助管理多账号、编排内容计划、与 pi agent 会话并在环审批。
 >
-> **状态：C1 + C2 + C3 + C4 + C5 已落地，C6 部署与加固规划中；`api.md`/`data-model.md`/`security.md` 校准为 v5；`agent-session.md` v2；`ops-tunnel.md` v1；`ops-deploy.md` v0（C6 规划）。**
+> **状态：C1 + C2 + C3 + C4 + C5 + C6 已落地；`api.md`/`security.md` 校准为 v6；`data-model.md` v5；`agent-session.md` v2；`ops-tunnel.md` v1；`ops-deploy.md` v1。**
 > 于 M0 编写（源：父任务 `design.md`）。
 > 契约与代码冲突时：**先改本目录，再改代码**；DDL / API / 安全语义变更必须同步本目录。
 
@@ -63,12 +63,12 @@ src/console/
 
 | Guide | 说明 | 状态 |
 |-------|------|------|
-| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v5（C1–C5） |
+| [API Contract](./api.md) | HTTP/SSE 约定、错误包、端点清单、鉴权头 | v6（C1–C6） |
 | [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v5（C1–C5） |
-| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v5（C1–C5） |
+| [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v6（C1–C6） |
 | [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v2（C4） |
 | [Ops & Tunnel](./ops-tunnel.md) | CF Quick Tunnel 监督、地址变更邮件下发、凭据加密、管理员总览 | v1（C5） |
-| [Deploy & Hardening](./ops-deploy.md) | 部署模式（Mode A/B）、systemd、限流、备份/恢复、失败退避、`/health` | v0（C6 规划） |
+| [Deploy & Hardening](./ops-deploy.md) | 部署模式（Mode A/B）、systemd、限流、备份/恢复、失败退避、`/health` | v1（C6） |
 
 ---
 

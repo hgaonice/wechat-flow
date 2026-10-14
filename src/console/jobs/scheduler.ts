@@ -33,6 +33,29 @@ function clampInt(v: unknown, def: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
+// ── failure backoff (C6, I32 / design.md D31) ──────────────────────────────
+
+const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_RETRY_COOLDOWN_MIN = 30;
+
+/** Read an integer env var and clamp it; non-numeric values fall back to `def`. */
+function envIntClamped(name: string, def: number, lo: number, hi: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return def;
+  return Math.max(lo, Math.min(hi, Math.trunc(raw)));
+}
+
+/**
+ * Normalize a SQLite timestamp to epoch ms. `datetime('now')` yields
+ * `YYYY-MM-DD HH:MM:SS` (UTC) which `Date.parse` treats as local time, so we
+ * insert the `T`/`Z`. Already-ISO strings are parsed as-is.
+ */
+function parseDbTime(value: string): number | null {
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const t = Date.parse(normalized);
+  return Number.isFinite(t) ? t : null;
+}
+
 export function readSchedule(db: Database): ScheduleConfig {
   const s = asObject(getGlobalRaw(db).schedule);
   // Strictly boolean-ish: 0 / "0" / "false" also disable.
@@ -78,6 +101,27 @@ export function schedulerTick(db: Database, now: Date = new Date()): ScheduleAct
   const week = isoWeek(today);
   const actions: ScheduleAction[] = [];
 
+  // C6 backoff budget/cooldown (env-driven; 0 disables each dimension).
+  const maxAttempts = envIntClamped("CONSOLE_JOB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, 0, 100);
+  const cooldownMin = envIntClamped("CONSOLE_JOB_RETRY_COOLDOWN_MIN", DEFAULT_RETRY_COOLDOWN_MIN, 0, 1440);
+  const cooldownMs = cooldownMin * 60_000;
+  const nowMs = now.getTime();
+
+  /** Reason string when this account/kind/key is still backing off, else null. */
+  const backoffReason = (accountId: number, kind: "plan" | "publish", key: string): string | null => {
+    if (maxAttempts > 0 && queue.countFailed(db, accountId, kind, key) >= maxAttempts) {
+      return "attempts-exhausted";
+    }
+    if (cooldownMs > 0) {
+      const last = queue.lastFailureAt(db, accountId, kind, key);
+      if (last) {
+        const t = parseDbTime(last);
+        if (t !== null && nowMs - t < cooldownMs) return "backoff";
+      }
+    }
+    return null;
+  };
+
   for (const row of listAccountRows(db)) {
     if (row.enabled === 0) continue;
 
@@ -109,21 +153,31 @@ export function schedulerTick(db: Database, now: Date = new Date()): ScheduleAct
         }
       }
       if (!published && !queue.hasPublishJobForDate(db, row.id, today)) {
-        const id = queue.enqueue(db, row.id, "publish", { date: today }, {
-          actor: "scheduler",
-          auditDetail: { source: "scheduler", reason: "due" },
-        });
-        actions.push({ accountId: row.id, alias: row.alias, kind: "publish", jobId: id, reason: `due ${today}` });
+        const skip = backoffReason(row.id, "publish", today);
+        if (skip) {
+          console.log(`[scheduler] skip publish for ${row.alias} (${skip})`);
+        } else {
+          const id = queue.enqueue(db, row.id, "publish", { date: today }, {
+            actor: "scheduler",
+            auditDetail: { source: "scheduler", reason: "due" },
+          });
+          actions.push({ accountId: row.id, alias: row.alias, kind: "publish", jobId: id, reason: `due ${today}` });
+        }
       }
     }
 
     // plan: weekly slot with no plan yet
     if (weekday === cfg.planWeekday && !getPlan(db, row.id, "week", week) && !queue.hasActivePlanJob(db, row.id)) {
-      const id = queue.enqueue(db, row.id, "plan", { periodKey: week }, {
-        actor: "scheduler",
-        auditDetail: { source: "scheduler", reason: `week ${week}` },
-      });
-      actions.push({ accountId: row.id, alias: row.alias, kind: "plan", jobId: id, reason: `week ${week}` });
+      const skip = backoffReason(row.id, "plan", week);
+      if (skip) {
+        console.log(`[scheduler] skip plan for ${row.alias} (${skip})`);
+      } else {
+        const id = queue.enqueue(db, row.id, "plan", { periodKey: week }, {
+          actor: "scheduler",
+          auditDetail: { source: "scheduler", reason: `week ${week}` },
+        });
+        actions.push({ accountId: row.id, alias: row.alias, kind: "plan", jobId: id, reason: `week ${week}` });
+      }
     }
   }
   return actions;

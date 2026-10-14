@@ -120,19 +120,27 @@ bash /tmp/wfc-c6-verify.sh        # 全部串起来
 
 | 项 | 证据 | 状态 |
 |----|------|------|
-| spec 先行 | `.trellis/spec/console/ops-deploy.md` | 待填 |
-| 限流 | `src/console/http/ratelimit.ts` + `/tmp/wfc-c6-ratelimit.ts` | 待填 |
-| `/health` | `server.ts` + `/tmp/wfc-c6-health.ts` | 待填 |
-| 失败退避 | `jobs/{queue,scheduler}.ts` + `/tmp/wfc-c6-backoff.ts` | 待填 |
-| SSE 修复 | `agent/events.ts`/`http/chat-sse.ts`/`ui/chat.js` + `/tmp/wfc-c6-sse.ts` | 待填 |
-| 备份 | `main.ts --backup` + `deploy/console-backup.sh` + `/tmp/wfc-c6-backup.sh` | 待填 |
-| 恢复 | `deploy/console-restore.sh` | 待填 |
-| 部署 | `deploy/systemd/*` + `deploy/install-console.sh` + `/tmp/wfc-c6-deploy.sh` | 待填 |
-| 手册 | `deploy/console-deploy.md`、`deploy/console-acceptance.md` | 待填 |
-| 聚合 | `bash /tmp/wfc-c6-verify.sh` → `pass=_ fail=0` | 待填 |
+| spec 先行 | `.trellis/spec/console/ops-deploy.md` v0→**v1**（§八 校准表） | ✅ |
+| 限流 | `src/console/http/ratelimit.ts`(109) + `server.ts#handle()`；`/tmp/wfc-c6-ratelimit.ts` **pass=38/0** | ✅ |
+| `/health` | `server.ts` `{status,version,uptimeSec,db,tunnel}`（`tunnel` 优先 DB 最新 status）；`/tmp/wfc-c6-health.ts` **pass=20/0** | ✅ |
+| 失败退避 | `jobs/{queue,scheduler}.ts`；`/tmp/wfc-c6-backoff.ts` **pass=23/0** | ✅ |
+| SSE 修复 | `agent/events.ts`/`http/chat-sse.ts`/`ui/chat.js`；`/tmp/wfc-c6-sse.ts` **pass=20/0** | ✅ |
+| 备份 | `main.ts --backup` + `deploy/console-backup.sh`；`/tmp/wfc-c6-backup.sh` **pass=17/0** | ✅ |
+| 恢复 | `deploy/console-restore.sh`（停服拒绝 + 预检 `--restore-check` + 现状快照；`bash -n` OK） | ✅ |
+| 部署 | `deploy/systemd/{wechat-console,cloudflared}.service` + `env.example` + `install-console.sh` + `nginx-console.conf.example`；`/tmp/wfc-c6-deploy.sh` **pass=37/0**；`systemd-analyze verify` 仅报开发机无 bun 路径 | ✅ |
+| 手册 | `deploy/console-deploy.md`、`deploy/console-acceptance.md`（AC-1…AC-11）、`README.md`、`docs/操作手册.md` §10.5 | ✅ |
+| 静态/回归 | `bunx tsc --noEmit` 0 错；`bun build` OK；`dependencies` 缺失；engine 4 文件 `git diff --quiet` 空；C1–C5 回归 **pass=22/0** | ✅ |
+| 聚合 | `bash /tmp/wfc-c6-verify.sh` → **pass=12 fail=0** | ✅ |
 | 独立复核 | `check-report.md` | 待填 |
-| spec 校准 | `api.md`/`security.md`/`index.md` v6 | 待填 |
+| spec 校准 | `api.md`/`security.md` v6、`index.md`、`ops-deploy.md` v1 | ✅ |
 
 ## 6. 偏差与观察（实现后回填）
 
-- 待填。
+1. **D-v1（Mode B 仅文档守卫，无代码开关）**：`cloudflared.service`（Mode B）与 Mode A 互斥，仅靠文档 + 单元注释警示；**未加运行时探测**“外部 cloudflared 是否已在跑”。理由：C5 监督器为全局单例，探测外部进程超出 C6 范围。残余风险已登记（`ops-deploy.md` §七）。
+2. **D-v2（限流 key 在未登录时的取值）**：已登录用 `u:<userId>`；未登录用 `ip:<clientKey>`——`CONSOLE_TRUST_CF=1` 取 `CF-Connecting-IP`，否则 `x-forwarded-for` 首段，皆缺则 `unknown`。故未登录且两个头都缺的调用方会共享 `unknown` 桶。默认部署经 CF 隧道会带 `CF-Connecting-IP`；已在 `ops-deploy.md` 记录。
+3. **D-v3（`/health.tunnel` 语义修正，已实现）**：初版 `tunnelHealth` 仅用 `TunnelSupervisor.status().running`（`TunnelStatusView` 无 `status` 字段）→ child 在跑即报 `up`，与 DB 实际状态可能不符。**已改为优先读取最新 `tunnels` 行 status**（`listTunnels(db,1)`；`up|down|expired|error`），无行时才回落 liveness。已同步 `ops-deploy.md` §八 与 `api.md`。
+4. **D-v4（`--backup` 依赖 `CONSOLE_DB`）**：`main.ts --backup <file>` 的**源**是 `CONSOLE_DB`/默认 DB，脚本需 `CONSOLE_DB=... bun main.ts --backup ...`；已在 `console-backup.sh` 显式传 `CONSOLE_DB`。
+5. **D-v5（systemd 沙箱保守）**：按 G-C6-4 未启用 `ProtectSystem=strict`/`ProtectHome`；仅 `NoNewPrivileges=true` + `ReadWritePaths`。若 Chrome/CDP 在 250 上因 `NoNewPrivileges` 失败，可移除该行（文档已注明）。
+6. **D-v6（遗留观察，未改）**：C4 `decision.expired` 命名保留（改会破前端契约）；C5 `emailConfigFor` 忽略全局 `notify.email.enabled=false`（C5 仅在隧道变更时发信，改会破 AC-8）——均**仅登记**。
+7. **D-v7（Mode B 安装路径不在默认流程）**：`--mode-b` 需显式传参，降低误用风险。
+8. **真机待验（250）**：真实 `cloudflared`/`email-sender`/浏览器 `/admin`、`/chat`、workbench；限流 429、备份恢复、systemd 启动均需 250 上复核（本机仅静态/单测/e2e）。

@@ -299,11 +299,19 @@
     on("chat.closed", () => {
       state.live = false;
       state.busy = false;
+      if (state.es) {
+        state.es.close();
+        state.es = null;
+      }
       renderHeader();
     });
     on("chat.lost", (d) => {
       state.live = false;
       state.busy = false;
+      if (state.es) {
+        state.es.close();
+        state.es = null;
+      }
       const stderr = Array.isArray(d.stderr) && d.stderr.length ? `：${d.stderr.slice(-3).join(" / ")}` : "";
       showBanner(`会话进程异常退出（code=${d.code ?? "?"} signal=${d.signal ?? "-"}）${stderr}`);
       renderHeader();

@@ -93,11 +93,11 @@
 - **关键导出**：`notify(cfg,msg)`、`sendMail(cfg,input)`、`checkEmail(cfg)`。
 - **坑**：`-b` 正文 + `-f` 附件（文章 md）走 skill；凭据在 skill 的 `config.env`，应用不自己实现 SMTP；别在日志里打印授权码。
 
-## console/ · 控制台（C1–C5，第二阶段）
+## console/ · 控制台（C1–C6，第二阶段）
 
 > 带鉴权的 Web 控制面；**engine 不得反向依赖它**（依赖方向 `console/* → ../*.ts`）；运行时**零新增依赖**（`Bun.serve`/`bun:sqlite`/`node:crypto`）。详细约定见 [`.trellis/spec/console/`](../.trellis/spec/console/index.md)。
 
-- **main.ts · 入口**：默认 `serve`（HTTP + 调度 + worker 同进程）；`--no-worker` 只 HTTP；`--worker` 无头；`--init-key`/`--create-admin`/`--import-config`/`--status`/`--verify-ac3`。`Bun.serve` 设 `idleTimeout:120`（SSE 必需）。
+- **main.ts · 入口**：默认 `serve`（HTTP + 调度 + worker 同进程）；`--no-worker` 只 HTTP；`--worker` 无头；`--init-key`/`--create-admin`/`--import-config`/`--status`/`--verify-ac3`；**C6** 新增 `--backup <file>`（`VACUUM INTO` 快照 + `integrity_check` + 原子 rename）与 `--restore-check <file>`（只读预检）。`Bun.serve` 设 `idleTimeout:120`（SSE 必需）。
 - **server.ts · 路由**：`route()` + 统一 envelope `{ok:true,data}` / `{ok:false,code,message,detail}`；写请求验 `X-CSRF-Token`；授权集中在 `auth/rbac.ts`（`assertAdmin`/`assertAccountAccess`）。
 - **db/**：`schema.ts` 为 **DDL 唯一真相源**（18 表 + 索引，`PRAGMA user_version`）；`migrate.ts` 启动前滚；DAO 在 `db/dao/*`。
 - **auth/**：口令哈希 + 会话 token 存 `sha256(token)` + RBAC。
@@ -110,6 +110,9 @@
 - **http/chat-sse.ts**（C4）：进程内 bus → SSE（`seq`=`id:`、`Last-Event-ID` 重放、落后发 `chat.resync`、15s `ping`）。
 - **tunnel/cloudflared.ts**（C5）：`TunnelSupervisor`——spawn `cloudflared tunnel --url <target> --no-autoupdate`，stderr 逐行解析（**禁 readline**）、单次健康失败即 `down`、退出码映射（0→`down`；≠0/signal→`error`+detail）、退避重启（`min(pollMs·2^n,60s)`）、地址去抖。**构造期强校验** `host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port`（fail-fast，T1/I27）。
 - **notify/tunnel-mail.ts**（C5）：`notifyTunnelChange`——收件人=账号 `account_email` ∪ 管理员副本（`settings(global).notify.email.to`）；按 `tunnels.id` 去重（`notified_at`）+ 失败重试封顶后停发（I26）；发信复用 engine `sendMail`（不改 engine）。
+- **http/ratelimit.ts**（C6）：`RateLimiter` 令牌桶（`take(key)→{ok,retryAfterSec?}`、`size`/`remove`、惰性补充、每 512 次清扫、`now` 可注入）；`server.ts#handle()` 仅对 `/api/*` 生效，key 为 `u:<userId>`（已登录）否则 `ip:<clientKey>`（`CONSOLE_TRUST_CF` 决定是否取 `CF-Connecting-IP`）；超限 429 `rate_limited` + `Retry-After`，**不写 audit**（I29）。
+- **jobs/{queue,scheduler}.ts 退避**（C6）：`countFailed`/`lastFailureAt`（按 `payload.date`\|`periodKey`）；调度器读 `CONSOLE_JOB_MAX_ATTEMPTS`(3)/`CONSOLE_JOB_RETRY_COOLDOWN_MIN`(30)，达上限/冷却内 skip 并记日志（I32）。
+- **deploy/**（C6）：`systemd/wechat-console.service`（Mode A）+ `cloudflared.service`（Mode B，互斥）+ `wechat-console.env.example`；`install-console.sh`/`console-backup.sh`/`console-restore.sh`；`nginx-console.conf.example`；手册 `console-deploy.md` + 验收 `console-acceptance.md`。参见 [`ops-deploy.md`](../.trellis/spec/console/ops-deploy.md)。
 - **db/dao/{emails,secrets,tunnels}.ts**（C5）：`account_email` CRUD；`secrets` 只存密文、读只回元数据（`smtp` 为保留 kind，`account_id IS NULL` 需显式判重）；`openTunnel` 单事务「插新 `up` + 旧 `up`/`down` → `expired`+`replaced_by=新 id`」（I24）。
 - **ui/**：静态页（`index`/`login`/`account`/`settings`/`workbench`/`chat`/**`admin`**）+ `app.css`/`app.js`/`workbench.*`/`chat.*`/**`admin.*`**。
 - **坑**：`.gitignore` 必须写 `/console/`（否则吞掉 `src/console/`）；**推送铁律不变**——控制台只调 `runPublish`，成功与否只看 `verifyDraftBody`；`bun:sqlite` 无行时返回 `null`（非 `undefined`）。

@@ -16,6 +16,7 @@ import {
   conflict,
   fail,
   forbidden,
+  json,
   notFound,
   ok,
   tooMany,
@@ -55,6 +56,7 @@ import { EXECUTABLE_KINDS, isJobKind, parseItems, parseJobPayload, type JobRow, 
 import { serveUi } from "./http/static.ts";
 import { streamJobEvents } from "./http/sse.ts";
 import { streamChatEvents } from "./http/chat-sse.ts";
+import { RateLimiter } from "./http/ratelimit.ts";
 import type { ChatActor, ChatManager } from "./agent/manager.ts";
 import type { ChatSessionRow } from "./db/dao/chats.ts";
 import * as articles from "./db/dao/articles.ts";
@@ -107,6 +109,27 @@ async function readJson(req: Request): Promise<JsonObject> {
 
 function clientIp(req: Request): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "local";
+}
+
+/** Integer env reader (read once at app construction for rate limits). */
+function envInt(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) ? Math.trunc(raw) : fallback;
+}
+
+/**
+ * Rate-limit client key (I29/D29): Cloudflare's `CF-Connecting-IP` only when the
+ * operator opts in via `CONSOLE_TRUST_CF=1`, otherwise the first
+ * `x-forwarded-for` segment, otherwise the socket-ish fallback in `clientIp`.
+ */
+function clientKey(req: Request, trustCf: boolean): string {
+  if (trustCf) {
+    const cf = req.headers.get("cf-connecting-ip");
+    if (cf && cf.trim()) return cf.trim();
+  }
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+  return clientIp(req);
 }
 
 function intParam(ctx: Ctx, name = "id"): number {
@@ -361,9 +384,43 @@ function draftView(row: articles.DraftRow): JsonObject {
 
 // ── app ─────────────────────────────────────────────────────────────────────
 
+/**
+ * `/health` tunnel summary (I33/D32): the supervised tunnel's status string, or
+ * `null` when the tunnel is not enabled. Never leaks URL/pid/detail.
+ *
+ * The real `TunnelSupervisor.status()` returns a `TunnelStatusView` without a
+ * `status` field, so prefer one when present (future-proof / tests) and fall
+ * back to the `running` boolean. (Do NOT change `cloudflared.ts` for this.)
+ */
+function tunnelHealth(db: Database, ops?: OpsDeps): string | null {
+  if (!ops?.tunnel) return null;
+  // Prefer the authoritative latest tunnel status (I24/I28); fall back to the
+  // supervisor's liveness only when no row exists yet (e.g. fresh start).
+  try {
+    const latest = tunnelDao.listTunnels(db, 1)[0];
+    if (latest && typeof latest.status === "string") return latest.status;
+  } catch {
+    /* fall through to in-memory liveness */
+  }
+  try {
+    const view = ops.tunnel.status() as unknown as { status?: string; running?: boolean };
+    if (typeof view.status === "string") return view.status;
+    return view.running ? "up" : "down";
+  } catch {
+    return null;
+  }
+}
+
 export function createApp(state: AppState, chat?: ChatManager, ops?: OpsDeps): App {
   const { db } = state;
   const router = new Router<Ctx>();
+
+  // C6: in-process API token bucket (I29/D29). Read env once per process.
+  const rateLimiter = new RateLimiter({
+    perMin: envInt("CONSOLE_RATE_PER_MIN", 600),
+    burst: envInt("CONSOLE_RATE_BURST", 120),
+  });
+  const trustCf = process.env.CONSOLE_TRUST_CF === "1" || process.env.CONSOLE_TRUST_CF?.toLowerCase() === "true";
 
   const requireTunnel = (): TunnelSupervisor => {
     if (!ops?.tunnel) {
@@ -1260,7 +1317,19 @@ export function createApp(state: AppState, chat?: ChatManager, ops?: OpsDeps): A
     const method = req.method.toUpperCase();
 
     if (pathname === "/health") {
-      return ok({ status: "ok", version: state.version, uptimeSec: Math.floor((Date.now() - state.startedAt) / 1000) });
+      let dbStatus: "ok" | "error" = "ok";
+      try {
+        db.query("SELECT 1").get();
+      } catch {
+        dbStatus = "error";
+      }
+      return ok({
+        status: "ok",
+        version: state.version,
+        uptimeSec: Math.floor((Date.now() - state.startedAt) / 1000),
+        db: dbStatus,
+        tunnel: tunnelHealth(db, ops),
+      });
     }
 
     if (!pathname.startsWith("/api/")) {
@@ -1307,6 +1376,23 @@ export function createApp(state: AppState, chat?: ChatManager, ops?: OpsDeps): A
 
   async function handle(req: Request): Promise<Response> {
     try {
+      const pathname = new URL(req.url).pathname;
+      if (pathname.startsWith("/api/")) {
+        const token = sess.parseCookie(req.headers.get("cookie"), sess.SESSION_COOKIE);
+        const session = sess.lookupSession(db, token);
+        const key = session ? `u:${session.user.id}` : `ip:${clientKey(req, trustCf)}`;
+        const verdict = rateLimiter.take(key);
+        if (!verdict.ok) {
+          // I29: a rate-limit rejection must NOT write an audit row (a hostile
+          // caller would otherwise turn 429s into an audit flood).
+          return securityHeaders(
+            json({ ok: false, code: "rate_limited", message: "请求过于频繁" }, 429, {
+              "retry-after": String(verdict.retryAfterSec ?? 60),
+            }),
+            state.secureCookies,
+          );
+        }
+      }
       return securityHeaders(await route(req), state.secureCookies);
     } catch (err) {
       if (err instanceof HttpError) {

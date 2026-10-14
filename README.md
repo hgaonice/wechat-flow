@@ -51,6 +51,7 @@ wechat-flow/
 ├── data/<alias>/          # 每个公众号独立的数据根（互不干扰）
 │   └── plans/ articles/ imgs/ state/ logs/ sessions/
 └── deploy/                # systemd service/timer + install.sh + deploy.sh + patch-baoyu-skill.sh
+                         #   + console-*（控制台部署/备份/恢复/验收 + systemd mode A/B）
 ```
 
 > 账号隔离靠两点：**独立数据目录**（`data/<alias>/`）和**独立 Chrome 调试端口**（`cdpPort`）。
@@ -95,6 +96,24 @@ ssh root@192.168.0.250 'cd /root/wechat-flow && DISPLAY=:99 bun src/cli.ts login
 # 6) 安装并启动定时器（install.sh 会再打一次补丁）
 ssh root@192.168.0.250 'bash /root/wechat-flow/deploy/install.sh'
 ```
+
+## Web 控制台（可选，多账号管理）
+
+控制台（`src/console/`，C1–C6）在网页上管理多账号：账号 CRUD、配置继承/覆盖、周/月计划、
+pi 生成与草稿箱推送、Agent 会话窗口（人在环）、Cloudflare 隧道地址下发与邮件、凭据加密、管理员总览。
+
+```bash
+cd /root/wechat-flow && export PATH="$HOME/.bun/bin:$PATH"
+bun src/console/main.ts --init-key          # 首次：生成主密钥
+bun src/console/main.ts --import-config     # 从 config.json 导入账号
+bun src/console/main.ts --create-admin admin # 设置管理员密码
+bash deploy/install-console.sh              # 装成 systemd 服务（Mode A）
+```
+
+- 默认只监听 `127.0.0.1:8787`，经 Cloudflare 隧道（或本机反代）对外；**CDP 端口绝不暴露**。
+- 隧道、限流、备份/恢复、回滚与排障见 **[deploy/console-deploy.md](./deploy/console-deploy.md)**；
+  端到端验收清单见 **[deploy/console-acceptance.md](./deploy/console-acceptance.md)**。
+- 命令行（`src/cli.ts`）仍可用：两者读同一份 `config.json` 与 `data/`，互不冲突。
 
 ## 手动使用
 
