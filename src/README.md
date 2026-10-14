@@ -93,7 +93,7 @@
 - **关键导出**：`notify(cfg,msg)`、`sendMail(cfg,input)`、`checkEmail(cfg)`。
 - **坑**：`-b` 正文 + `-f` 附件（文章 md）走 skill；凭据在 skill 的 `config.env`，应用不自己实现 SMTP；别在日志里打印授权码。
 
-## console/ · 控制台（C1–C4，第二阶段）
+## console/ · 控制台（C1–C5，第二阶段）
 
 > 带鉴权的 Web 控制面；**engine 不得反向依赖它**（依赖方向 `console/* → ../*.ts`）；运行时**零新增依赖**（`Bun.serve`/`bun:sqlite`/`node:crypto`）。详细约定见 [`.trellis/spec/console/`](../.trellis/spec/console/index.md)。
 
@@ -108,7 +108,10 @@
 - **agent/**（C4）：`frames.ts`（严格 JSONL 切帧：只按 `\n`、剥 `\r`、U+2028/2029 不切、禁 readline）、`rpc.ts`（极简 RPC：按 `id` 关联、`writeChain` 背压、stderr 200 行 ring、区分有序/意外退出）、`events.ts`（进程内 `ChatBus`，500 环 + 单调 `seq`）、`manager.ts`（每会话 1 个 `pi --mode rpc` 子进程；懒 spawn、`CONSOLE_CHAT_MAX`/`CONSOLE_CHAT_TTL_MS`、`handleExit`/`reapStale` 同事务清算 pending）、`extensions/console-decision.ts`（pi 侧最小权限扩展，硬阻断 `wechat*/publish*/mail*/backup*`）。
 - **db/dao/chats.ts**（C4）：`chat_sessions`/`chat_messages`/`decisions` DAO；`closeChatSession` 同事务置会话状态 + pending→lost（I21/I23），`markChatLost` 用于异常退出。
 - **http/chat-sse.ts**（C4）：进程内 bus → SSE（`seq`=`id:`、`Last-Event-ID` 重放、落后发 `chat.resync`、15s `ping`）。
-- **ui/**：静态页（`index`/`login`/`account`/`settings`/`workbench`/**`chat`**）+ `app.css`/`app.js`/`workbench.*`/**`chat.*`**。
+- **tunnel/cloudflared.ts**（C5）：`TunnelSupervisor`——spawn `cloudflared tunnel --url <target> --no-autoupdate`，stderr 逐行解析（**禁 readline**）、单次健康失败即 `down`、退出码映射（0→`down`；≠0/signal→`error`+detail）、退避重启（`min(pollMs·2^n,60s)`）、地址去抖。**构造期强校验** `host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port`（fail-fast，T1/I27）。
+- **notify/tunnel-mail.ts**（C5）：`notifyTunnelChange`——收件人=账号 `account_email` ∪ 管理员副本（`settings(global).notify.email.to`）；按 `tunnels.id` 去重（`notified_at`）+ 失败重试封顶后停发（I26）；发信复用 engine `sendMail`（不改 engine）。
+- **db/dao/{emails,secrets,tunnels}.ts**（C5）：`account_email` CRUD；`secrets` 只存密文、读只回元数据（`smtp` 为保留 kind，`account_id IS NULL` 需显式判重）；`openTunnel` 单事务「插新 `up` + 旧 `up`/`down` → `expired`+`replaced_by=新 id`」（I24）。
+- **ui/**：静态页（`index`/`login`/`account`/`settings`/`workbench`/`chat`/**`admin`**）+ `app.css`/`app.js`/`workbench.*`/`chat.*`/**`admin.*`**。
 - **坑**：`.gitignore` 必须写 `/console/`（否则吞掉 `src/console/`）；**推送铁律不变**——控制台只调 `runPublish`，成功与否只看 `verifyDraftBody`；`bun:sqlite` 无行时返回 `null`（非 `undefined`）。
 
 ## date.ts / log.ts / prompts.ts · 基础设施

@@ -39,6 +39,7 @@ import { createApp, type AppState } from "./server.ts";
 import { startScheduler, type SchedulerHandle } from "./jobs/scheduler.ts";
 import { startWorker, type WorkerHandle } from "./jobs/worker.ts";
 import { ChatManager } from "./agent/manager.ts";
+import { TunnelSupervisor } from "./tunnel/cloudflared.ts";
 
 const VERSION = "0.1.0";
 const DB_PATH = process.env.CONSOLE_DB ?? path.join(APP_DIR, "console", "console.db");
@@ -116,7 +117,16 @@ async function cmdServe(args: string[]): Promise<void> {
     masterKey,
   };
   const chat = new ChatManager({ db });
-  const app = createApp(state, chat);
+  // C5: quick tunnel supervisor (opt-in via CONSOLE_TUNNEL=1).
+  const tunnel = process.env.CONSOLE_TUNNEL === "1" ? new TunnelSupervisor({ db, masterKey }) : null;
+  if (tunnel) {
+    console.log(
+      `tunnel: on（bin=${process.env.CONSOLE_TUNNEL_BIN ?? "cloudflared"} url=${process.env.CONSOLE_TUNNEL_URL ?? `http://127.0.0.1:${PORT}`}）`,
+    );
+  } else {
+    console.log("tunnel: off（CONSOLE_TUNNEL=1 开启）");
+  }
+  const app = createApp(state, chat, tunnel ? { tunnel } : undefined);
   // C4: reap sessions whose subprocess died with a previous console process.
   chat.reapStale();
   const server = Bun.serve({
@@ -136,6 +146,9 @@ async function cmdServe(args: string[]): Promise<void> {
   });
   console.log(`wechat-flow console v${VERSION} → http://${HOST}:${server.port}  (db=${DB_PATH})`);
   console.log(`secure cookies: ${state.secureCookies ? "on" : "off（CONSOLE_ALLOW_INSECURE_COOKIE=1）"}`);
+  // Start the tunnel only once the HTTP server is listening so the supervisor's
+  // local `/health` probe can succeed immediately (I27).
+  tunnel?.start();
 
   // C2: in-process scheduler + worker (disable with --no-worker).
   let scheduler: SchedulerHandle | null = null;
@@ -160,6 +173,7 @@ async function cmdServe(args: string[]): Promise<void> {
     scheduler?.stop();
     await worker?.stop();
     await chat.shutdown();
+    await tunnel?.stop();
     try {
       server.stop(true);
     } catch {

@@ -130,17 +130,35 @@ AC-C5-9 → §2 静态命令 + 回归。
 
 | 项 | 证据 | 状态 |
 |----|------|------|
-| spec 先行 | `.trellis/spec/console/ops-tunnel.md` | 待填 |
-| migration v3 | `src/console/db/schema.ts` + 单测输出 | 待填 |
-| DAO | `src/console/db/dao/{emails,secrets,tunnels}.ts` | 待填 |
-| 隧道监督 | `src/console/tunnel/cloudflared.ts` + `/tmp/wfc-c5-tunnel.ts` | 待填 |
-| 邮件下发 | `src/console/notify/tunnel-mail.ts` + 单测 | 待填 |
-| 路由 | `src/console/server.ts` 增量 + `/tmp/wfc-c5-http.sh` | 待填 |
-| UI | `src/console/ui/{account.html,app.js,admin.html,admin.js}` | 待填 |
-| 聚合验证 | `bash /tmp/wfc-c5-verify.sh` → `pass=_ fail=0` | 待填 |
-| 独立复核 | `check-report.md` | 待填 |
-| spec 校准 | `ops-tunnel.md` v1 + `index.md` v5 | 待填 |
+| spec 先行 | `.trellis/spec/console/ops-tunnel.md`（v0→**v1**） | ✅ |
+| migration v3 | `src/console/db/schema.ts`（`tunnel_notify`；v2→v3 单测 8/8） | ✅ |
+| DAO | `src/console/db/dao/{emails,secrets,tunnels}.ts`（65/126/154 行） | ✅ |
+| 隧道监督 | `src/console/tunnel/cloudflared.ts`（462 行）+ `bun /tmp/wfc-c5-tunnel.ts` → `pass=19 fail=0` | ✅ |
+| 邮件下发 | `src/console/notify/tunnel-mail.ts`（319 行）+ 独立 `c5-check-smtp.ts` 7/0、`c5-check-tunnel.ts` 26/0 | ✅ |
+| 路由 | `src/console/server.ts`（+282/−1，11 条；`createApp(state,chat,ops?)`、`requireTunnel→503`）+ `c5-check-http.ts` 50/0 | ✅ |
+| UI | `src/console/ui/{account.html,app.js,admin.html,admin.js}` + `http/static.ts`(+/admin) + `c5-check-static.sh` 14/0 | ✅ |
+| 聚合验证 | `bash /tmp/wfc-c5-verify.sh` → **`pass=22 fail=0`**（含 C3 7/0、C4 8/0 回归） | ✅ |
+| 独立复核 | `.trellis/tasks/10-13-console-ops-tunnel/check-report.md` → 首轮 171/172；修复后 **196/0**（unit 53/http 50/tunnel 26/static 14/deviations 18/extra 4/smtp 7/recheck 24） | ✅ |
+| spec 校准 | `ops-tunnel.md` **v1** + `api.md`/`data-model.md`/`security.md` **v5** + `index.md` | ✅ |
+| 静态/零依赖 | `tsc --noEmit` = 0 err；`bun build` 无新依赖；`package.json` 无 `dependencies`；engine 四文件 `git diff --quiet` → OK | ✅ |
+| 真机（G2，250 主机） | 真实 `cloudflared` + `email-sender` 发信、浏览器 `/admin` | ⏳ 待 250 主机 |
 
 ## 6. 偏差与观察（实现后回填）
 
-- 待填。
+**与规划稿的偏差（均已回写 `ops-tunnel.md` §九）**：
+
+1. `openTunnel` 收编范围由「旧 `up`」扩为「旧 `up` **与 `down`**」（同事务），确保全局至多一行 `up`（I24）。
+2. `replaced_by` 方向明确为**旧行 → 新行 id**（前向链）——同步修正了 `data-model.md` I8 旧稿的方向笔误。
+3. admin 副本收件源 = **`settings(global).notify.email.to`**（与 engine `EmailConfig` 同源），非 `notify.to`。
+4. `emailConfigFor()` 总能构造可用 `EmailConfig`（`enabled:true`、缺省 `skill.dir`/`python` 补齐）；`email-sender` 未配置时仅通过 `sendMail=false` **显形失败**（重试封顶→`error`），不伪造成功。
+5. 某账号无收件人时，仅当 `adminCopy` 开启才退化为**仅管理员副本**邮件。
+6. 新增测试缝 `TunnelDeps.{probe,autoRestart,consolePort}`。
+7. `DELETE` 幂等返回 `{deleted:n}`；email GET **不含 `updatedAt`**（表无该列）。
+8. `createApp` 扩为 `(state, chat?, ops?:{tunnel?})`。
+9. **（复核发现，已修复）** I27 原来只校验回环**主机**、不校验**端口** → 误配 `CONSOLE_TUNNEL_URL=…:9222` 会把 CDP 发到公网。已在 `TunnelSupervisor` 构造期加「端口 === `CONSOLE_PORT`」+「不得为任何 `accounts.cdp_port`」双重校验（fail-fast）；新增复核断言 24/0。
+
+**非阻塞观察（不修，登记备查）**：
+
+- `emailConfigFor` 忽略全局 `notify.email.enabled=false`（C5 只在隧道变更时发信，不受全局开关影响；如未来需尊重，C6 再议）。
+- 多账号部分失败时，下一轮会对**已成功账号重发**（每人 at-least-once；正文不含跨账号信息，可接受）。
+- `decision.expired` 等 C4 观察项仍由 C6 统一收口。

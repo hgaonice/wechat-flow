@@ -70,10 +70,12 @@
 | **S13** | 调度与任务模型：计划表 + jobs + 调度器 + 每账号互斥 | M2a | C2 | ✅ 完成 | — | `src/console/jobs/**`、`deploy/console-scheduler.md`、`deploy/systemd/`、spec v2 |
 | **S14** | 内容工作台：计划编辑 → pi 生成 → 草稿箱推送 → 重生成/版本历史 | M2b | C3 | ✅ 完成 | G2（真机待 250） | `src/console/{content,db/dao/articles,http/sse,ui/workbench.*}`、`archive/2026-10/10-13-console-content-workbench/`、spec v3 |
 | **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ✅ 完成 | G2（真机待 250） | `src/console/agent/**`、`src/console/ui/chat.*`、`archive/2026-10/10-13-console-agent-session/`、spec v4（agent-session v2） |
-| **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ⚪ 未开始 | G7 | 子任务 `10-13-console-ops-tunnel/` |
+| **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ✅ 完成 | G7（真机待 250） | `src/console/{tunnel,notify}/**`、`db/dao/{emails,secrets,tunnels}.ts`、`ui/admin.*`、`archive/2026-10/10-13-console-ops-tunnel/`、spec v5（ops-tunnel v1） |
 | **S17** | 部署与加固：systemd/反代/限流/备份/回归 | M5 | C6 | ⚪ 未开始 | G6/G7 | 子任务 `10-13-console-deploy-hardening/` |
 
 > **C4 已完成并归档（S15/M3，2026-10-14）**：每账号多会话 ↔ `pi --mode rpc` 长活子进程；严格 JSONL 切帧（禁 readline）；进程内 `ChatBus` → SSE 流式；`extension_ui_request` → 决策卡片（`pending→{answered,cancelled,expired,lost}`，**预期/异常关闭均同事务清算 pending**，无悬挂，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + `console-decision.ts` 硬阻断 `wechat*/publish*/mail*/backup*`）。engine 零改动；`CONSOLE_CHAT_MAX`(3)/`CONSOLE_CHAT_TTL_MS`(30min)。详见 §5。
+
+> **C5 已完成并归档（S16/M4，2026-10-14）**：CF Quick Tunnel 监督（`TunnelSupervisor`）+ 地址变更邮件下发 + 凭据加密存取 + 管理员总览。**安全加固**：隧道构造期强校验 `host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port`（fail-fast，防误配把 CDP 暴露公网，T1/I27）。发信复用 engine `sendMail` + `email-sender` 共享 SMTP（收件人=账号邮箱 ∪ 管理员副本），`smtp` kind 保留不参与发信。地址变更按 `tunnels.id` 去重 + 重试封顶停发。engine 零改动；`CONSOLE_TUNNEL`(0)/`CONSOLE_TUNNEL_MAIL_MAX_ATTEMPTS`(3)/`CONSOLE_TUNNEL_MAIL_ADMIN`(1)。详见 §5。
 
 ---
 
@@ -99,12 +101,12 @@
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
-| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（4/6：C1–C4 ✅，待 C5/C6） |
+| `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | 🟡 进行中（5/6：C1–C5 ✅，待 C6） |
 | `archive/2026-10/10-13-console-foundation/` | S12 | C1 控制台基座（服务/DB/鉴权/RBAC/配置继承/迁移） | ✅ 已归档（2026-10-13） |
 | `archive/2026-10/10-13-console-scheduler/` | S13 | C2 调度与任务模型（plans/jobs/queue/worker/scheduler + timer 迁移脚本） | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-content-workbench/` | S14 | C3 内容工作台 | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ✅ 已归档（2026-10-14） |
-| `10-13-console-ops-tunnel/` | S16 | C5 运维与公网 | ⚪ 规划 |
+| `archive/2026-10/10-13-console-ops-tunnel/` | S16 | C5 运维与公网（邮箱/隧道地址下发/凭据/管理员视图） | ✅ 已归档（2026-10-14） |
 | `10-13-console-deploy-hardening/` | S17 | C6 部署与加固 | ⚪ 规划 |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
@@ -133,9 +135,31 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：**控制台 C4 `console-agent-session` 已完成并归档 → 下一步 C5 `console-ops-tunnel` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
+**当前任务**：**控制台 C5 `console-ops-tunnel` 已完成并归档 → 下一步 C6 `console-deploy-hardening` 规划**（父任务 `10-13-wechat-flow-console`，阶段 S11+）。
 
-### 当前（控制台）· C4 Agent 会话窗口与人在环（M3）
+### 当前（控制台）· C5 运维与公网（M4）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| I5-0 | spec 先行 `ops-tunnel.md` v0→v1 | ✅ | `.trellis/spec/console/{ops-tunnel,api,data-model,security,index}.md`（v5） |
+| I5-1 | migration v3（`tunnels.notified_at`/`notify_attempts`）+ `dao/{emails,secrets,tunnels}.ts` | ✅ | v2→v3 单测 8/8；`openTunnel` 单事务收编旧 `up`/`down`（I24）；NULL 判重 |
+| I5-2 | `tunnel/cloudflared.ts` `TunnelSupervisor`（spawn/解析/健康/变更/退避/去抖） | ✅ | `bun /tmp/wfc-c5-tunnel.ts` → `pass=19 fail=0`（退出码映射/健康/退避/去抖） |
+| I5-3 | `notify/tunnel-mail.ts` `notifyTunnelChange`（收件人/去重/重试封顶/审计） | ✅ | `c5-check-smtp.ts` 7/0；按 `tunnels.id` 去重，`attempts` 封顶后停发（I26） |
+| I5-4 | `server.ts` 11 条路由 + `ops` 注入 + `requireTunnel→503` | ✅ | `c5-check-http.ts` 50/0（401/403/404/400/503/CSRF/隔离） |
+| I5-5 | `main.ts` 接线 + 关闭顺序（`scheduler→worker→chat→tunnel→server→db`） | ✅ | `main.ts` +15/−1；`tsc`/`bun build` OK |
+| I5-6 | UI：`account` 邮箱/凭据表单 + `/admin` 总览 + 隧道徽标 + 导航 | ✅ | `c5-check-static.sh` 14/0；403/503/401 处理 |
+| AC-C5-6 | 管理员总览：跨账号 + 凭据仅布尔 + 无明文 | ✅ | `c5-check-deviations.ts` 18/0 |
+| AC-C5-7 | 隧道**只**指向 `127.0.0.1:<console_port>`，CDP 端口绝不入隧道 | ✅ | `c5-recheck-i27.ts` 24/0；复核 §7 判定 **CLOSED** |
+| AC-C5-8 | `cloudflared` 崩溃 → `down`/`error` + 非空 `detail`（不伪装 up） | ✅ | 崩溃 e2e：`status∈{down,error}` + detail 含 exit/signal/stderr 尾 |
+| AC-C5-9 | 零新增运行时依赖 / tsc / bun build / engine 未动 / C1–C4 回归 | ✅ | `dependencies=undefined`、`tsc --noEmit` 0 错、engine 4 文件 `git diff --quiet` = 空；C3 7/0、C4 8/0 |
+| 独立复核 | trellis-check（两轮） | ✅ | `check-report.md`：首轮 **PASS-with-issues**（1 高：I27 端口未校验）→ 修复 → 复审 **PASS**，独立 196/0 |
+| spec | 校准 console spec v4→v5（`ops-tunnel.md` v1 + I24–I28） | ✅ | `.trellis/spec/console/*` |
+
+**下一步**：C6 `console-deploy-hardening`（systemd/反代/限流/备份/端到端回归；携带 C2–C5 遗留观察项：C2 plan-job 失败无退避、C4 N1–N3、`decision.expired` 命名）。
+**真机待验（G2，250 主机）**：真实 `cloudflared` quick tunnel + 真实 `email-sender` 发信 + 浏览器 `/admin`；真实 `pi` 生成/流式与微信草稿推送（C3/C4）。
+**推进顺序**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → C5 ✅ → C6。
+
+### 上一子任务（控制台）· C4 Agent 会话窗口与人在环（M3）
 
 | # | 步骤 | 状态 | 证据 |
 |---|------|------|------|
@@ -304,6 +328,12 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 | D19 | 会话事件用**进程内 EventBus**（`ChatBus`，500 条环形 + 单调 `seq`=`SSE id:`），DB 只存 `message_end` 权威消息 | 同进程零延迟、零依赖；断线 `Last-Event-ID` 重放、落后发 `chat.resync` | ✅ 已实现（C4） |
 | D20 | 决策**终态不可逆**且**无悬挂**：`pending→{answered,cancelled,expired,lost}`；**任何**会话终止路径（异常 / 预期关闭 / 启动回收）都把 pending 与会话状态**同事务**清算 | AC-6「无悬挂」；分事务会在崩溃/中断留下可点的死卡片（B1） | ✅ 已实现（C4） |
 | D21 | 最小权限**双层且不可放开**：CLI `--tools` 白名单 + 扩展 `pi.on("tool_call")` fail-safe 硬阻断 `wechat*/publish*/mail*/backup*` | R3.5；发布/外发能力绝不下放给会话，且不提供 `dangerouslyAllowAll` | ✅ 已实现（C4） |
+| D22 | CF 隧道**只**映射回环控制台，构造期强校验 `host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port`（**fail-fast**） | 误配把 CDP(9222) 暴露公网 = 远程接管 Chrome（T1/H8）；只校验主机不够（复核发现） | ✅ 已实现（C5） |
+| D23 | 隧道**全局单例**（`tunnels` 无 `account_id`）；地址变更 = 单事务「插新 `up` + 旧 `up`/`down` → `expired`+`replaced_by=新 id`」（I24） | 一台机一个 quick tunnel；历史可追溯且全局至多一行 `up` | ✅ 已实现（C5） |
+| D24 | 地址变更邮件按 `tunnels.id` 去重（`notified_at`）+ 失败重试封顶（`CONSOLE_TUNNEL_MAIL_MAX_ATTEMPTS`）后置 `detail` 停发（I26） | 地址抖动不得演变为邮件轰炸（T5） | ✅ 已实现（C5） |
+| D25 | 发信**复用 engine `sendMail` + `email-sender` skill 共享 SMTP**，收件人覆盖为「该账号 `account_email` ∪ 管理员副本 `settings(global).notify.email.to`」；`smtp` kind 保留但**不参与发信**（D-C5-2/3/4，engine 零改动） | 不改 engine 发布/邮件链路；每账号接收邮箱动态可配 | ✅ 已实现（C5） |
+| D26 | `secrets` 只存密文，API **永不回显明文/密文**（读仅 `{kind,configured,keyVersion,updatedAt}`）；`account_id IS NULL` 需显式判重（SQLite NULL 不参与 UNIQUE） | 凭据是最高风险资产（H7/K1） | ✅ 已实现（C5） |
+| D27 | 服务注入 `createApp(state, chat?, ops?:{tunnel?})`；`ops.tunnel` 缺失 → 隧道路由 **503 `tunnel_unavailable`**（绝不 200 空） | 失败必须显形（H5/AC-11） | ✅ 已实现（C5） |
 
 ---
 
@@ -311,6 +341,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-14 | **控制台 C5 运维与公网交付并归档（S16/M4）**：新增 `src/console/tunnel/cloudflared.ts`（`TunnelSupervisor`，462 行）、`src/console/notify/tunnel-mail.ts`（319 行）、`db/dao/{emails,secrets,tunnels}.ts`、`ui/admin.{html,js}`；`schema.ts` 加 migration v3（`tunnels.notified_at`/`notify_attempts`，纯加法）；`server.ts` 加 11 条路由 + `createApp(state,chat,ops?)`（`ops.tunnel` 缺失 → 503 `tunnel_unavailable`）；`main.ts` 接线（`CONSOLE_TUNNEL=1`）+ 关闭顺序 `scheduler→worker→chat→tunnel→server→db`。实现：spawn cloudflared 逐行解析（禁 readline）；单次健康失败即 `down`、退出码映射（0→`down`；≠0/signal→`error`+detail）、退避重启、地址去抖；地址变更按 `tunnels.id` 去重 + 重试封顶后停发；发信复用 engine `sendMail`+共享 SMTP，收件人=账号邮箱 ∪ 管理员副本（`notify.email.to`）；凭据 AES-256-GCM，API 只回元数据。**安全加固（复核发现）**：`TunnelSupervisor` 构造期强校验 `host∈回环 ∧ port===CONSOLE_PORT ∧ port∉accounts.cdp_port`，杜绝误配把 CDP(9222) 暴露公网（T1/I27）。验证：`bash /tmp/wfc-c5-verify.sh` → `pass=22 fail=0`；独立复核 **196/0**（两轮：首轮 1 高缺陷 → 修复 → 复审 PASS）；`tsc`/`bun build`/零依赖/engine **零改动**（`git diff --quiet` 4 文件）；C3 7/0、C4 8/0 回归。console spec 校准 v4→v5（`ops-tunnel.md` v1 + I24–I28）。真机（250/G2）真实 cloudflared + 真实发信 + 浏览器 `/admin` 待验。 | pi |
 | 2026-10-14 | **控制台 C4 Agent 会话窗口与人在环交付并归档（S15/M3）**：新增 `src/console/agent/**`（`frames`/`rpc`/`events`/`manager` + `extensions/console-decision.ts`）、`db/dao/chats.ts`、`http/chat-sse.ts`、`ui/chat.{html,css,js}`；`schema.ts` 加 migration v2（`chat_sessions.session_file`，纯加法）；12 条复数路由 `/api/chats/*`、`/api/decisions`（CSRF + 按行 `account_id` 鉴权）。实现：`pi --mode rpc` 长活子进程 + 严格 JSONL 切帧（禁 readline）；按 `id` 关联命令、`prompt` 流式 `streamingBehavior:"steer"`；进程内 `ChatBus`（`seq`=`SSE id:`、`Last-Event-ID` 重放 + `chat.resync`）；`extension_ui_request` → 决策卡片，`pending→{answered,cancelled,expired,lost}`；**异常退出/预期关闭/启动回收均同事务清算 pending**（`closeChatSession`/`markChatLost`，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + 扩展硬阻断 `wechat*/publish*/mail*/backup*`，无放开开关）。验证：`tsc --noEmit` 0 错、`bun build` 49 modules、零依赖、engine **零改动**、单测 + fake-pi e2e + C3 回归全绿（`pass=8 fail=0`）；`trellis-check` 首轮 **FAIL**（唯一阻塞 **B1**：预期关闭未清算 pending）→ 修复（`closeChatSession` 同事务）→ 对抗复现 `PROBE(S) PASSED` + 复审 **PASS**。console spec 校准 v3→v4（`agent-session.md` v2、I19–I23）。真机（250/G2）流式/扩展/浏览器 `/chat` 待验。 | pi |
 | 2026-10-14 | **控制台 C3 内容工作台交付（S14/M2b）**：engine **附加式**重构——`src/publisher.ts` 抽出 `runArticleGeneration`/`buildArticlePrompt`，`runPublish` 改为调用它；空 `feedback` 时 prompt **字节一致（3012B）**、`runPublish` 生成后区段 diff 与 HEAD 相同（发布铁律与 `verifyDraftBody` 未动）；新增 `src/console/content/generate.ts`（`snapshotVersion`/`generateArticle`/`recordDraftResult`）与 `db/dao/articles.ts`（版本链 DAO），`http/sse.ts`（零依赖 SSE：~700ms 轮询 + 15s 心跳 + `Last-Event-ID` 续传），`ui/workbench.{html,css,js}`（计划编辑/生成/推送/版本链/对比/反馈重生成/失败面板）；worker 真执行 `generate`/`regenerate`，publish 分支补写 `drafts`（`verified` **仅镜像** engine 判决，I18）+ `articles.status='pushed'`；新增 5 条路由并开放 `POST /jobs` 的 `generate`/`regenerate`；`main.ts` `serve` 加 `idleTimeout:120`（SSE 必需）。验证：30 项单测、HTTP e2e（401/403/CSRF、SSE 不重不漏）、失败路径 e2e、假 `pi` worker e2e、字节一致比对，`tsc`/`bun build`/零依赖全绿；`trellis-check` 独立复核 **PASS**（8/8 必验；4 项非阻塞观察）。真机（250/G2）的「真 `pi` 生成 + 草稿推送 + 封面 + 浏览器 UI」待验。console spec 校准 v2→v3（I15–I18、SSE §3） | pi |
 | 2026-10-14 | **控制台 C2 调度与任务模型交付并归档（S13/M2a）**：新增 `src/console/jobs/**`（`types`/`plans`/`queue`/`worker`/`scheduler`，886 行）+ 7 条路由 + `main.ts` 生命周期（`serve` 内联调度、`--no-worker`、`--worker` 无头、SIGTERM 优雅退出）；新增 `deploy/console-scheduler.md` 与 `deploy/systemd/{disable,enable}-timer.sh`（不删 unit、可回退）；新增 `fillMissingPlansFromFiles` 迁移桥（**DB 优先**，控制台编辑不被文件回灌）。AC-5/AC-10/AC-11 实测：任务层单测 **35 passed/0 failed**、HTTP e2e（CSRF 403 / 400 / 401 / 403 / 201 / 409 全符合）、调度 e2e（启动即 tick → 1 条 publish，`actor=scheduler`，再 tick 仍 1）、失败必显形（`status=failed` + 非空 `error`）。`trellis-check` 独立复核 **PASS-with-issues**（无阻塞缺陷；直接修 1）死代码/未用导出 5 处、2）403 `denied` 审计 `actor` 改为请求局部——消除共享可变状态；本轮另修 D3/D4/D7：文件计划迁移桥、`worker.stop()` 有界 drain（`CONSOLE_WORKER_DRAIN_MS`）、`readSchedule` 布尔强校验 + 失败保留进度）。engine **零改动**；console spec 校准 v1→v2 并补 `design.md` I13（计划物化契约） | pi |
@@ -332,7 +363,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → 规划并实施 **C5 `console-ops-tunnel`**（邮箱 + Cloudflare 隧道地址下发 + 凭据加密 + 管理员全局视图，G7），随后 C6。见 §5 与父任务 `implement.md`。
+1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → C5 ✅ → 规划并实施 **C6 `console-deploy-hardening`**（systemd/反代/限流/备份/端到端回归，G6/G7）。见 §5 与父任务 `implement.md`。
 2. **真机待验（G2，需 250）**：C3 —— 真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench；C4 —— 真实 `pi` 流式、`pi --extension` 加载、浏览器 `/chat`（流式 + 决策卡片）。
 3. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
 4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。

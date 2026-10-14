@@ -7,6 +7,7 @@
  */
 import type { Database } from "bun:sqlite";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { Router } from "./http/router.ts";
 import {
@@ -38,6 +39,13 @@ import {
   type AccountRow,
 } from "./db/dao/accounts.ts";
 import { recentAudit, recordAudit } from "./db/dao/audit.ts";
+import * as emailDao from "./db/dao/emails.ts";
+import * as secretsDao from "./db/dao/secrets.ts";
+import * as tunnelDao from "./db/dao/tunnels.ts";
+import type { TunnelRow } from "./db/dao/tunnels.ts";
+import { encryptSecret } from "./crypto/secrets.ts";
+import { consolePort, internalIpv4 } from "./notify/tunnel-mail.ts";
+import type { TunnelSupervisor } from "./tunnel/cloudflared.ts";
 import { effectiveAccount, keySource, overrideKeys, removeOverride } from "./config/resolve.ts";
 import { renderConfig } from "./db/render-config.ts";
 import { loadConfig } from "../config.ts";
@@ -62,6 +70,15 @@ export interface AppState {
   startedAt: number;
   secureCookies: boolean;
   masterKey: Buffer;
+}
+
+/**
+ * Optional runtime collaborators injected by `main.ts`. C5 adds the tunnel
+ * supervisor; when it is absent the tunnel control routes answer 503
+ * `tunnel_unavailable` rather than pretending to succeed.
+ */
+export interface OpsDeps {
+  tunnel?: TunnelSupervisor;
 }
 
 export interface Ctx {
@@ -96,6 +113,52 @@ function intParam(ctx: Ctx, name = "id"): number {
   const n = Number(ctx.params[name]);
   if (!Number.isInteger(n) || n <= 0) throw badRequest(`参数 ${name} 非法`);
   return n;
+}
+
+// ── C5 helpers ──────────────────────────────────────────────────────────────
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Validate + normalise + de-duplicate a JSON address list. */
+function normalizeEmailList(value: unknown, field: string): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw badRequest(`${field} 必须是字符串数组`);
+  const out: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== "string") throw badRequest(`${field} 的元素必须是字符串`);
+    const addr = raw.trim();
+    if (!addr) continue;
+    if (!EMAIL_RE.test(addr)) throw badRequest(`${field} 含非法邮箱：${addr}`);
+    if (!out.includes(addr)) out.push(addr);
+  }
+  return out;
+}
+
+function secretKindParam(ctx: Ctx): string {
+  const kind = ctx.params.kind ?? "";
+  if (!secretsDao.isSecretKind(kind)) {
+    throw badRequest(`kind 非法（可选：${secretsDao.SECRET_KINDS.join(", ")}）`);
+  }
+  return kind;
+}
+
+/** Public shape of a `tunnels` row (never leaks ciphertext; there is none here). */
+function tunnelView(row: TunnelRow): JsonObject {
+  return {
+    id: row.id,
+    kind: row.kind,
+    url: row.url,
+    hostname: row.hostname,
+    pid: row.pid,
+    status: row.status,
+    detail: row.detail,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    lastCheckedAt: row.last_checked_at,
+    replacedBy: row.replaced_by,
+    notifiedAt: row.notified_at,
+    notifyAttempts: row.notify_attempts,
+  };
 }
 
 const CSP =
@@ -298,9 +361,16 @@ function draftView(row: articles.DraftRow): JsonObject {
 
 // ── app ─────────────────────────────────────────────────────────────────────
 
-export function createApp(state: AppState, chat?: ChatManager): App {
+export function createApp(state: AppState, chat?: ChatManager, ops?: OpsDeps): App {
   const { db } = state;
   const router = new Router<Ctx>();
+
+  const requireTunnel = (): TunnelSupervisor => {
+    if (!ops?.tunnel) {
+      throw new HttpError(503, "tunnel_unavailable", "隧道功能未启用（设置 CONSOLE_TUNNEL=1 后可用）");
+    }
+    return ops.tunnel;
+  };
 
   // ---- auth ----------------------------------------------------------------
 
@@ -968,6 +1038,217 @@ export function createApp(state: AppState, chat?: ChatManager): App {
       uptimeSec: Math.floor((Date.now() - state.startedAt) / 1000),
       cdpSuggestions: suggestCdpPorts(db, 9222, 5),
       routes: router.list(),
+    });
+  });
+
+  // ---- C5: account email + secrets ----------------------------------------
+
+  router.add("GET", "/api/accounts/:id/email", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const row = emailDao.getEmail(db, id);
+    if (!row) return ok({ configured: false, to: [], cc: [], subjectPrefix: null });
+    return ok({
+      configured: true,
+      to: emailDao.parseEmailList(row.to_json),
+      cc: emailDao.parseEmailList(row.cc_json),
+      subjectPrefix: row.subject_prefix,
+    });
+  });
+
+  router.add("PUT", "/api/accounts/:id/email", async (ctx) => {
+    const id = intParam(ctx);
+    const account = getAccountById(db, id);
+    if (!account) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const body = await readJson(ctx.req);
+    const to = normalizeEmailList(body.to, "to");
+    const cc = normalizeEmailList(body.cc, "cc");
+    if (to.length + cc.length === 0) throw badRequest("to/cc 至少需要一个邮箱");
+    const subjectPrefix =
+      typeof body.subjectPrefix === "string" ? body.subjectPrefix.trim().slice(0, 200) : "";
+    const saved = emailDao.upsertEmail(db, id, { to, cc, subjectPrefix });
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "email.upsert",
+      target: account.alias,
+      ok: true,
+    });
+    return ok({
+      configured: true,
+      to: emailDao.parseEmailList(saved.to_json),
+      cc: emailDao.parseEmailList(saved.cc_json),
+      subjectPrefix: saved.subject_prefix,
+    });
+  });
+
+  router.add("DELETE", "/api/accounts/:id/email", (ctx) => {
+    const id = intParam(ctx);
+    const account = getAccountById(db, id);
+    if (!account) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const deleted = emailDao.deleteEmail(db, id);
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "email.delete",
+      target: account.alias,
+      ok: true,
+    });
+    return ok({ deleted });
+  });
+
+  router.add("GET", "/api/accounts/:id/secrets", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const metas = new Map(secretsDao.listSecretMetas(db, id).map((m) => [m.kind, m]));
+    const secrets = secretsDao.SECRET_KINDS.map((kind) => {
+      const meta = metas.get(kind);
+      return {
+        kind,
+        configured: Boolean(meta),
+        keyVersion: meta?.key_version ?? null,
+        updatedAt: meta?.updated_at ?? null,
+      };
+    });
+    return ok({ secrets });
+  });
+
+  router.add("PUT", "/api/accounts/:id/secrets/:kind", async (ctx) => {
+    const id = intParam(ctx);
+    const account = getAccountById(db, id);
+    if (!account) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const kind = secretKindParam(ctx);
+    const body = await readJson(ctx.req);
+    const value =
+      typeof body.value === "string" ? body.value : typeof body.secret === "string" ? body.secret : "";
+    if (!value) throw badRequest("缺少 value（明文仅在此刻传输，落库前加密）");
+    if (value.length > 20_000) throw badRequest("value 过长");
+    const enc = encryptSecret(value, state.masterKey);
+    secretsDao.putSecret(db, id, kind, enc);
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "secret.put",
+      target: `${account.alias}:${kind}`,
+      detail: { keyVersion: enc.keyVersion },
+      ok: true,
+    });
+    const meta = secretsDao.listSecretMetas(db, id).find((m) => m.kind === kind);
+    return ok({
+      kind,
+      configured: true,
+      keyVersion: meta?.key_version ?? enc.keyVersion,
+      updatedAt: meta?.updated_at ?? null,
+    });
+  });
+
+  router.add("DELETE", "/api/accounts/:id/secrets/:kind", (ctx) => {
+    const id = intParam(ctx);
+    const account = getAccountById(db, id);
+    if (!account) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const kind = secretKindParam(ctx);
+    const deleted = secretsDao.deleteSecret(db, id, kind);
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "secret.delete",
+      target: `${account.alias}:${kind}`,
+      ok: true,
+    });
+    return ok({ deleted });
+  });
+
+  // ---- C5: tunnels + admin overview ---------------------------------------
+
+  router.add("GET", "/api/tunnels", (ctx) => {
+    const limit = Math.min(Math.max(Number(ctx.url.searchParams.get("limit") ?? 20) || 20, 1), 100);
+    return ok({ tunnels: tunnelDao.listTunnels(db, limit).map(tunnelView) });
+  });
+
+  router.add("GET", "/api/tunnels/current", (ctx) => {
+    const current = tunnelDao.getCurrentTunnel(db);
+    return ok({ current: current ? tunnelView(current) : null, process: ops?.tunnel?.status() ?? null });
+  });
+
+  router.add("POST", "/api/tunnels/restart", async (ctx) => {
+    assertAdmin(ctx.auth);
+    const supervisor = requireTunnel();
+    const view = await supervisor.restart();
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "tunnel.restart",
+      target: "tunnel",
+      ok: true,
+    });
+    return ok(view);
+  });
+
+  router.add("POST", "/api/tunnels/:id/notify", async (ctx) => {
+    assertAdmin(ctx.auth);
+    const supervisor = requireTunnel();
+    const id = intParam(ctx);
+    if (!tunnelDao.getTunnel(db, id)) throw notFound("隧道记录不存在");
+    const result = await supervisor.notifyNow(id);
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "tunnel.notify",
+      target: `tunnel:${id}`,
+      detail: { sent: result.sent, skipped: result.skipped ?? null },
+      ok: result.sent,
+    });
+    return ok(result);
+  });
+
+  router.add("GET", "/api/admin/overview", (ctx) => {
+    assertAdmin(ctx.auth);
+    const current = tunnelDao.getCurrentTunnel(db);
+    const accounts = listAccountRows(db).map((row) => {
+      const emailRow = emailDao.getEmail(db, row.id);
+      const kinds = new Set(secretsDao.listSecretMetas(db, row.id).map((m) => m.kind));
+      return {
+        id: row.id,
+        alias: row.alias,
+        displayName: row.display_name,
+        enabled: row.enabled === null ? null : row.enabled !== 0,
+        email: {
+          configured: Boolean(emailRow),
+          to: emailRow ? emailDao.parseEmailList(emailRow.to_json) : [],
+        },
+        secrets: Object.fromEntries(secretsDao.SECRET_KINDS.map((k) => [k, kinds.has(k)])),
+        cdpPort: row.cdp_port,
+      };
+    });
+    const process = ops?.tunnel?.status() ?? null;
+    const jobsRunning =
+      db.query<{ n: number }>("SELECT COUNT(*) AS n FROM jobs WHERE status = 'running'").get()?.n ?? 0;
+    return ok({
+      tunnel: {
+        status: current?.status ?? null,
+        url: current?.url ?? null,
+        since: current?.created_at ?? null,
+        lastCheckedAt: current?.last_checked_at ?? null,
+        notifiedAt: current?.notified_at ?? null,
+        notifyAttempts: current?.notify_attempts ?? 0,
+        running: process?.running ?? false,
+        pid: process?.pid ?? null,
+        detail: process?.detail ?? null,
+      },
+      accounts,
+      jobsRunning,
+      server: {
+        hostname: os.hostname(),
+        internalIp: internalIpv4(),
+        port: consolePort(),
+        now: new Date().toISOString(),
+      },
     });
   });
 

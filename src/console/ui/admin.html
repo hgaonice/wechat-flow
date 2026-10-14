@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运维 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+<script src="/admin.js" defer></script>
+</head>
+<body data-page="admin">
+<header>
+  <span class="brand">wechat-flow console</span>
+  <a href="/app">账号</a>
+  <a href="/workbench">内容工作台</a>
+  <a href="/chat">Agent 会话</a>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+  <button id="logout" class="ghost">退出</button>
+</header>
+<main>
+  <div id="banner" class="fail" hidden>
+    <span id="banner-msg"></span>
+    <button id="banner-close" class="ghost">关闭</button>
+  </div>
+
+  <div class="card">
+    <h2>隧道状态（Cloudflare Quick Tunnel）</h2>
+    <div class="stat-grid" id="tunnel-stats"></div>
+    <div id="tunnel-detail" class="muted mono"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="tunnel-restart" class="primary">重启隧道</button>
+      <button id="tunnel-notify">重发邮件</button>
+      <button id="tunnel-refresh" class="ghost">刷新</button>
+    </div>
+    <div id="tunnel-msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>服务器信息</h2>
+    <div class="stat-grid" id="server-stats"></div>
+  </div>
+
+  <div class="card">
+    <h2>账号总览</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>alias</th><th>显示名</th><th>启用</th><th>接收邮箱</th><th>凭据</th><th>CDP</th></tr>
+        </thead>
+        <tbody id="accounts"></tbody>
+      </table>
+    </div>
+    <div id="accounts-empty" class="muted" hidden>暂无账号。</div>
+  </div>
+
+  <div class="card">
+    <h2>隧道历史（含已过期，replacedBy 指向后继行）</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>id</th><th>状态</th><th>地址</th><th>PID</th><th>创建</th><th>检查/过期</th><th>通知</th><th>replacedBy</th><th></th></tr>
+        </thead>
+        <tbody id="tunnels"></tbody>
+      </table>
+    </div>
+    <div id="tunnels-empty" class="muted" hidden>暂无隧道记录。</div>
+    <div id="tunnels-msg" class="msg"></div>
+  </div>
+  <div id="msg" class="msg"></div>
+</main>
+</body>
+</html>

@@ -25,6 +25,7 @@ const ROUTES: Record<string, string> = {
   "/settings": "settings.html",
   "/workbench": "workbench.html",
   "/chat": "chat.html",
+  "/admin": "admin.html",
 };
 
 export function serveUi(pathname: string): Response {

@@ -75,3 +75,40 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 .msg.ok { color: var(--ok); }
 .login-wrap { max-width: 380px; margin: 10vh auto; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* C5: ops/tunnel overview + account email/secrets sections */
+.fail {
+  margin-top: 12px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fail .ghost { margin-left: auto; flex: 0 0 auto; }
+.badge.warn { color: var(--warn); border-color: var(--warn); }
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.stat {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.stat-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.stat-value { font-weight: 600; overflow-wrap: anywhere; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap table { min-width: 640px; }
+
+/* Mobile (R2.5): never overflow the phone viewport. */
+@media (max-width: 640px) {
+  header { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  main { padding: 14px; }
+  .card { padding: 14px; }
+}

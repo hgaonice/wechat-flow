@@ -82,6 +82,7 @@ async function initIndex() {
   csrf = me.csrfToken;
   if ($("#who")) $("#who").textContent = `${me.user.username}（${me.isAdmin ? "管理员" : "负责人"}）`;
   if ($("#nav-settings")) $("#nav-settings").hidden = !me.isAdmin;
+  if ($("#nav-admin")) $("#nav-admin").hidden = !me.isAdmin;
   if ($("#create-card")) $("#create-card").hidden = !me.isAdmin;
 
   const msg = $("#msg");
@@ -204,6 +205,106 @@ async function initAccount() {
     }
   };
 
+  // C5: 邮箱配置 + 凭据（只写不读）
+  const splitList = (s) => String(s || "").split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+
+  const renderEmail = (email) => {
+    const configured = email && email.configured;
+    $("#email-to").value = configured ? (email.to || []).join(", ") : "";
+    $("#email-cc").value = configured ? (email.cc || []).join(", ") : "";
+    $("#email-prefix").value = configured ? email.subjectPrefix || "" : "";
+  };
+
+  const loadEmail = async () => {
+    const email = await api(`/api/accounts/${id}/email`);
+    renderEmail(email);
+  };
+
+  const renderSecrets = (secrets) => {
+    const tbody = $("#secrets-list");
+    tbody.innerHTML = "";
+    for (const s of secrets) {
+      const badge = s.configured
+        ? el("span", { class: "badge on", text: "已配置" })
+        : el("span", { class: "badge off", text: "未配置" });
+      const del = s.configured
+        ? el("button", { class: "danger", text: "删除", onclick: () => removeSecret(s.kind) })
+        : null;
+      tbody.append(
+        el("tr", {}, [
+          el("td", { class: "mono", text: s.kind }),
+          el("td", {}, [badge]),
+          el("td", { class: "mono", text: s.keyVersion ?? "—" }),
+          el("td", { class: "mono", text: s.updatedAt ?? "—" }),
+          el("td", {}, [del]),
+        ]),
+      );
+    }
+  };
+
+  const loadSecrets = async () => {
+    const { secrets } = await api(`/api/accounts/${id}/secrets`);
+    renderSecrets(secrets);
+  };
+
+  const removeSecret = async (kind) => {
+    if (!confirm(`删除凭据「${kind}」？删除后该凭据立即失效。`)) return;
+    try {
+      await api(`/api/accounts/${id}/secrets/${kind}`, { method: "DELETE" });
+      await loadSecrets();
+      flash($("#secret-msg"), `已删除 ${kind}`, "ok");
+    } catch (err) {
+      flash($("#secret-msg"), err.message, "error");
+    }
+  };
+
+  $("#email-save").addEventListener("click", async () => {
+    const emsg = $("#email-msg");
+    try {
+      const saved = await api(`/api/accounts/${id}/email`, {
+        method: "PUT",
+        body: {
+          to: splitList($("#email-to").value),
+          cc: splitList($("#email-cc").value),
+          subjectPrefix: $("#email-prefix").value.trim(),
+        },
+      });
+      renderEmail(saved);
+      flash(emsg, "邮箱配置已保存", "ok");
+    } catch (err) {
+      flash(emsg, err.message, "error");
+    }
+  });
+
+  $("#email-delete").addEventListener("click", async () => {
+    if (!confirm("删除该账号的邮箱配置？删除后隧道变更邮件将不再下发到此账号。")) return;
+    try {
+      await api(`/api/accounts/${id}/email`, { method: "DELETE" });
+      renderEmail(null);
+      flash($("#email-msg"), "邮箱配置已删除", "ok");
+    } catch (err) {
+      flash($("#email-msg"), err.message, "error");
+    }
+  });
+
+  $("#secret-save").addEventListener("click", async () => {
+    const smsg = $("#secret-msg");
+    const kind = $("#secret-kind").value;
+    const value = $("#secret-value").value;
+    if (!value) {
+      flash(smsg, "请输入明文后再保存", "error");
+      return;
+    }
+    try {
+      await api(`/api/accounts/${id}/secrets/${kind}`, { method: "PUT", body: { value } });
+      $("#secret-value").value = "";
+      await loadSecrets();
+      flash(smsg, `已保存 ${kind}（仅显示状态，不回显明文）`, "ok");
+    } catch (err) {
+      flash(smsg, err.message, "error");
+    }
+  });
+
   $("#save").addEventListener("click", async () => {
     let overrides;
     try {
@@ -229,6 +330,8 @@ async function initAccount() {
 
   detail = await api(`/api/accounts/${id}`);
   render();
+  await loadEmail();
+  await loadSecrets();
 }
 
 // ── settings ────────────────────────────────────────────────────────────────

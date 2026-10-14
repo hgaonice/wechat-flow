@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v4（C1+C2+C3+C4 已校准；C5–C6 端点仍为契约先验）**，源 `design.md` §5。
+> 状态：**v5（C1+C2+C3+C4+C5 已校准；仅 C6 端点仍为契约先验）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -126,16 +126,28 @@
 - 审计：`chat.create/close/prompt/abort/fork/clone/model.set`、`agent.tool`、`agent.decision.pending/answer/cancel/expired`、`chat.lost`。
 > 早期单数草案（`/api/accounts/:id/chat`、`/api/chat/:id`…）**已废弃**；实现一律用上表复数路径。
 
-### 2.5 运维 / 管理员
+### 2.5 运维 / 管理员（**已落地（C5）**）
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/health` | **免鉴权**，`{version,db,tunnel,queue}` 摘要 |
-| GET/PUT | `/api/accounts/:id/email` | 接收邮箱（多邮箱 + 主题前缀） |
-| GET/PUT | `/api/accounts/:id/secrets` | 凭据：读**只回** `{kind,configured,updated_at}`；写只收不发 |
-| GET | `/api/tunnels` | 隧道地址历史（`up/down/expired/error`，`replaced_by` 链） |
-| GET | `/api/admin/overview` | 管理员全局视图（跨账号总览） |
-| GET | `/api/audit` | 审计查询（admin） |
+| 方法 | 路径 | 授权 | 说明 |
+|---|---|---|---|
+| GET | `/health` | **免鉴权** | `{status,version,uptimeSec}`（**非** db/tunnel/queue 摘要；隧道/队列摘要见 `/api/admin/overview` 与 `/api/meta`） |
+| GET | `/api/accounts/:id/email` | owner(账号)/admin | `{configured,to[],cc[],subjectPrefix}`（无则 `{configured:false,to:[],cc:[],subjectPrefix:null}`；**无 `updatedAt`**，表无该列） |
+| PUT | `/api/accounts/:id/email` | owner(账号)/admin | body `{to[],cc[],subjectPrefix?}`；`to+cc` 至少一个邮箱，否则 400；audit `email.upsert` |
+| DELETE | `/api/accounts/:id/email` | owner(账号)/admin | `{deleted:n}`（**幂等**）；audit `email.delete` |
+| GET | `/api/accounts/:id/secrets` | owner(账号)/admin | `{secrets:[{kind,configured,keyVersion,updatedAt}]}`（**仅元数据，绝不含明文/密文**） |
+| PUT | `/api/accounts/:id/secrets/:kind` | owner(账号)/admin | body `{value}`（兼容 `{secret}`）；落库前 AES-256-GCM 加密；响应不含明文；audit `secret.put`（只记 `keyVersion`） |
+| DELETE | `/api/accounts/:id/secrets/:kind` | owner(账号)/admin | `{deleted:n}`；audit `secret.delete` |
+| GET | `/api/tunnels?limit=` | 任意登录 | `{tunnels:[TunnelView]}`（默认 20，上限 100；含 `expired` 历史） |
+| GET | `/api/tunnels/current` | 任意登录 | `{current:TunnelView\|null, process:TunnelStatusView\|null}` |
+| POST | `/api/tunnels/restart` | **admin** | `TunnelStatusView`；`ops.tunnel` 缺失 → **503 `tunnel_unavailable`** |
+| POST | `/api/tunnels/:id/notify` | **admin** | `{sent,attempts,skipped?,error?}`；强制重发该行邮件；audit `tunnel.notify` |
+| GET | `/api/admin/overview` | **admin** | `{tunnel:{status,url,since,lastCheckedAt,notifiedAt,notifyAttempts,running,pid,detail}, accounts:[{id,alias,displayName,enabled,email:{configured,to[]},secrets:{kind:bool},cdpPort}], jobsRunning, server:{hostname,internalIp,port,now}}`（`jobsRunning` 为**全局**运行中任务数） |
+| GET | `/api/audit` | **admin** | 审计查询 |
+| GET | `/api/meta` | 任意登录 | `{version,routes[]}` |
+
+- `kind` ∈ `wechat_login \| cf_token \| smtp`（`smtp` 为**保留**：可写入、永不回显，**当前不参与发信**；SMTP 走 engine `email-sender` skill 的共享配置）。
+- `TunnelView` = `{id,kind,url,hostname,pid,status,detail,createdAt,expiresAt,lastCheckedAt,replacedBy,notifiedAt,notifyAttempts}`；`status` ∈ `up\|down\|expired\|error`。
+- 写请求需 `X-CSRF-Token`（缺失/错 → 403）；越权 → 403 + `audit('denied')`；未知账号/隧道 → 404。
 
 ---
 
@@ -160,5 +172,5 @@
 ## 4. 静态 UI
 
 - `src/console/ui/` 下静态文件由 `server.ts` 直接送出；无打包。
-- 页面路由（`http/static.ts#ROUTES`）：`/`、`/login`、`/app`、`/account`、`/settings`、`/workbench`、**`/chat`**（C4）。
+- 页面路由（`http/static.ts#ROUTES`）：`/`、`/login`、`/app`、`/account`、`/settings`、`/workbench`、`/chat`（C4）、**`/admin`**（C5，运维/管理员总览）。
 - 所有动态数据经上述 JSON API / SSE 获取；**不在 HTML 内嵌任何凭据**。

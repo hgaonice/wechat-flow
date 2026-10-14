@@ -462,6 +462,7 @@
     const me = await api("/api/me");
     csrf = me.csrfToken; // app.js binding read by api()
     if ($("#who")) $("#who").textContent = `${me.user.username}（${me.isAdmin ? "管理员" : "负责人"}）`;
+    if ($("#nav-admin")) $("#nav-admin").hidden = !me.isAdmin;
     $("#logout").addEventListener("click", async () => {
       try {
         await api("/api/logout", { method: "POST" });

@@ -36,6 +36,41 @@
   </div>
 
   <div class="card">
+    <h2>邮箱配置（隧道地址变更时下发到此账号邮箱）</h2>
+    <p class="muted">多个地址用逗号或空格分隔；留空表示未配置。管理员副本由全局 notify 列表决定。</p>
+    <label for="email-to">收件人 to</label>
+    <input id="email-to" placeholder="owner@example.com, backup@example.com">
+    <label for="email-cc">抄送 cc</label>
+    <input id="email-cc" placeholder="cc@example.com">
+    <label for="email-prefix">主题前缀 subjectPrefix</label>
+    <input id="email-prefix" placeholder="例如 [公众号A] ">
+    <div class="row" style="margin-top:14px">
+      <button id="email-save" class="primary">保存邮箱</button>
+      <button id="email-delete" class="danger">删除配置</button>
+    </div>
+    <div id="email-msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>凭据（AES-256-GCM 加密存储，保存后不可回显）</h2>
+    <p class="muted">只写不读：保存后仅显示「已配置」与版本/时间，明文永不落库也不回显。</p>
+    <table>
+      <thead><tr><th>kind</th><th>状态</th><th>keyVersion</th><th>更新时间</th><th></th></tr></thead>
+      <tbody id="secrets-list"></tbody>
+    </table>
+    <div class="row" style="margin-top:14px">
+      <select id="secret-kind">
+        <option value="wechat_login">wechat_login（公众号后台账密）</option>
+        <option value="cf_token">cf_token（Cloudflare，预留）</option>
+        <option value="smtp">smtp（保留，暂不参与发信）</option>
+      </select>
+      <input id="secret-value" type="password" autocomplete="new-password" placeholder="明文（仅此刻传输，落库前加密）">
+      <button id="secret-save" class="primary">保存凭据</button>
+    </div>
+    <div id="secret-msg" class="msg"></div>
+  </div>
+
+  <div class="card">
     <h2>全局默认（只读，管理员在“全局设置”改）</h2>
     <pre id="global" class="mono muted"></pre>
   </div>

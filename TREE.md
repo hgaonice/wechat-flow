@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 15:17:05
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 16:54:55
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -38,7 +38,10 @@ src/console/db/dao/accounts.ts
 src/console/db/dao/articles.ts
 src/console/db/dao/audit.ts
 src/console/db/dao/chats.ts
+src/console/db/dao/emails.ts
+src/console/db/dao/secrets.ts
 src/console/db/dao/settings.ts
+src/console/db/dao/tunnels.ts
 src/console/db/import-config.ts
 src/console/db/migrate.ts
 src/console/db/render-config.ts
@@ -54,7 +57,9 @@ src/console/jobs/scheduler.ts
 src/console/jobs/types.ts
 src/console/jobs/worker.ts
 src/console/main.ts
+src/console/notify/tunnel-mail.ts
 src/console/server.ts
+src/console/tunnel/cloudflared.ts
 src/console/types.ts
 src/console/verify-ac3.ts
 src/cover.ts
@@ -174,10 +179,25 @@ src/wechat.ts
 
 导出：`CHAT_STATUSES, ChatStatus, DECISION_METHODS, DecisionMethod, DecisionStatus, ChatSessionRow, ChatMessageRow, DecisionRow, CreateChatSessionInput, createChatSession, getChatSession, listChatSessions, listLiveChatSessions, setChatStatus, touchChatSession, setChatPiRefs, deleteChatSession, ChatMessageInput, insertChatMessage, listChatMessages, DecisionInput, InsertDecisionResult, insertDecision, getDecision, getDecisionByRequest, ListDecisionsOptions, listDecisions, AnswerDecisionInput, answerDecision, expireDecision, loseDecisionsForSession, ChatLostCounts, markChatLost, closeChatSession, countPendingDecisions, pendingCountsForAccount, reapStaleChats`
 
+### `src/console/db/dao/emails.ts`  (65 行)
+> `account_email` DAO — per-account recipients for control-plane mail (C5).
+
+导出：`EmailRow, EmailInput, parseEmailList, getEmail, upsertEmail, deleteEmail`
+
+### `src/console/db/dao/secrets.ts`  (126 行)
+> `secrets` DAO — encrypted credential storage (I25: ciphertext only).
+
+导出：`SECRET_KINDS, SecretKind, isSecretKind, SecretMeta, SecretCipher, listSecretMetas, getSecretCipher, putSecret, deleteSecret`
+
 ### `src/console/db/dao/settings.ts`  (42 行)
 > Global config (`settings` key = 'global') storage.
 
 导出：`GLOBAL_KEY, getSetting, setSetting, delSetting, getGlobalRaw, setGlobalRaw`
+
+### `src/console/db/dao/tunnels.ts`  (154 行)
+> `tunnels` DAO — the control-plane tunnel ledger (C5).
+
+导出：`TunnelStatus, TunnelKind, TunnelRow, getTunnel, getCurrentTunnel, listTunnels, OpenTunnelInput, openTunnel, setTunnelStatus, HeardPatch, markHeard, markNotified, clearNotified, bumpNotifyAttempts`
 
 ### `src/console/db/import-config.ts`  (107 行)
 > One-time import: existing `config.json` → DB (`settings` + `accounts`).
@@ -194,7 +214,7 @@ src/wechat.ts
 
 导出：`RenderResult, renderConfig`
 
-### `src/console/db/schema.ts`  (257 行)
+### `src/console/db/schema.ts`  (267 行)
 > v1 schema baseline for the console DB.
 
 导出：`Migration, MIGRATIONS`
@@ -219,7 +239,7 @@ src/wechat.ts
 
 导出：`StreamOptions, streamJobEvents`
 
-### `src/console/http/static.ts`  (44 行)
+### `src/console/http/static.ts`  (45 行)
 >  Static UI serving from `src/console/ui` (no bundler, no dependencies).
 
 导出：`serveUi`
@@ -249,15 +269,25 @@ src/wechat.ts
 
 导出：`WorkerHandle, WorkerOptions, executeJob, startWorker`
 
-### `src/console/main.ts`  (252 行)
+### `src/console/main.ts`  (266 行)
 > wechat-flow console entry point (C1).
 
 导出：（无，或为可执行入口）
 
-### `src/console/server.ts`  (1044 行)
+### `src/console/notify/tunnel-mail.ts`  (319 行)
+> C5 tunnel-change mail (design §5).
+
+导出：`SendFn, NotifyOpts, NotifyResult, internalIpv4, consolePort, WechatLogin, decryptWechatLogin, formatStamp, TunnelMailBody, buildTunnelMail, notifyTunnelChange`
+
+### `src/console/server.ts`  (1325 行)
 > Console HTTP app: routing, session middleware, CSRF, RBAC, and the C1 API.
 
-导出：`AppState, Ctx, App, createApp`
+导出：`AppState, OpsDeps, Ctx, App, createApp`
+
+### `src/console/tunnel/cloudflared.ts`  (484 行)
+> C5 cloudflared quick-tunnel supervisor (design §4).
+
+导出：`TunnelStatusView, TunnelDeps, TunnelSupervisor`
 
 ### `src/console/types.ts`  (35 行)
 >  Very small JSON value model shared by the console config layer.

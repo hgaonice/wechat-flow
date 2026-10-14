@@ -254,4 +254,14 @@ export const MIGRATIONS: Migration[] = [
     name: "chat_session_file",
     sql: `ALTER TABLE chat_sessions ADD COLUMN session_file TEXT;`,
   },
+  {
+    // C5 (D-C5-6): pure-additive notify bookkeeping on `tunnels`.
+    //   notified_at      — success timestamp, the per-row dedupe key (I26)
+    //   notify_attempts  — failed send counter, capped by MAX_ATTEMPTS (I26)
+    // No data backfill and no CHECK changes; old code reading a v3 DB is unaffected.
+    version: 3,
+    name: "tunnel_notify",
+    sql: `ALTER TABLE tunnels ADD COLUMN notified_at TEXT;
+          ALTER TABLE tunnels ADD COLUMN notify_attempts INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];

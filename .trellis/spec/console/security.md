@@ -1,6 +1,6 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v4（已随 C1 + C2 + C3 + C4 校准）**。C5/C6 落地后继续校准。
+> 状态：**v5（已随 C1 + C2 + C3 + C4 + C5 校准）**。C6 落地后继续校准。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
@@ -76,8 +76,9 @@
   3. 文件不存在 → **拒绝启动**，提示 `--init-key`。
 - `--init-key`：在文件缺失时生成 32B 随机密钥并以 **0600** 落盘（**不覆盖已有文件**）。v0 稿“首启自动生成”已改为**显式 `--init-key`**，避免隐式落盘状态。
 - **无 key**：拒绝启动（或拒绝解密）并**显式报错**——绝不回退明文。
-- **API 永不回显明文**：读接口返回 `{kind, configured:true, updated_at}` 形态；写接口只收不发。
-- 审计：凭据写入/轮换落 `audit`（记录操作者与时间，**不记录值**）。
+- **API 永不回显明文**：读接口返回 `{kind, configured:true, keyVersion, updatedAt}` 形态（**仅元数据，无明文/密文列**）；写接口只收不发。
+- **凭据种类白名单**：`SECRET_KINDS = ["wechat_login","cf_token","smtp"]`。其中 **`smtp` 为保留项**：可写入（加密落库）以便未来切换每账号 SMTP，但**当前不参与发信**（发信走 engine `email-sender` skill 的共享 SMTP，D-C5-3）。`UNIQUE(account_id,kind)` 对 `account_id IS NULL`（全局项）不生效 → DAO 先 `SELECT ... WHERE account_id IS NULL AND kind=?` 再决定 insert/update。
+- 审计：凭据写入/轮换落 `audit`（记录操作者与时间、`keyVersion`，**不记录值**）。
 
 ## 6. 限流与锁定
 
@@ -85,7 +86,7 @@
   **同一用户名 15 分钟窗口内失败 ≥ 5 次** → 后续登录返回 **429**（`retryAfterSec` 提示），成功登录清零失败计数。
   常量：`MAX_LOGIN_ATTEMPTS=5`、`ATTEMPT_WINDOW_MIN=15`（`sessions.ts`）。
 - API 全局限流：按会话/IP 令牌桶；超限 429（C6 加固）。
-- 隧道地址抖动时**发信去抖 + 失败重试上限**，避免邮件轰炸（C5）。
+- 隧道地址抖动时**发信去抖 + 失败重试上限**，避免邮件轰炸：去重键 `tunnels.id`（`notified_at IS NULL`），失败累加 `notify_attempts`，上限 `CONSOLE_TUNNEL_MAIL_MAX_ATTEMPTS`（默认 3）后置于 `detail` **停发**（I26）。
 
 ## 7. 审计（Audit）
 
@@ -93,6 +94,8 @@
 C4 补充：`chat.create`/`chat.close`/`chat.prompt`/`chat.abort`/`chat.fork`/`chat.clone`/`chat.model.set`、
 `agent.tool`（含 `phase`/`toolName`）、`agent.decision.pending`/`agent.decision.answer`/`agent.decision.cancel`/`agent.decision.expired`、
 `chat.lost`（附退出 `code`/`signal` 与丢失决策数）。
+C5 补充：`email.upsert`/`email.delete`、`secret.put`/`secret.delete`（附 `keyVersion`）、
+`tunnel.restart`、`tunnel.notify`（附 `sent`/`skipped`）、隧道生命周期 `tunnel.change`/`tunnel.exit`/`tunnel.mail`（附 `ok`）。
 字段（v1）：`user_id`（可空）、**`actor`**（用户名文本，失败登录/未知用户也能归属）、`action`、`target`、
 `detail_json`、`ip`、`ua`、`ts`、**`ok`**（0/1）。查询入口 `GET /api/audit`（admin，`?limit=`≤500）。
 越权（403）由 `server.ts` 统一捕获并写 `action='denied'` 行；**`actor` 取该请求会话的真实用户名**
@@ -105,5 +108,5 @@ C4 补充：`chat.create`/`chat.close`/`chat.prompt`/`chat.abort`/`chat.fork`/`c
 | 自动填公众号账密登录可能触发风控（K2） | **保留二维码邮件自愈**为兜底；账密仅在有显式配置时使用 |
 | Quick Tunnel 地址公开可扫 | 强鉴权 + 限流锁定 + 可选 CF Access + 地址可轮换 |
 | master key 丢失 → 凭据不可解 | `--init-key` 提示备份；支持 `key_version` 轮换 |
-| 隧道/反代被误配暴露 CDP | 部署清单显式禁止；C6 只映射控制台端口 |
+| 隧道/反代被误配暴露 CDP | **代码层 fail-fast**：`TunnelSupervisor` 构造期校验目标 `host∈回环` **且** `port===CONSOLE_PORT` **且** 非任何 `accounts.cdp_port`，否则**拒绝启动**（I27，AC-C5-7）；部署清单亦显式禁止 |
 | 账号热列与 entry 不一致导致约束失效 | 写入侧 `assertEntryTypes` 校验；镜像时对数字字符串容错 |
