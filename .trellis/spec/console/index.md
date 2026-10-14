@@ -3,7 +3,7 @@
 > 控制面（control plane）：在既有 engine（`src/*.ts`，见 `../engine/index.md`）之上加一层**带鉴权的 Web 管理控制台**，
 > 让非命令行使用者能自助管理多账号、编排内容计划、与 pi agent 会话并在环审批。
 >
-> **状态：C1 + C2 + C3 + C4 已落地；`api.md`/`data-model.md` 已校准为 v4；`agent-session.md` 校准为 v2。**
+> **状态：C1 + C2 + C3 + C4 已落地；`api.md`/`data-model.md` 已校准为 v4；`agent-session.md` 校准为 v2；`ops-tunnel.md` v0 规划中（C5）。**
 > 于 M0 编写（源：父任务 `design.md`）。
 > 契约与代码冲突时：**先改本目录，再改代码**；DDL / API / 安全语义变更必须同步本目录。
 
@@ -67,6 +67,7 @@ src/console/
 | [Data Model](./data-model.md) | SQLite DDL、不变量、迁移、`config.json` 派生关系（AC-3） | v4（C1–C4） |
 | [Security](./security.md) | 鉴权/RBAC/CSRF/限流/凭据加密/暴露面/审计（K1） | v4（C1–C4） |
 | [Agent Session](./agent-session.md) | pi `--mode rpc` 帧协议、决策生命周期、最小权限 | v2（C4） |
+| [Ops & Tunnel](./ops-tunnel.md) | CF Quick Tunnel 监督、地址变更邮件下发、凭据加密、管理员总览 | v0（C5 规划） |
 
 ---
 

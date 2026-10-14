@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-ops-tunnel/design.md", "reason": "C5 技术设计：边界、迁移 v3、DAO、隧道监督状态机、邮件语义、路由与 UI、权衡与回滚"}
+{"file": ".trellis/tasks/10-13-console-ops-tunnel/implement.md", "reason": "C5 实施清单 I5-0..I5-8、验收命令、G-C5 确认门与回滚点"}
+{"file": ".trellis/tasks/10-13-console-ops-tunnel/prd.md", "reason": "C5 需求 R2.1-R2.5 与 AC-C5-1..9（监督/变更/邮件/凭据/管理员视图/暴露面/失败显形）"}
+{"file": ".trellis/spec/console/ops-tunnel.md", "reason": "v0 契约：隧道监督状态机、邮件语义、凭据唯一性、AES-256-GCM、暴露面与 503 语义"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "account_email/secrets/tunnels 表结构 + migration 机制 + 不变量写法（I24-I28 落此）"}
+{"file": ".trellis/spec/console/api.md", "reason": "统一错误包/鉴权/CSRF/端点命名，C5 增量路由需沿用；含 503 chat_unavailable 同类先例"}
+{"file": ".trellis/spec/console/security.md", "reason": "凭据加密与不回显、RBAC 越权 403、审计、暴露面（H7/H8/K1），C5 必须一致"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 层硬约束 H1-H8、Quality Check 清单与反模式（零依赖、失败显形、不暴露 CDP）"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "src/ 目录与模块职责约定，新增 console/{tunnel,notify} 与 dao 需保持一致"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11/H5 失败必须显形：隧道 down/error 与发信失败不得伪装成功"}

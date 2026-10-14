@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/10-13-console-ops-tunnel/implement.md", "reason": "C5 验收命令与 AC-C5 映射（逐条核对，含失败路径与回滚点）"}
+{"file": ".trellis/tasks/10-13-console-ops-tunnel/design.md", "reason": "C5 不变量 I24-I28、隧道状态机、邮件去重/重试语义、ops 注入与 503 语义"}
+{"file": ".trellis/spec/console/ops-tunnel.md", "reason": "隧道/邮件硬约束 T1-T8：只映射 127.0.0.1、CDP 不入隧道、去重封顶、失败显形、禁 readline"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "迁移 v3 纯加法、status='up' 至多一行、secrets NULL 判重、不变量 I24-I28"}
+{"file": ".trellis/spec/console/api.md", "reason": "C5 端点契约与错误包（400/403/404/503）、CSRF、元数据不返回密文"}
+{"file": ".trellis/spec/console/security.md", "reason": "凭据不回显、越权 403 + 审计、邮件仅发本账号、审计不含正文"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 清单（tsc/build/零依赖/engine 未改）与反模式"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "实现后必跑命令与零依赖/构建健康基线"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（隧道 down/error + detail；发信失败 audit ok:false）"}
