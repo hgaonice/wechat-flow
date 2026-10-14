@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/10-13-console-deploy-hardening/implement.md", "reason": "C6 验收命令与 AC 映射（逐条核对，含失败路径、回滚点与证据表）"}
+{"file": ".trellis/tasks/10-13-console-deploy-hardening/design.md", "reason": "C6 不变量 I29-I34 与 D28-D33，用于独立核对是否真的落地（限流/退避/备份/health/SSE）"}
+{"file": ".trellis/spec/console/security.md", "reason": "限流实现契约（令牌桶、429+Retry-After、不写审计）、响应头、暴露面与凭据不回显"}
+{"file": ".trellis/spec/console/api.md", "reason": "错误包与 429 契约、/health 安全子集（I33）、401/403/503 先例"}
+{"file": ".trellis/spec/console/ops-tunnel.md", "reason": "隧道只映射控制台端口、CDP 不入隧道；Mode A/B 互斥（D28）核对"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "jobs 表字段（attempts/queued_at/ended_at）与迁移纯加法约束，退避查询需据此"}
+{"file": ".trellis/spec/console/index.md", "reason": "console Quality Check 清单（tsc/build/零依赖/engine 未改）与反模式"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "实现后必跑命令与零依赖/构建健康基线"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11 失败必须显形（429/备份失败/退避 skip 留痕）"}

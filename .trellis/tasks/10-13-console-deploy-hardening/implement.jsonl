@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/10-13-console-deploy-hardening/design.md", "reason": "C6 技术设计：D28-D33（cloudflared 托管模式、限流、备份恢复、失败退避、/health、遗留修复）、I29-I34、G-C6 决策门"}
+{"file": ".trellis/tasks/10-13-console-deploy-hardening/implement.md", "reason": "C6 实施清单 I6-1..I6-10、验收命令、回滚点与证据回填表"}
+{"file": ".trellis/tasks/10-13-console-deploy-hardening/prd.md", "reason": "C6 需求（systemd/反代/限流/备份/手册/文档/spec）+ AC-10/AC-11 + G6/G7"}
+{"file": ".trellis/spec/console/ops-tunnel.md", "reason": "C5 隧道全局单例与监督语义；C6 D28 部署模式必须与之兼容（Mode A 唯一支持）"}
+{"file": ".trellis/spec/console/security.md", "reason": "限流与锁定（§6，C6 补齐 API 全局限流）、安全响应头、暴露面收敛（CDP 不入隧道）"}
+{"file": ".trellis/spec/console/api.md", "reason": "统一错误包/401-403-429 语义、CSRF、/health 免鉴权契约需在 C6 增强后校准"}
+{"file": ".trellis/spec/console/index.md", "reason": "console 层硬约束 H1-H8、Quality Check 清单与反模式（零依赖、失败显形、不暴露 CDP）"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "实现后必跑命令与零依赖/构建健康基线（tsc/build/doctor/publish --dry-run）"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "AC-11/H5 失败必须显形：限流 429、备份/恢复失败、退避 skip 均不得伪装成功"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "src/ 与 deploy/ 约定，新增 http/ratelimit.ts 与 deploy/*.{sh,service} 需一致"}
