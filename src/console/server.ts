@@ -6,6 +6,8 @@
  *   handle() — wraps route() into a Response with security headers
  */
 import type { Database } from "bun:sqlite";
+import fs from "node:fs";
+import path from "node:path";
 import { Router } from "./http/router.ts";
 import {
   HttpError,
@@ -43,6 +45,8 @@ import * as plans from "./jobs/plans.ts";
 import * as queue from "./jobs/queue.ts";
 import { EXECUTABLE_KINDS, isJobKind, parseItems, parseJobPayload, type JobRow, type PlanRow } from "./jobs/types.ts";
 import { serveUi } from "./http/static.ts";
+import { streamJobEvents } from "./http/sse.ts";
+import * as articles from "./db/dao/articles.ts";
 import * as users from "./auth/users.ts";
 import * as sess from "./auth/sessions.ts";
 import { assertAccountAccess, assertAdmin, authContextOf, isAdmin, type AuthContext } from "./auth/rbac.ts";
@@ -241,6 +245,40 @@ function planView(row: PlanRow): JsonObject {
     items: parseItems(row) as unknown as Json,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+/** Public shape of an article version, `verified` mirrored from the latest draft. */
+function articleView(row: articles.ArticleRow, latest?: articles.DraftRow): JsonObject {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    planId: row.plan_id,
+    date: row.date,
+    title: row.title,
+    slug: row.slug,
+    filePath: row.file_path,
+    status: row.status,
+    version: row.version,
+    parentId: row.parent_id,
+    feedback: row.feedback,
+    createdAt: row.created_at,
+    verified: latest ? latest.verified === 1 : null,
+    verifyDetail: latest?.verify_detail ?? null,
+  };
+}
+
+/** Public shape of a push attempt (verify verdict from the engine, I18). */
+function draftView(row: articles.DraftRow): JsonObject {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    articleId: row.article_id,
+    wechatTitle: row.wechat_title,
+    pushAt: row.push_at,
+    verified: row.verified === 1,
+    verifyDetail: row.verify_detail,
+    createdAt: row.created_at,
   };
 }
 
@@ -520,6 +558,124 @@ export function createApp(state: AppState): App {
       ok: true,
     });
     return ok({ job: jobView(queue.getJob(db, job.id)!) });
+  });
+
+  // ---- articles + content workbench (C3) -----------------------------------
+
+  const loadArticle = (ctx: Ctx, id: number): articles.ArticleRow => {
+    const row = articles.getArticle(db, id);
+    if (!row) throw notFound("文章不存在");
+    // Re-derive the account from the row itself (never trust the URL) — C2 loadJob pattern.
+    assertAccountAccess(ctx.auth, row.account_id);
+    return row;
+  };
+
+  /** Engine cover path for an article's account/date (config may be broken → null). */
+  const coverPathFor = (accountId: number, date: string): string | null => {
+    const acc = getAccountById(db, accountId);
+    if (!acc) return null;
+    try {
+      return path.join(loadConfig(acc.alias).paths.imgs, date, "cover.png");
+    } catch {
+      return null;
+    }
+  };
+
+  router.add("GET", "/api/accounts/:id/articles", (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const date = ctx.url.searchParams.get("date") ?? undefined;
+    const limit = Number(ctx.url.searchParams.get("limit") ?? 100) || 100;
+    const rows = articles.listArticles(db, id, { date, limit });
+    return ok({ articles: rows.map((r) => articleView(r, articles.listDrafts(db, r.id)[0])) });
+  });
+
+  router.add("GET", "/api/articles/:id", (ctx) => {
+    const row = loadArticle(ctx, intParam(ctx));
+    const latest = articles.listDrafts(db, row.id)[0];
+    const versions = articles.listVersions(db, row).map((v) => articleView(v, articles.listDrafts(db, v.id)[0]));
+    const drafts = articles.listDrafts(db, row.id).map(draftView);
+
+    let content: string | null = null;
+    if (row.file_path && fs.existsSync(row.file_path)) {
+      try {
+        content = fs.readFileSync(row.file_path, "utf8");
+      } catch {
+        content = null;
+      }
+    }
+    const cover = coverPathFor(row.account_id, row.date);
+    return ok({
+      article: articleView(row, latest),
+      content,
+      coverPath: cover,
+      coverUrl: cover && fs.existsSync(cover) ? `/api/articles/${row.id}/cover` : null,
+      versions,
+      drafts,
+    });
+  });
+
+  router.add("GET", "/api/articles/:id/cover", (ctx) => {
+    const row = loadArticle(ctx, intParam(ctx));
+    const cover = coverPathFor(row.account_id, row.date);
+    if (!cover || !fs.existsSync(cover)) throw notFound("封面不存在");
+    const bytes = fs.readFileSync(cover);
+    return new Response(bytes, {
+      headers: { "content-type": "image/png", "cache-control": "private, max-age=60" },
+    });
+  });
+
+  router.add("POST", "/api/articles/:id/regenerate", async (ctx) => {
+    const row = loadArticle(ctx, intParam(ctx));
+    const body = await readJson(ctx.req);
+    const feedback = typeof body.feedback === "string" ? body.feedback.trim().slice(0, 8000) : "";
+    const jobId = queue.enqueue(
+      db,
+      row.account_id,
+      "regenerate",
+      { date: row.date, articleId: row.id, feedback },
+      { createdBy: ctx.auth!.user.id, actor: ctx.auth!.user.username },
+    );
+    recordAudit(db, {
+      userId: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+      action: "article.regenerate",
+      target: `article:${row.id}`,
+      detail: { date: row.date, version: row.version, feedbackChars: feedback.length },
+      ok: true,
+    });
+    return ok({ job: jobView(queue.getJob(db, jobId)!) }, 201);
+  });
+
+  router.add("POST", "/api/accounts/:id/articles/generate", async (ctx) => {
+    const id = intParam(ctx);
+    if (!getAccountById(db, id)) throw notFound("账号不存在");
+    assertAccountAccess(ctx.auth, id);
+    const body = await readJson(ctx.req);
+    const date = typeof body.date === "string" ? body.date : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest("date 需为 YYYY-MM-DD");
+    const jobId = queue.enqueue(db, id, "generate", { date }, {
+      createdBy: ctx.auth!.user.id,
+      actor: ctx.auth!.user.username,
+    });
+    return ok({ job: jobView(queue.getJob(db, jobId)!) }, 201);
+  });
+
+  router.add("GET", "/api/jobs/:id/stream", (ctx) => {
+    const job = loadJob(ctx, intParam(ctx));
+    const qp = ctx.url.searchParams.get("last_event_id");
+    const header = ctx.req.headers.get("last-event-id");
+    const lastEventId = Number(qp ?? header ?? 0);
+    const stream = streamJobEvents(db, job.id, Number.isFinite(lastEventId) ? lastEventId : 0);
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      },
+    });
   });
 
   // ---- global settings -----------------------------------------------------

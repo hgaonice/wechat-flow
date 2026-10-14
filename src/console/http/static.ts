@@ -23,6 +23,7 @@ const ROUTES: Record<string, string> = {
   "/app": "index.html",
   "/account": "account.html",
   "/settings": "settings.html",
+  "/workbench": "workbench.html",
 };
 
 export function serveUi(pathname: string): Response {

@@ -1,6 +1,6 @@
 # API Contract（控制台 HTTP / SSE）
 
-> 状态：**v2（C1+C2 已校准；C3–C6 端点仍为契约先验）**，源 `design.md` §5。
+> 状态：**v3（C1+C2+C3 已校准；C4–C6 端点仍为契约先验）**，源 `design.md` §5。
 > 零依赖约束：路由与响应由 `src/console/http/{router,respond}.ts` 自实现，不引第三方框架。
 
 ---
@@ -39,7 +39,7 @@
 > 任务失败会表现在 **`job.status='failed'` + `job.error`**（`jobs` 表无 `ok` 列）。前端**必须按 `status` 渲染**，不得以 `envelope.ok` 判成败。
 >
 > **落地状态**：§2.1、§2.2 已随 **C1** 实现（另含 `GET /api/meta`、`GET /api/users`、`POST /api/users`、`PUT /api/users/:id`）；
-> §2.3 的**计划 CRUD + 入队/查询/取消已随 C2 落地**（`articles`、`regenerate`、SSE 属 C3）；§2.4 属 **C4**，§2.5 属 **C5**。
+> §2.3 的**计划 CRUD + 入队/查询/取消已随 C2 落地**；**`generate`/`regenerate` 与 articles + SSE 已随 C3 落地**；§2.4 属 **C4**，§2.5 属 **C5**。
 
 ---
 
@@ -76,7 +76,7 @@
 | GET | `/api/accounts/:id/plans` | 计划列表（可选 `period_type`/`period_key`/`limit`）；返回 `items` 已解析 |
 | PUT | `/api/accounts/:id/plans` | 创建/覆盖计划；**校验**：week 为 `YYYY-Www` 且 `days.length∈[1,7]` 且日期落在该周内；month 为 `YYYY-MM`；每条需 `topic`；`weekday` 服务端自动补齐。入库后**物化**回 `data/<alias>/plans/<week>.json`。写 `audit(plan.upsert)` |
 | GET | `/api/accounts/:id/plans/find?date=YYYY-MM-DD` | 反查该日的计划条目 → `{found,planId,periodKey,day}` 或 `{found:false}` |
-| POST | `/api/accounts/:id/jobs` | 入队 `{kind, payload}`；C2 仅执行 `plan`/`publish`（`generate`/`regenerate` 返回 400，C3 开放）→ `201 {job}`；写 `audit(job_enqueue)` |
+| POST | `/api/accounts/:id/jobs` | 入队 `{kind, payload}`；C3 起执行 `plan`/`publish`/`generate`/`regenerate` → `201 {job}`；写 `audit(job_enqueue)` |
 | GET | `/api/accounts/:id/jobs?status=&limit=` | 该账号任务列表（默认 50） |
 | GET | `/api/jobs/:id` | `{job, logs[]}`；`job.status∈{queued,running,succeeded,failed,canceled}`、`progress`、`message`、`error`、`attempts`、`pid`、`payload` |
 | POST | `/api/jobs/:id/cancel` | 仅 `queued` 可取消；否则 **409**；写 `audit(job_cancel)` |
@@ -84,13 +84,21 @@
 - `job` 路由鉴权：由 `job.account_id` 反查（`loadJob()`）而非信任 URL；越权 → 403。
 - `payload`：`plan` = `{date?, dryRun?}`；`publish` = `{date?, dryRun?, reuse?, force?}`。
 
-**C3 计划**
+**C3 新增（内容工作台）**
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/jobs/:id/stream` | SSE：`job.progress` / `job.log` / `job.done`（`Last-Event-ID` 续传） |
-| GET | `/api/accounts/:id/articles` | 产物列表（md/封面/校验结果、版本链） |
-| POST | `/api/articles/:id/regenerate` | 重生成 `{feedback}` → 新 `version`，`parent_id` 指向旧版 |
+| GET | `/api/accounts/:id/articles?date=&limit=` | 文章列表（`date DESC, version DESC`）；每项含 `id/date/title/version/parentId/status/filePath/verified/verifyDetail` |
+| GET | `/api/articles/:id` | 详情：`{article, content, coverPath, coverUrl, versions[], drafts[]}`；`content` = 该版快照 md |
+| GET | `/api/articles/:id/cover` | 封面 PNG（`image/png`，`private`）；无则 404 |
+| POST | `/api/articles/:id/regenerate` | `{feedback?}`（≤8000 字）→ 入队 `regenerate {date,articleId,feedback}` → `201 {job}`；写 `audit(article.regenerate)` |
+| POST | `/api/accounts/:id/articles/generate` | `{date:YYYY-MM-DD}` → 入队 `generate` → `201 {job}`（`POST /jobs` 的便利入口） |
+| GET | `/api/jobs/:id/stream` | **SSE**（见 §3） |
+
+- `generate`/`regenerate` 的 `payload`：`generate={date}`；`regenerate={date,articleId,feedback?}`。
+- **articles 路由鉴权**：`/api/articles/*` 不信任 URL——先取行，再用 `row.account_id` 走 `assertAccountAccess`（同 C2 `loadJob` 模式）。
+- **版本链**：`articles.version` 每 (account,date) 单调；`parent_id` 指向上一版；`file_path` 指向不可变快照 `<base>.v<N>.md`，而 engine base（`<date>-<slug>.md`）恒为最新一版——发布读 base。
+- **推送结果**：`drafts.verified` 仅镜像 engine `verifyDraftBody` 结果（`runPublish.ok`）；UI 不得自判成功。
 
 ### 2.4 会话与人在环
 
@@ -118,9 +126,15 @@
 
 ## 3. SSE 约定
 
-- 事件名固定；`data:` 为 JSON；每条事件带 `id:`（单调递增）以支持 `Last-Event-ID` 续传。
-- 心跳：每 15s 发送注释行 `: ping`，防止反代/隧道掐断。
-- 断线重连由浏览器 `EventSource` 自动完成；服务端按 `Last-Event-ID` 从 `job_logs` / `chat_messages` 补发。
+**已落地（C3）**：`GET /api/jobs/:id/stream`（实现 `src/console/http/sse.ts`）。
+
+- 事件：`job.progress {jobId,status,progress,message}`、`job.log {jobId,ts,level,message}`、`job.done {jobId,status,error}`。
+- `job.log` 的 `id:` = `job_logs.id`（单调），支持 `Last-Event-ID` 续传（亦接受 `?last_event_id=`）；**不重不漏**。
+- 心跳：每 15s 注释行 `: ping`；Bun `serve` 的 `idleTimeout` 提到 120s（默认 10s 会切断空闲 SSE）。
+- 实现为 `ReadableStream` + ~700ms 轮询 `jobs`/`job_logs`（worker 与 server 同进程但**无事件总线**，零依赖且崩溃后可续）；状态进入终态即发 `job.done` 并关流；客户端断开（`cancel`）会清理定时器。
+- 鉴权：先 `loadJob`（由 `job.account_id` 反查 `assertAccountAccess`）→ 401/403。
+
+**待落地（C4）**：`/api/chat/:id/stream`（会话流）。
 
 ## 4. 静态 UI
 

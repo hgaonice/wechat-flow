@@ -15,6 +15,8 @@ import { runPlan } from "../../planner.ts";
 import { runPublish } from "../../publisher.ts";
 import { isPublished } from "../../state.ts";
 import { todayInTz } from "../../date.ts";
+import { generateArticle, recordDraftResult } from "../content/generate.ts";
+import { getArticle } from "../db/dao/articles.ts";
 import { getAccountById } from "../db/dao/accounts.ts";
 import * as queue from "./queue.ts";
 import { importPlansFromFiles, materializePlans } from "./plans.ts";
@@ -102,6 +104,22 @@ export async function executeJob(db: Database, job: JobRow): Promise<void> {
       queue.setProgress(db, job.id, 25, `执行发布 ${date}`);
       const res = await runPublish(cfg, { date, dryRun: payload.dryRun === true, reuse, force });
 
+      // Record the outcome: `drafts.verified` mirrors the engine's verifyDraftBody
+      // verdict (I18); a verified push flips the article to `pushed`. The worker
+      // never invents success (H5 / AC-11).
+      const rec = recordDraftResult(db, {
+        accountId: job.account_id,
+        date,
+        ok: res.ok,
+        title: res.title ?? null,
+        error: res.error ?? null,
+        articlePath: res.articlePath ?? null,
+        skipped: res.skipped === true,
+      });
+      if (rec.draftId) {
+        log("info", `draft#${rec.draftId} verified=${res.ok ? 1 : 0}${rec.createdArticle ? " (adopted base as v1)" : ""}`);
+      }
+
       if (res.ok) {
         const note = res.skipped ? `skipped: ${res.reason ?? "already published"}` : `已推送到草稿箱 ${date}`;
         log("info", note);
@@ -117,9 +135,57 @@ export async function executeJob(db: Database, job: JobRow): Promise<void> {
       return;
     }
 
-    // generate / regenerate are reserved for C3.
+    if (job.kind === "generate") {
+      const date = typeof payload.date === "string" ? payload.date : "";
+      if (!date) {
+        log("error", "missing payload.date");
+        queue.finish(db, job.id, "failed", { error: "missing payload.date" });
+        return;
+      }
+      queue.setProgress(db, job.id, 15, `生成文章 ${date}`);
+      const g = await generateArticle(db, cfg, job.account_id, date, {});
+      if (g.ok) {
+        log("info", `generated v${g.version} → ${g.snapshotPath}`);
+        queue.finish(db, job.id, "succeeded", { message: `已生成 v${g.version}（${date}）`, progress: 100 });
+      } else {
+        log("error", g.error ?? "generate failed");
+        queue.finish(db, job.id, "failed", { error: g.error ?? "generate failed" });
+      }
+      return;
+    }
+
+    if (job.kind === "regenerate") {
+      const date = typeof payload.date === "string" ? payload.date : "";
+      const articleId = typeof payload.articleId === "number" ? payload.articleId : Number.NaN;
+      const feedback = typeof payload.feedback === "string" ? payload.feedback : undefined;
+      if (!date || !Number.isInteger(articleId)) {
+        const m = "regenerate 需要 payload.date 与 payload.articleId";
+        log("error", m);
+        queue.finish(db, job.id, "failed", { error: m });
+        return;
+      }
+      const parent = getArticle(db, articleId);
+      if (!parent || parent.account_id !== job.account_id) {
+        const m = `parent article ${articleId} 不存在或不属于该账号`;
+        log("error", m);
+        queue.finish(db, job.id, "failed", { error: m });
+        return;
+      }
+      queue.setProgress(db, job.id, 15, `重生成文章 ${date}`);
+      const g = await generateArticle(db, cfg, job.account_id, date, { feedback, parentId: parent.id });
+      if (g.ok) {
+        log("info", `regenerated v${g.version} (parent=${parent.id}) → ${g.snapshotPath}`);
+        queue.finish(db, job.id, "succeeded", { message: `已重生成 v${g.version}（父版本 v${parent.version}）`, progress: 100 });
+      } else {
+        log("error", g.error ?? "regenerate failed");
+        queue.finish(db, job.id, "failed", { error: g.error ?? "regenerate failed" });
+      }
+      return;
+    }
+
+    // Unknown kinds are rejected at enqueue; be explicit here anyway.
     log("error", `kind ${job.kind} 尚未实现`);
-    queue.finish(db, job.id, "failed", { error: `kind ${job.kind} 尚未实现（C3）` });
+    queue.finish(db, job.id, "failed", { error: `kind ${job.kind} 尚未实现` });
   } catch (err) {
     const m = errMsg(err);
     log("error", m);

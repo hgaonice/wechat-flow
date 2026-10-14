@@ -1,6 +1,6 @@
 # Data Model（SQLite / `bun:sqlite`）
 
-> 状态：**v1（已随 C1 校准）**。C1 落地后本文以 `src/console/db/schema.ts` 为唯一 DDL 真相源，
+> 状态：**v3（已随 C1+C2+C3 校准）**。C1 落地后本文以 `src/console/db/schema.ts` 为唯一 DDL 真相源，
 > 本文只描述**语义契约 + 与设计稿的差异**，不再复制整段 DDL（避免双写漂移）。
 > 存储：`console/console.db`（`CONSOLE_DB` 可覆盖，不入 git）；
 > 连接期固定 `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout`（见 `db/migrate.ts#openDb`）。
@@ -58,9 +58,12 @@
 >
 > **C2 实际形态（v2）**：`plans.items_json = {week?, days:[{date:"YYYY-MM-DD", topic, weekday?}]}`，`weekday` 由服务端按 engine `date.ts` 补齐；
 > `plans.status` 当前恒为 `draft`（发布态由 engine `state/published.json` 决定，不在此表）。
-> `jobs.payload_json`：`plan`=`{date?,dryRun?}`（调度器另附 `{periodKey}` 供排查）、`publish`=`{date?,dryRun?,reuse?,force?}`；
+> `jobs.payload_json`：`plan`=`{date?,dryRun?}`（调度器另附 `{periodKey}` 供排查）、`publish`=`{date?,dryRun?,reuse?,force?}`、
+> `generate`=`{date}`、`regenerate`=`{date,articleId,feedback?}`；
 > 去重 SQL 靠 `json_extract(payload_json,'$.date')`，**故 date 必须写在 payload 顶层**。
-> `jobs.kind`：`plan` | `generate` | `publish` | `regenerate`（见 `api.md` §2.3）。
+> `jobs.kind`：`plan` | `generate` | `publish` | `regenerate`（见 `api.md` §2.3）；C3 起四类均可执行（`EXECUTABLE_KINDS`）。
+> `articles`（C3）：`file_path` = **不可变快照** `<base>.v<N>.md`；`version` 每 (account,date) 单调；`parent_id` 指上一版（v1 为 NULL）；`feedback` 仅 regenerate 写。
+> `drafts`（C3）：一次推送一行；`verified` **仅镜像** engine `verifyDraftBody`（`runPublish.ok`），`verify_detail = res.error ?? "ok"`；跳过（已发布幂等）不落行。
 
 ---
 
@@ -78,6 +81,10 @@
 | I12 | 任务/计划变更均可审计 | `enqueue` 写 `audit(action='job_enqueue')`；计划变更写 `plan.upsert`；取消写 `job_cancel`；越权写 `denied`（含真实 `actor`） |
 | I13 | `plans` 表为计划**唯一真源**，engine 计划文件为**派生物** | `plans.ts#materializePlans`（DB→`data/<alias>/plans/<week>.json`，`tmp`+`rename` 原子）；反向 `fillMissingPlansFromFiles`（仅 DB 缺该周时采纳，**DB 优先**）与 `importPlansFromFiles`（plan 任务后吸收，跳过 `*.dryrun.json`），两者都再过 `validatePlanInput` |
 | I14 | 调度「到期」由 `plans` + `settings.schedule` 推导，无需新列 | `scheduler.ts#schedulerTick`：publish = 当天在计划内 && `hour≥publishHour` && 未发布 && 无 live job；plan = `weekday===planWeekday` && 本周无计划 && 无 live plan job。时区固定 `Asia/Shanghai` |
+| I15 | `articles.version` 每 (account,date) 单调，且版本行与快照文件一一对应 | `db/dao/articles.ts#nextVersion`(MAX+1) + `insertArticle`（显式版本时在事务内写入）；跨写者唯一性靠 **I4**（同账号单写者）——`(account_id,date,version)` 只有非唯一索引，**非 DB 约束** |
+| I16 | 历史版本不可变；engine base 恒为**最新**一版 | `content/generate.ts#snapshotVersion` 把 base 复制为 `<base>.v<N>.md`（新版本只新增文件，从不回写旧快照）；engine 发布读 base（`publisher.ts` 路径不变） |
+| I17 | 生成失败**不落 DB 行**（不伪造成功） | `generateArticle`：`runArticleGeneration.ok=false` 直接返回 `{ok:false,error}`，不 `nextVersion`、不写 `articles`；job 落 `failed`+非空 `error`（AC-11/H5） |
+| I18 | `drafts.verified` 只由 engine 判决 | `content/generate.ts#recordDraftResult` 由 `runPublish.ok` 驱动；`verified=1` 时把 `articles.status` 置 `pushed`；engine 返回 `ok:false` 时落 `verified=0` + `verify_detail=error`，UI 读 `verified` 而不自判 |
 | I6 | `decisions` 状态机：`pending→{answered,cancelled,expired,lost}` | 应答/超时/进程失联各自落终态，**不留悬挂** |
 | I7 | `secrets` 只存 `ciphertext`+`nonce`+`key_version`，**无明文列** | `crypto/secrets.ts`；读接口不回显 |
 | I8 | `tunnels` 变更留链：新行 `replaced_by` 指旧行，旧行 `expired` | `tunnel/cloudflared.ts` |

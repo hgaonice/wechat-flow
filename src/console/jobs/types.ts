@@ -8,12 +8,12 @@
  */
 import { asObject } from "../types.ts";
 
-/** Kinds the queue understands. C2 executes only `plan` + `publish`. */
+/** Kinds the queue understands. C2 executes `plan` + `publish`; C3 adds `generate`/`regenerate`. */
 export type JobKind = "plan" | "publish" | "generate" | "regenerate";
 
 export const ALL_KINDS: JobKind[] = ["plan", "publish", "generate", "regenerate"];
 /** Kinds the worker can actually run today (others → 400 on enqueue). */
-export const EXECUTABLE_KINDS: JobKind[] = ["plan", "publish"];
+export const EXECUTABLE_KINDS: JobKind[] = ["plan", "publish", "generate", "regenerate"];
 
 export function isJobKind(v: unknown): v is JobKind {
   return typeof v === "string" && (ALL_KINDS as string[]).includes(v);
@@ -82,6 +82,10 @@ export interface JobPayload {
   dryRun?: boolean;
   reuse?: boolean;
   force?: boolean;
+  /** regenerate: predecessor article id. */
+  articleId?: number;
+  /** regenerate: user feedback appended to the article prompt. */
+  feedback?: string;
   [key: string]: unknown;
 }
 

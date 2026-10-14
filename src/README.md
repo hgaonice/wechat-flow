@@ -32,7 +32,7 @@
 ## publisher.ts · 每日全流程
 
 - **职责**：串起「查计划 → 生成文章 → 媒体预处理 → 封面 → 登录自愈 → 发布 → **草稿箱回查 + 正文校验 + 封面自动上传** → 状态 → 通知」。
-- **关键导出**：`runPublish(cfg,{date,dryRun,reuse,force})`、`parseFrontmatter(md)`；返回 `PublishRunResult`。
+- **关键导出**：`runPublish(cfg,{date,dryRun,reuse,force})`、`runArticleGeneration(cfg,{date,feedback,reuse})`（C3 抽出的**纯生成**，不推送）、`buildArticlePrompt(cfg,day,date,articlePath,feedback?)`（空/缺 `feedback` 时字节不变）、`parseFrontmatter(md)`；返回 `PublishRunResult` / `ArticleGenResult`。
 - **输入→输出**：`plans/<周>.json` + `prompts/article.md` → `articles/<日期>-<slug>.md`、`imgs/<日期>/cover.png`、`state/published.json`。
 - **坑**：`reuse` 复用已有文章、`force` 忽略已发布记录（修复历史草稿用）；发布成功后**必须**过 `verifyDraftBody`，标题在但正文空要判失败；失败写 `ok:false` 并告警。
 
@@ -92,6 +92,21 @@
 - **职责**：`notify` 按配置分发（email/telegram）；`mailer` 调 `email-sender` skill（python3 + SMTP）。
 - **关键导出**：`notify(cfg,msg)`、`sendMail(cfg,input)`、`checkEmail(cfg)`。
 - **坑**：`-b` 正文 + `-f` 附件（文章 md）走 skill；凭据在 skill 的 `config.env`，应用不自己实现 SMTP；别在日志里打印授权码。
+
+## console/ · 控制台（C1–C3，第二阶段）
+
+> 带鉴权的 Web 控制面；**engine 不得反向依赖它**（依赖方向 `console/* → ../*.ts`）；运行时**零新增依赖**（`Bun.serve`/`bun:sqlite`/`node:crypto`）。详细约定见 [`.trellis/spec/console/`](../.trellis/spec/console/index.md)。
+
+- **main.ts · 入口**：默认 `serve`（HTTP + 调度 + worker 同进程）；`--no-worker` 只 HTTP；`--worker` 无头；`--init-key`/`--create-admin`/`--import-config`/`--status`/`--verify-ac3`。`Bun.serve` 设 `idleTimeout:120`（SSE 必需）。
+- **server.ts · 路由**：`route()` + 统一 envelope `{ok:true,data}` / `{ok:false,code,message,detail}`；写请求验 `X-CSRF-Token`；授权集中在 `auth/rbac.ts`（`assertAdmin`/`assertAccountAccess`）。
+- **db/**：`schema.ts` 为 **DDL 唯一真相源**（18 表 + 索引，`PRAGMA user_version`）；`migrate.ts` 启动前滚；DAO 在 `db/dao/*`。
+- **auth/**：口令哈希 + 会话 token 存 `sha256(token)` + RBAC。
+- **crypto/secrets.ts**：`aes-256-gcm`（12B nonce，`KEY_VERSION=1`）；无 master key → fail-fast。
+- **jobs/**（C2）：`types`/`plans`/`queue`/`worker`/`scheduler`。**每账号 ≤1 `running`**（SQL `NOT EXISTS` + 进程内 Set）；`plans` 表为计划唯一真源，engine 计划文件为派生（`materializePlans` / `fillMissingPlansFromFiles`）。
+- **content/generate.ts**（C3）：`generateArticle`（调 engine，快照 `.v<N>.md`，落 `articles` 行）、`recordDraftResult`（`drafts.verified` **只镜像** `runPublish.ok`）。
+- **http/sse.ts**（C3）：零依赖 SSE，`ReadableStream` + ~700ms 轮询 `jobs`/`job_logs`，`id:`=`job_logs.id`，`Last-Event-ID` 续传，15s `: ping`。
+- **ui/**：静态页（`index`/`login`/`account`/`settings`/`workbench`）+ `app.css`/`app.js`。
+- **坑**：`.gitignore` 必须写 `/console/`（否则吞掉 `src/console/`）；**推送铁律不变**——控制台只调 `runPublish`，成功与否只看 `verifyDraftBody`；`bun:sqlite` 无行时返回 `null`（非 `undefined`）。
 
 ## date.ts / log.ts / prompts.ts · 基础设施
 

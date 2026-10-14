@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>内容工作台 · wechat-flow console</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/workbench.css">
+<script src="/app.js" defer></script>
+<script src="/workbench.js" defer></script>
+</head>
+<body data-page="workbench">
+<header>
+  <span class="brand">wechat-flow console</span>
+  <a href="/app">账号</a>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+  <span id="account-name" class="muted"></span>
+  <button id="logout" class="ghost">退出</button>
+</header>
+<main>
+  <div class="card">
+    <h2>选择账号</h2>
+    <div class="row">
+      <select id="account"></select>
+      <button id="reload" class="ghost">刷新</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>计划编辑</h2>
+    <div class="row">
+      <select id="period-type">
+        <option value="week">周计划</option>
+        <option value="month">月计划</option>
+      </select>
+      <input id="period-key" placeholder="2026-W42 或 2026-10">
+      <button id="plan-load" class="ghost">载入</button>
+      <input id="find-date" type="date">
+      <button id="plan-find" class="ghost">按日期定位</button>
+    </div>
+    <table class="days">
+      <thead>
+        <tr><th>日期</th><th>星期</th><th>模块</th><th>选题*</th><th>概要</th><th>要点（逗号分隔）</th><th>字数</th><th></th></tr>
+      </thead>
+      <tbody id="plan-days"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <button id="add-day" class="ghost">+ 添加一天</button>
+      <button id="save-plan" class="primary">保存计划</button>
+    </div>
+    <div id="plan-msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>生成 / 推送</h2>
+    <div class="row">
+      <input id="action-date" type="date">
+      <button id="gen">生成文章</button>
+      <button id="push" class="primary">生成并推送草稿箱</button>
+    </div>
+    <div class="progress"><div id="bar" class="progress-bar"></div></div>
+    <div id="job-status" class="muted"></div>
+    <pre id="job-log" class="log"></pre>
+    <div id="fail-panel" class="fail" hidden>
+      <div id="fail-msg"></div>
+      <div class="row">
+        <button id="retry-gen" class="ghost">重试生成</button>
+        <button id="retry-push" class="ghost">重试推送</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>文章版本</h2>
+    <table>
+      <thead><tr><th>版本</th><th>日期</th><th>标题</th><th>状态</th><th>校验</th><th>父版本</th><th></th></tr></thead>
+      <tbody id="articles"></tbody>
+    </table>
+    <div id="articles-empty" class="muted" hidden>该账号暂无文章版本。</div>
+  </div>
+
+  <div class="card" id="detail-card" hidden>
+    <h2>文章详情</h2>
+    <div id="detail-meta" class="muted"></div>
+    <div class="detail-grid">
+      <div>
+        <h3>正文（当前版本快照）</h3>
+        <pre id="article-md" class="md"></pre>
+      </div>
+      <div>
+        <h3>封面</h3>
+        <img id="cover" class="cover" alt="封面" hidden>
+        <div id="cover-missing" class="muted">无封面。</div>
+        <h3>校验</h3>
+        <div id="verify" class="muted"></div>
+        <h3>推送记录</h3>
+        <table>
+          <thead><tr><th>时间</th><th>校验</th><th>详情</th></tr></thead>
+          <tbody id="drafts"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h3>版本链</h3>
+    <div id="versions" class="chips"></div>
+
+    <h3>版本对比</h3>
+    <div class="row">
+      <select id="diff-a"></select>
+      <select id="diff-b"></select>
+      <button id="diff-btn" class="ghost">对比</button>
+    </div>
+    <div id="diff" class="diff"></div>
+
+    <h3>修改反馈（重新生成 vN+1）</h3>
+    <textarea id="feedback" placeholder="描述希望如何修改，例如：第二段过于冗长请精简；补充一道例题；公式用 LaTeX。"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="regen" class="primary">依据反馈重新生成</button>
+    </div>
+    <div id="detail-msg" class="msg"></div>
+  </div>
+
+  <div id="msg" class="msg"></div>
+</main>
+</body>
+</html>

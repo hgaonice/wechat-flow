@@ -44,6 +44,109 @@ export function parseFrontmatter(md: string): Record<string, string> {
   return out;
 }
 
+/** Result of a standalone article generation (no push) — shared with the console. */
+export interface ArticleGenResult {
+  ok: boolean;
+  date: string;
+  articlePath: string;
+  title?: string;
+  error?: string;
+  /** True when an existing base file was reused (no pi call). */
+  reused?: boolean;
+}
+
+/**
+ * Build the article prompt. `feedback`, when non-empty, is appended as a
+ * dedicated section so a regenerate can steer the model. With empty/absent
+ * feedback the output is byte-identical to the original inline prompt.
+ * Exported so tests can prove that byte-equality (I3-1).
+ */
+export function buildArticlePrompt(
+  cfg: AppConfig,
+  day: PlanDay,
+  date: string,
+  articlePath: string,
+  feedback?: string,
+): string {
+  const prompt = renderTemplate(path.join(cfg.paths.prompts, "article.md"), {
+    accountName: cfg.accountName,
+    author: cfg.author,
+    date,
+    weekday: day.weekday,
+    entryJson: JSON.stringify(day, null, 2),
+    articlePath,
+    imgsDir: path.join(cfg.paths.imgs, date),
+    imgRefBase: "../imgs/" + date,
+    mathEnabled: cfg.math.enabled ? "true" : "false",
+    manimEnabled: cfg.manim.enabled ? "true" : "false",
+  });
+  const extra = feedback?.trim();
+  if (!extra) return prompt;
+  return `${prompt}\n\n## 修改要求（用户反馈）\n${extra}\n`;
+}
+
+/**
+ * Generate (or reuse) the article Markdown for a date — extracted verbatim
+ * from the old inline block in `runPublish` (C3/D1, pure extraction). It does
+ * NOT push anything; the publish pipeline stays the only push path (H1).
+ */
+export async function runArticleGeneration(
+  cfg: AppConfig,
+  opts: { date?: string; feedback?: string; reuse?: boolean } = {},
+): Promise<ArticleGenResult> {
+  const date = opts.date ?? todayInTz();
+  const found = findEntryForDate(cfg, date);
+  if (!found) {
+    const msg = `no plan entry for ${date}; run "plan" first`;
+    log.warn(msg);
+    return { ok: false, date, articlePath: "", error: msg };
+  }
+  const { day } = found;
+  const slug = slugify(day.topic);
+  const articlePath = path.join(cfg.paths.articles, `${date}-${slug}.md`);
+  const reused = opts.reuse === true && fs.existsSync(articlePath);
+
+  if (!reused) {
+    const prompt = buildArticlePrompt(cfg, day, date, articlePath, opts.feedback);
+    const gen = await runPi({
+      prompt,
+      cwd: cfg.paths.content,
+      piBin: cfg.piBin,
+      model: cfg.model.article.model,
+      thinking: cfg.model.article.thinking,
+      fallbackModels: cfg.model.article.fallbacks,
+      noSession: cfg.noSession,
+      sessionId: cfg.noSession ? undefined : `math-article-${date}`,
+      sessionDir: cfg.sessionDir,
+      appendSystemPrompt: path.join(cfg.paths.prompts, "editor.md"),
+      timeoutSec: cfg.timeoutSec.article,
+      env: proxyEnv(cfg),
+      onStderr: (s) => process.stderr.write(s),
+    });
+    if (!gen.ok) {
+      const msg = `article generation failed: ${gen.error}`;
+      log.error(msg);
+      await notify(cfg, {
+        kind: "publish",
+        title: `❌ ${date} 文章生成失败`,
+        body: `日期：${date}\n模块：${day.module}\n选题：${day.topic}\n错误：${gen.error}`,
+      });
+      return { ok: false, date, articlePath, error: msg };
+    }
+  }
+
+  if (!fs.existsSync(articlePath)) {
+    const msg = `article file missing: ${articlePath}`;
+    log.error(msg);
+    await notify(cfg, { kind: "publish", title: `❌ ${date} 文章文件缺失`, body: articlePath });
+    return { ok: false, date, articlePath, error: msg };
+  }
+
+  const fm = parseFrontmatter(fs.readFileSync(articlePath, "utf8"));
+  const title = fm.title || day.titleSuggestion || day.topic;
+  return { ok: true, date, articlePath, title, reused };
+}
+
 export async function runPublish(
   cfg: AppConfig,
   opts: { date?: string; dryRun?: boolean; reuse?: boolean; force?: boolean } = {},
@@ -71,52 +174,10 @@ export async function runPublish(
 
   log.step(`publishing ${date} [${day.module}] ${day.topic}`);
 
-  // 1) Generate the article Markdown with the pi agent.
-  if (!(opts.reuse && fs.existsSync(articlePath))) {
-    const prompt = renderTemplate(path.join(cfg.paths.prompts, "article.md"), {
-      accountName: cfg.accountName,
-      author: cfg.author,
-      date,
-      weekday: day.weekday,
-      entryJson: JSON.stringify(day, null, 2),
-      articlePath,
-      imgsDir: path.join(cfg.paths.imgs, date),
-      imgRefBase: "../imgs/" + date,
-      mathEnabled: cfg.math.enabled ? "true" : "false",
-      manimEnabled: cfg.manim.enabled ? "true" : "false",
-    });
-    const gen = await runPi({
-      prompt,
-      cwd: cfg.paths.content,
-      piBin: cfg.piBin,
-      model: cfg.model.article.model,
-      thinking: cfg.model.article.thinking,
-      fallbackModels: cfg.model.article.fallbacks,
-      noSession: cfg.noSession,
-      sessionId: cfg.noSession ? undefined : `math-article-${date}`,
-      sessionDir: cfg.sessionDir,
-      appendSystemPrompt: path.join(cfg.paths.prompts, "editor.md"),
-      timeoutSec: cfg.timeoutSec.article,
-      env: proxyEnv(cfg),
-      onStderr: (s) => process.stderr.write(s),
-    });
-    if (!gen.ok) {
-      const msg = `article generation failed: ${gen.error}`;
-      log.error(msg);
-      await notify(cfg, {
-        kind: "publish",
-        title: `❌ ${date} 文章生成失败`,
-        body: `日期：${date}\n模块：${day.module}\n选题：${day.topic}\n错误：${gen.error}`,
-      });
-      return { date, skipped: false, ok: false, error: msg, articlePath };
-    }
-  }
-
-  if (!fs.existsSync(articlePath)) {
-    const msg = `article file missing: ${articlePath}`;
-    log.error(msg);
-    await notify(cfg, { kind: "publish", title: `❌ ${date} 文章文件缺失`, body: articlePath });
-    return { date, skipped: false, ok: false, error: msg };
+  // 1) Generate the article Markdown with the pi agent (extracted → shared with console/C3).
+  const genResult = await runArticleGeneration(cfg, { date, reuse: opts.reuse });
+  if (!genResult.ok) {
+    return { date, skipped: false, ok: false, error: genResult.error, articlePath: genResult.articlePath || articlePath };
   }
 
   const md = fs.readFileSync(articlePath, "utf8");

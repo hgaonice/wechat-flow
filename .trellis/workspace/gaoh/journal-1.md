@@ -307,3 +307,46 @@ G5 选定 O-B 并完成实现：wechat.ts 新增 setDraftCover/probeDraftCover�
 
 - C3 `console-content-workbench` 规划：计划编辑 UI → pi 生成 → 草稿箱推送 → 重生成/版本历史（含 SSE、`articles`/`drafts` 落地）→ 父任务 `implement.md` M2b
 - C2 遗留（C6 加固）：计划 job 持续失败无退避（D2）
+
+---
+
+## Session 8: 控制台 C3 内容工作台交付（S14/M2b）
+<!-- trellis-session: v=2 fp=c3contentworkbench -->
+
+### Goal
+
+在 C2 的 `jobs`/`plans` 之上补齐内容闭环：计划编辑 → engine 生成文章 → 草稿箱推送 → 重生成与版本历史（含 SSE 进度与失败面板）。
+
+### What Changed
+
+- **engine（唯一改动，附加式）**：`src/publisher.ts` 抽出 `runArticleGeneration(cfg,{date,feedback,reuse})` 与 `buildArticlePrompt(...)`；`runPublish` 改为调用前者。空/缺 `feedback` 时 prompt **字节一致（3012B）**，`runPublish` 生成后区段与 HEAD **diff 相同**；`verifyDraftBody`/`src/wechat.ts`/成功判定均未动。
+- **新增**：`src/console/db/dao/articles.ts`（版本链 DAO）、`src/console/content/generate.ts`（`snapshotVersion`/`generateArticle`/`recordDraftResult`）、`src/console/http/sse.ts`（零依赖 SSE）、`src/console/ui/workbench.{html,css,js}`。
+- **修改**：`jobs/types.ts`（`generate`/`regenerate` 进 `EXECUTABLE_KINDS`）、`jobs/worker.ts`（真执行两 kind；publish 分支补写 `drafts` + `articles.status='pushed'`）、`server.ts`（5 条路由 + `articleView`/`draftView`/`loadArticle`）、`http/static.ts`、`ui/index.html`、`main.ts`（`idleTimeout:120`）。
+- **版本链模型**：engine base `<date>-<slug>.md` 恒=最新（发布读它）；每版快照 `<base>.v<N>.md` 不可变；`articles` 每版一行（`version` 单调、`parent_id` 链）；`drafts.verified` **仅镜像** `runPublish.ok`。
+- **文档**：console spec v2→v3（`api.md` §2.3/§3、`data-model.md` I15–I18、`security.md` 文章路由/审计、`index.md`）；`AGENT.md` §1/§3/§5/§8(D16–D18)/§9/§10；`src/README.md` 新增 `console/` 小节并更新 `publisher.ts`；`tools/repomap.sh` 改为递归扫描 `src/**/*.ts`（此前完全漏掉 `src/console/**`）。
+
+### Git Commits
+
+- (本次收口提交) feat(console): C3 内容工作台（S14/M2b）+ spec v3
+
+### Testing
+
+- [OK] `tsc --noEmit` 0 错误；`bun build --target=bun src/console/main.ts` 43 modules；`dependencies=undefined`
+- [OK] **prompt 字节一致**：空/缺 feedback `sha256` 相同（3012B）；非空 feedback 仅追加 `## 修改要求（用户反馈）`
+- [OK] 单测 `/tmp/wfc-c3-content.ts`：30 项（v1→v3 单调、`parent_id` 链、旧 `.vN.md` 不可变、base=最新、生成失败不落行、`recordDraftResult` 成功/失败/跳过）
+- [OK] HTTP e2e `/tmp/wfc-c3-http.sh`：401/403/CSRF、articles 列表/详情、regenerate+audit、generate 201、SSE `job.progress/log/done`、`Last-Event-ID` 不重不漏
+- [OK] 失败路径 `/tmp/wfc-c3-fail.sh`（AC-11）：4 类失败均 `failed` + 非空 `error`，0 文章行
+- [OK] 假 `pi` worker e2e `/tmp/wfc-c3-worker.sh`：v1 行 + `.v1.md`、v2 父链 + 反馈、v1 快照不可变、base=最新
+- [OK] `bash /tmp/wfc-c3-verify.sh` → **pass=7 fail=0**
+- [OK] trellis-check 独立复核 **PASS**（8/8 必验项；4 项非阻塞观察；ISSUE-1 的 DAO 注释已按事实收敛）
+- [~] 真机（250/G2）待验：真 `pi` 生成、真实微信草稿推送、封面/manim、浏览器手工加载 workbench
+
+### Status
+
+[OK] **C3 完成**（父任务 M2b 收口；2/6 → 3/6 子任务）
+
+### Next Steps
+
+- C4 `console-agent-session` 规划：pi RPC + 严格 JSONL 流式 + 决策卡片人在环 + 最小权限
+- C3 遗留：真实推送与 UI 手工项需 250（G2）；`publish` 以 `reuse=false` 绕过 UI 触发时草稿可能挂旧版快照（已记录，UI 固定 `reuse=true`）
+- C2 遗留（C6 加固）：计划 job 持续失败无退避（D2）

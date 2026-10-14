@@ -1,6 +1,6 @@
 # Security（控制台）—— K1 本需求最高风险
 
-> 状态：**v2（已随 C1 + C2 校准）**。C5/C6 落地后继续校准。
+> 状态：**v3（已随 C1 + C2 + C3 校准）**。C5/C6 落地后继续校准。
 > 威胁前提：控制台经 **Cloudflare Quick Tunnel** 暴露到公网，且库中存有公众号后台账密 → 视为**高价值目标**。
 
 ---
@@ -43,6 +43,12 @@
 - 授权判定集中在 `auth/rbac.ts`（`assertAdmin` / `assertAccountAccess`），禁止各 handler 自行判断。
 - **任务类路由（C2）**：`/api/jobs/:id` 与 `/api/jobs/:id/cancel` **不信任 URL**——先查 `jobs` 行，再用
   `job.account_id` 走 `assertAccountAccess`；不存在 → 404（在鉴权之前）。越权 → 403 且落 `denied`。
+- **文章/SSE 路由（C3）**：`/api/articles/:id`（含 `/cover`、`/regenerate`）与 `/api/jobs/:id/stream` 同模式——
+  `server.ts#loadArticle` / `loadJob` 先取行，再用 **行内 `account_id`** 走 `assertAccountAccess`，**绝不信任 URL 中的账号**。
+- **产物路径不可被请求控制**：`/api/articles/:id/cover` 的封面路径由 `getAccountById` + `loadConfig(alias).paths.imgs`
+  派生（config 缺失时 `null` → 404），请求体不参与路径拼接，无穿越面。
+- **反馈长度上限**：`regenerate` 的 `feedback` 截断至 8000 字（`slice`），避免超长 prompt 滥用。
+- **审计（C3）**：重生成写 `audit(action='article.regenerate', target='article:<id>')`；其余任务仍走 `job_enqueue`。
 - **机密可见性**：非 admin 的 `GET /api/accounts/:id` **不下发 `global`**，且从 `effective`/`overrides` 剔除
   `notify`/`proxy`/`piBin`/`bunBin`/`skillDir`（H7，见 `server.ts#accountDetail`）。
 

@@ -1,0 +1,109 @@
+/* C3 content workbench extras (app.css holds the shared theme). */
+
+.progress {
+  height: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 12px 0 6px;
+}
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.log {
+  max-height: 240px;
+  overflow: auto;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+.log .error { color: var(--danger); }
+.log .warn { color: var(--warn); }
+.log .info { color: var(--text); }
+
+.fail {
+  margin-top: 12px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--danger);
+}
+.fail .row { margin-top: 8px; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 18px;
+}
+@media (max-width: 860px) {
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+.md {
+  max-height: 460px;
+  overflow: auto;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+img.cover {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.chip.active { border-color: var(--accent); color: var(--accent); }
+
+.diff {
+  margin-top: 10px;
+  max-height: 320px;
+  overflow: auto;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.diff div { padding: 0 10px; white-space: pre-wrap; word-break: break-word; }
+.diff .del { background: rgba(255, 95, 109, 0.14); color: #ffb3b8; }
+.diff .add { background: rgba(61, 220, 151, 0.14); color: #9ff0cb; }
+.diff .ctx { color: var(--muted); }
+
+table.days td { padding: 6px 6px; }
+table.days input { padding: 6px 8px; font-size: 13px; }
+table.days textarea { min-height: 40px; padding: 6px 8px; font-size: 13px; }
+
+h3 { font-size: 13px; color: var(--muted); margin: 16px 0 6px; }

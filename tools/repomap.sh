@@ -29,12 +29,12 @@ trap 'rm -f "$TMP"' EXIT
     -type d -print 2>/dev/null | sed 's|^\./||' | sort | sed 's|^|  |'
   echo
   echo "[src/ 模块]"
-  find src -maxdepth 1 -name '*.ts' 2>/dev/null | sort
+  find src -name '*.ts' 2>/dev/null | sort
   echo '```'
   echo
   echo "## src/ 模块与导出符号"
   echo
-  for f in $(find src -maxdepth 1 -name '*.ts' 2>/dev/null | sort); do
+  for f in $(find src -name '*.ts' 2>/dev/null | sort); do
     lines=$(wc -l < "$f" | tr -d ' ')
     # 取文件头第一个 ///** 或 // 注释行作为一句话职责
     # 文件级注释：取第一个出现在任何 export 之前的 /** 块

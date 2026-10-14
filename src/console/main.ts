@@ -118,6 +118,9 @@ async function cmdServe(args: string[]): Promise<void> {
   const server = Bun.serve({
     port: PORT,
     hostname: HOST,
+    // SSE streams (`/api/jobs/:id/stream`) can be idle between 15s pings, which
+    // exceeds Bun's 10s default and would sever the connection. Raise it.
+    idleTimeout: 120,
     fetch: (req) => app.handle(req),
     error: (err) => {
       console.error("[console] unhandled:", err);
