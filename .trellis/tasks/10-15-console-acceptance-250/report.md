@@ -63,6 +63,17 @@ G6/G7 待用户浏览器人工确认后放行。
 
 > 备注：`/api/me` 未登录 401 资源错误是 app.js 预检预期行为（catch 兜底跳登录），非缺陷。
 
+## 端到端真 pi 闭环（2026-10-15 补充）
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| **AC-8 邮件（G7）** | ✅ | 配置账号/管理员收件邮箱后强制重发：`{"sent":true,"recipients":1}`，audit `tunnel.mail ok:1`（正文含服务器信息+新地址+账密，收件箱 2199382542@qq.com 可查） |
+| **AC-5 生成（真 pi）** | ✅ | 控制台触发 generate → job#1 `succeeded`，5min44s 真实生成 v1（`.v1.md` 快照 6789B + `articles` 行 status=draft） |
+| **AC-5 推送（G2 复核）** | ✅ | `drafts --date 2026-10-15` → **`✅ 2026-10-15 正文校验: ✅ 正文正常 (body=2535 chars, svg=1, img=1)`**（草稿箱真实 DOM 回查，铁律达准）。注：当天已在 state/published.json → publish job 正确 skip（幂等，不伪装成功） |
+| **AC-7 重生成** | ✅ | regenerate + 反馈 → job#3 `succeeded`，`v2 (parent=1)` 落库、`.v2.md` 快照 7889B 不可变、base 更新；Playwright 确认 workbench 版本链可见 |
+
+**G6/G7 技术前提全部达成**，仅剩用户在收件箱确认邮件 + 门放行确认。
+
 ## 需用户人工完成（G6/G7 放行）
 1. 浏览器打开公网地址登录（admin / 250:`/root/console-admin-pw.txt`），点验 workbench / chat / admin UI（AC-6/7 人工项）
 2. 决策一次真实文章生成与草稿推送（AC-5 完整闭环 + AC-7 重生成；注意 model.plan 上游 429 挂起风险）

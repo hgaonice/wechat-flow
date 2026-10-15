@@ -148,7 +148,8 @@
 | P1.5 | **发现并修复 C6 缺陷：`console-restore.sh --force` 热替换 DB 致 malformed** | ✅ 已修 | `--force` 改为自动停启（EXIT trap 保底）；250 实测 PID 更换+integrity ok |
 | P2 | 真 pi plan 任务实测 | ✅ 失败显形 | queued→running(15)→failed('planner agent failed: timeout')，上游模型流挂起（与 workbuddy 429 吻合）；退避生效（跨 tick 无重试） |
 | P3 | Playwright 浏览器验收 13 项 | ✅ 13/13 | 登录/鉴权/账号表/工作台/会话/管理员隧道+凭据/设置/无 JS 错误；发现并修复：① CSP 拦截内联 style（改 `.row.mt` 类）② **deploy.sh --delete 删 250 的 console/DB+backups**（EXCLUDES 补齐；已重建+重备份） |
-| G6/G7 | 用户人工项 | 🟡 待用户 | 浏览器 UI（workbench/chat/admin）+ 真实生成/推送 + SMTP 配置后邮件 + 门确认；清单见 `report.md` |
+| P4 | 真 pi 端到端：generate→推送→regenerate + 隧道邮件 | ✅ | generate job 5m44s 成功（v1 落库）；`drafts --date` **正文校验 ✅**（真相源回查）；regenerate 反馈 → v2(parent=1) 落库 + workbench 可见；隧道邮件 `sent:true recipients:1`（audit tunnel.mail ok） |
+| G6/G7 | 用户人工项 | 🟡 待用户 | 仅剩：收件箱确认邮件 + 门放行确认；清单见 `report.md` |
 
 ### 当前（控制台）· C6 部署与加固（M5）
 
@@ -379,6 +380,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-15 | **端到端真 pi 闭环完成（AC-5/7/8 全部实测）**：① 配置账号+管理员收件邮箱，强制重发隧道通知 `sent:true recipients:1`（AC-8/G7 邮件半边达成）；② 控制台触发真实 generate（claude-opus，5m44s）→ v1 落库（快照 6789B）→ `drafts --date` 真相源回查 **正文校验 ✅**（body=2535 chars, svg=1, img=1）；③ regenerate + 反馈 → v2(parent=1) 落库（7889B）+ workbench 版本链可见（AC-7）；④ publish 因当天已发布正确 skip（幂等不伪装）。G6/G7 技术前提全部达成，待用户收件箱确认 + 门放行 | pi |
 | 2026-10-15 | **Playwright 浏览器验收 13/13 PASS**：登录/错误密码拒/账号表/工作台/会话/admin 隧道+凭据/设置/无 JS 错误全过。**发现并修复 2 个新问题**：① 8 处内联 `style` 被 CSP 拦截（改 `.row.mt` 类，250 复验样式生效+违规归零）；② **deploy.sh EXCLUDES 缺 `console/`+`backups/`，rsync --delete 删掉了 250 的 DB 与备份（严重）**——补齐排除项并在 250 重建（import+admin）+ 重新备份。新公网地址 `https://diet-compiler-phentermine-estimate.trycloudflare.com`（重启后变更） | pi |
 | 2026-10-15 | **控制台 250 真机验收交付（`10-15-console-acceptance-250`）**：部署 Mode A（import-config→admin→install→旧 timer disabled→隧道 up）；AC-1/2/3/4/8/9/10/11 自动化项全过（重复 cdpPort 409、覆盖/回落、回渲染语义等价、401/403/audit、429+Retry-After 不写审计、secrets 密文+不回显+无 key 拒启、tsc/build/零依赖/doctor/dry-run、备份/恢复退出码）；**发现并修复 C6 缺陷：`console-restore.sh --force` 热替换 DB 致 `database disk image is malformed`——改为 --force 自动停启（EXIT trap 保底），250 闭环验证（PID 更换+integrity ok）**；真 pi plan 任务实测失败显形（上游模型流挂起超时，退避生效）；G6/G7 待用户浏览器人工确认。报告：`.trellis/tasks/10-15-console-acceptance-250/report.md` | pi |
 | 2026-10-14 | **控制台 C6 部署与加固交付并归档（S17/M5，第二阶段收官）**：新增 `src/console/http/ratelimit.ts`（令牌桶，109 行）与 `server.ts` 接入（仅 `/api/*`、429 `rate_limited` + `Retry-After`、不写审计、`/health`/静态豁免）；`/health` 收紧为 `{status,version,uptimeSec,db,tunnel}`（`tunnel` 优先最新 DB 状态）；`jobs/{queue,scheduler}.ts` 失败退避（`CONSOLE_JOB_MAX_ATTEMPTS`/`CONSOLE_JOB_RETRY_COOLDOWN_MIN`）；修复 C4/C5 遗留 N1–N3（SSE 监听泄漏 / `ChatBus.close` 未广播 / 已 abort 未清理 + 前端关流）；`main.ts` 加 `--backup`/`--restore-check`。新增 `deploy/`（systemd Mode A/B 互斥单元 + `install-console.sh` + `console-backup.sh`/`console-restore.sh` + `nginx-console.conf.example` + `console-deploy.md` + `console-acceptance.md`）与 `README.md`/`docs/操作手册.md` §10.5。验证：`bash /tmp/wfc-c6-verify.sh` → `pass=12 fail=0`；专项 38/23/20/20/17/37；`tsc` 0 错/`bun build` OK/零依赖/engine **零改动**；独立复核 **PASS-with-issues**（自写探针 51/0 + 聚合 12/0；F1/F2 已修、F3/F4 措辞已修）。console spec 校准 v5→v6（`ops-deploy.md` v1 + I29–I34）。真机（250/G6/G7）待验。 | pi |
