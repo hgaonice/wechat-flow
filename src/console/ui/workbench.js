@@ -70,7 +70,7 @@
     $("#add-day").addEventListener("click", () => addDayRow());
     $("#save-plan").addEventListener("click", savePlan);
     $("#plan-load").addEventListener("click", loadPlan);
-    $("#plan-find").addEventListener("click", findDate);
+    $("#plan-find").addEventListener("click", () => findDate($("#find-date").value));
     $("#gen").addEventListener("click", startGenerate);
     $("#push").addEventListener("click", startPush);
     $("#retry-gen").addEventListener("click", startGenerate);
@@ -91,9 +91,10 @@
     const acc = currentAccount();
     if ($("#account-name")) $("#account-name").textContent = acc ? acc.alias : "";
     closeEs();
+    if (jobsTimer) { clearInterval(jobsTimer); jobsTimer = null; }
     state.detail = null;
     $("#detail-card").hidden = true;
-    await Promise.all([loadPlan(), loadArticles()]);
+    await Promise.all([loadPlan(), loadArticles(), loadJobs()]);
   }
 
   // ── plan editor ──────────────────────────────────────────────────────────
@@ -158,8 +159,12 @@
 
   async function loadPlan() {
     const type = $("#period-type").value;
-    const key = $("#period-key").value.trim();
+    let key = $("#period-key").value.trim();
+    // UX：首次进入未选周/月时，自动定位今天所在周期，避免「空表格」误导（2026-10-15 验收反馈）
     if (!key) {
+      const date = $("#find-date").value || todayISO();
+      const found = await findDate(date, { silent: true });
+      if (found) return;
       setPlanRows([]);
       return;
     }
@@ -176,21 +181,23 @@
     }
   }
 
-  async function findDate() {
-    const date = $("#find-date").value;
-    if (!date) return;
+  /** Locate the plan containing `date`; fills period inputs and loads it. Returns true when found. */
+  async function findDate(date, { silent = false } = {}) {
+    if (!date) return false;
     try {
       const found = await api(`/api/accounts/${state.accountId}/plans/find?date=${encodeURIComponent(date)}`);
       if (!found.found) {
-        flash($("#plan-msg"), `${date} 不在任何计划中`, "error");
-        return;
+        if (!silent) flash($("#plan-msg"), `${date} 不在任何计划中`, "error");
+        return false;
       }
       $("#period-type").value = found.periodKey.includes("W") ? "week" : "month";
       $("#period-key").value = found.periodKey;
       await loadPlan();
-      flash($("#plan-msg"), `已定位 ${found.periodKey} 中的 ${date}`, "ok");
+      if (!silent) flash($("#plan-msg"), `已定位 ${found.periodKey} 中的 ${date}`, "ok");
+      return true;
     } catch (err) {
-      flash($("#plan-msg"), err.message, "error");
+      if (!silent) flash($("#plan-msg"), err.message, "error");
+      return false;
     }
   }
 
@@ -315,6 +322,78 @@
   }
 
   // ── articles ─────────────────────────────────────────────────────────────
+
+  const JOB_KIND_CN = { plan: "计划", generate: "生成", regenerate: "重生成", publish: "推送" };
+  let jobsTimer = null;
+
+  async function loadJobs() {
+    try {
+      const { jobs } = await api(`/api/accounts/${state.accountId}/jobs?limit=10`);
+      const tbody = $("#jobs");
+      tbody.innerHTML = "";
+      $("#jobs-empty").hidden = jobs.length > 0;
+      const hasRunning = jobs.some((j) => j.status === "queued" || j.status === "running");
+      for (const j of jobs) {
+        const badge =
+          j.status === "succeeded"
+            ? el("span", { class: "badge on", text: "成功" })
+            : j.status === "failed"
+              ? el("span", { class: "badge off", text: "失败" })
+              : j.status === "canceled"
+                ? el("span", { class: "muted", text: "已取消" })
+                : el("span", { class: "badge", text: j.status === "running" ? "运行中" : "排队中" });
+        const dur =
+          j.startedAt && j.endedAt
+            ? `${Math.max(1, Math.round((new Date(j.endedAt) - new Date(j.startedAt)) / 1000))}s`
+            : j.status === "running"
+              ? `${Math.max(1, Math.round((Date.now() - new Date(j.startedAt || j.queuedAt)) / 1000))}s…`
+              : "—";
+        const note = j.error || j.message || "—";
+        const actions = [];
+        // 仅 queued 可取消（running 被 CDP/生成互斥占用，服务端拒 409，见 jobs 状态机）
+        if (j.status === "queued") {
+          actions.push(
+            el("button", {
+              class: "ghost",
+              text: "取消",
+              onclick: async () => {
+                try {
+                  await api(`/api/jobs/${j.id}/cancel`, { method: "POST" });
+                  await loadJobs();
+                } catch (err) {
+                  flash($msg(), `取消失败：${err.message}`, "error");
+                }
+              },
+            }),
+          );
+        }
+        tbody.append(
+          el("tr", {}, [
+            el("td", { class: "mono", text: `#${j.id}` }),
+            el("td", { text: JOB_KIND_CN[j.kind] || j.kind }),
+            el("td", {}, [badge]),
+            el("td", { class: "mono", text: `${j.progress ?? 0}%` }),
+            el("td", { class: "mono", text: `${fmtTime(j.queuedAt)} · ${dur}` }),
+            el("td", { class: note !== "—" && j.status === "failed" ? "fail" : "muted", text: note }),
+            el("td", {}, actions),
+          ]),
+        );
+      }
+      // 有进行中任务时轮询刷新；否则停表
+      if (hasRunning && !jobsTimer) {
+        jobsTimer = setInterval(() => {
+          if (document.hidden) return;
+          loadJobs().catch(() => {});
+        }, 5000);
+      } else if (!hasRunning && jobsTimer) {
+        clearInterval(jobsTimer);
+        jobsTimer = null;
+      }
+    } catch (err) {
+      // 任务列表加载失败不阻断其他卡片
+      $("#jobs-empty").hidden = false;
+    }
+  }
 
   async function loadArticles() {
     try {
