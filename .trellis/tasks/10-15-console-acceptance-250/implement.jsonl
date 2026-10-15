@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/console/ops-deploy.md", "reason": "C6 部署与加固契约（I29–I34/D28–D33），验收判定依据"}
+{"file": ".trellis/spec/console/security.md", "reason": "AC-4/AC-9 鉴权与凭据安全验收标准"}
+{"file": ".trellis/spec/console/ops-tunnel.md", "reason": "AC-8 隧道与邮件下发契约（I24–I28）"}
+{"file": "deploy/console-acceptance.md", "reason": "AC-1…AC-11 验收清单原文，逐条执行"}
+{"file": "deploy/console-deploy.md", "reason": "部署/迁移/回滚手册（注意 250 实际 bun 路径差异）"}

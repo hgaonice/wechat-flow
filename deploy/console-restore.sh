@@ -40,13 +40,24 @@ if [ -z "$ARCHIVE" ] || [ ! -f "$ARCHIVE" ]; then
   exit 2
 fi
 
+SERVICE_WAS_ACTIVE=0
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$SERVICE"; then
   if [ "$FORCE" -ne 1 ]; then
     echo "服务 $SERVICE 正在运行；请先 'systemctl stop $SERVICE'（或加 --force）" >&2
     exit 1
   fi
-  echo "警告：--force 覆盖正在运行的服务（$SERVICE）" >&2
+  # --force 必须真的停掉服务再替换：进程持有旧 DB 句柄时热替换文件
+  # 会导致 WAL 不一致（实测 database disk image is malformed，2026-10-15 验收）。
+  echo "==> 停止 $SERVICE（--force 自动停启）"
+  systemctl stop "$SERVICE"
+  SERVICE_WAS_ACTIVE=1
 fi
+restore_service() {
+  if [ "$SERVICE_WAS_ACTIVE" = "1" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl start "$SERVICE"
+  fi
+}
+trap 'restore_service; rm -rf "${WORK:-/dev/null}"' EXIT
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -93,5 +104,11 @@ if [ -f "$WORK/master.key" ]; then
 fi
 
 echo
-echo "恢复完成。启动：systemctl start $SERVICE"
+if [ "$SERVICE_WAS_ACTIVE" = "1" ]; then
+  echo "==> 重新启动 $SERVICE"
+  restore_service
+  echo "恢复完成，服务已重启。"
+else
+  echo "恢复完成。启动：systemctl start $SERVICE"
+fi
 echo "如 DB 路径为默认值，请确认 $DB 与 .env / $SERVICE 中的 CONSOLE_DB 一致。"
