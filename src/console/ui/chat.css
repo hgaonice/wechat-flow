@@ -91,3 +91,7 @@
   .chat-main { grid-template-columns: 1fr; }
   .chat-side { position: static; max-height: none; }
 }
+
+/* 模型请求失败显形（H5）：错误气泡红边 + 错误文案 */
+.bubble.error { border-color: rgba(248, 113, 113, 0.55); }
+.bubble.error .body.fail { color: #f87171; font-size: 12px; word-break: break-all; }

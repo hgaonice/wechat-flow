@@ -47,12 +47,23 @@
     const box = $("#messages");
     box.innerHTML = "";
     for (const m of state.messages) {
-      box.append(
-        el("div", { class: `bubble ${m.role}` }, [
-          el("div", { class: "role", text: roleLabel(m.role) }),
-          el("div", { class: "body", text: m.content || "" }),
-        ]),
-      );
+      const meta = m.meta || {};
+      const errMsg =
+        typeof meta.errorMessage === "string"
+          ? meta.errorMessage
+          : meta.stopReason === "error" && !m.content
+            ? "（原因未记录，多为模型网关暂时不可用或限流）"
+            : null;
+      const bubble = el("div", { class: `bubble ${m.role}${errMsg ? " error" : ""}` }, [
+        el("div", { class: "role", text: roleLabel(m.role) }),
+      ]);
+      if (errMsg) {
+        // 模型请求失败：显式报错，不渲染空正文（H5 失败显形）
+        bubble.append(el("div", { class: "body fail", text: `⚠ 模型请求失败：${errMsg}` }));
+      } else {
+        bubble.append(el("div", { class: "body", text: m.content || "" }));
+      }
+      box.append(bubble);
     }
     renderStreamInto(box);
     renderDecisionsInto(box);

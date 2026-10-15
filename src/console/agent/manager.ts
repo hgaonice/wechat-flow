@@ -502,6 +502,12 @@ export class ChatManager {
         const meta: Record<string, unknown> = {};
         if (message.stopReason !== undefined) meta.stopReason = message.stopReason;
         if (message.usage !== undefined) meta.usage = message.usage;
+        // H5 失败显形：模型请求失败时 pi 把原因放在 errorMessage（content 为空）。
+        // 丢弃它会让 UI 只剩空气泡（2026-10-15 验收：4 个空「agent」气泡，真因是网关 503 无可用渠道）。
+        const errorMessage = asString(message.errorMessage);
+        if (errorMessage) meta.errorMessage = errorMessage;
+        if (message.api !== undefined) meta.api = message.api;
+        if (message.model !== undefined) meta.model = message.model;
         const stored = chats.insertChatMessage(this.db, {
           chatSessionId: live.chatId,
           role,
