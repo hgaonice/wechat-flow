@@ -40,6 +40,29 @@ G6/G7 待用户浏览器人工确认后放行。
 **`console-restore.sh --force` 热替换 DB 导致损坏**：`--force` 只打印警告不停服，进程持旧句柄 + WAL → 替换后 `database disk image is malformed`（实测复现）。
 **修复**（本地 `deploy/console-restore.sh`，已同步 250 并闭环验证）：`--force` 自动 `systemctl stop` → 恢复 → 自动 `systemctl start`（EXIT trap 保证中途失败也会重启服务）；实测 PID 更换、`integrity_check=ok`。
 
+## 浏览器端验收（Playwright，2026-10-15 补充）
+
+**13/13 PASS**（脚本 `/tmp/wfc-browser-accept.py`，Chromium headless 经公网隧道）：
+
+| # | 项 | 结论 |
+|---|---|---|
+| V1 | 未登录访问 → 跳登录页 | ✅ |
+| V2 | 错误密码被拒（401 提示） | ✅ |
+| V3 | 登录成功 → `/app` 显示 `admin（管理员）` | ✅ |
+| V4 | 首页账号表列出 second/gaoh | ✅ |
+| V5 | admin 可见「新建账号」 | ✅ |
+| V6/V7 | 工作台加载 + 账号选择器 | ✅ |
+| V8 | Agent 会话页加载 | ✅ |
+| V9–V11 | /admin：隧道在线状态 + 当前地址 + 历史（expired）+ 凭据/邮箱区块 | ✅ |
+| V12 | 全局设置页加载 | ✅ |
+| V13 | 无 JS 控制台错误 | ✅（修复后） |
+
+### 发现并修复的 2 个新问题
+1. **CSP 违规（真缺陷）**：8 处 HTML `style="margin-top:…"` 内联样式被 `style-src 'self'` 拦截（样式失效）。修复：改用 `.row.mt` 类（`app.css`），250 部署后 `marginTop=14px` 生效、CSP 违规 0。
+2. **deploy.sh 删库（严重缺陷，C6 漏项）**：EXCLUDES 缺 `console/`、`backups/`，rsync `--delete` 把 250 的 **DB 与备份全删**（users=0、backups 目录消失）。修复：EXCLUDES 补 3 项并留注释；250 重建（import-config + create-admin）+ 重新备份（console-20261015-132403.tgz）。
+
+> 备注：`/api/me` 未登录 401 资源错误是 app.js 预检预期行为（catch 兜底跳登录），非缺陷。
+
 ## 需用户人工完成（G6/G7 放行）
 1. 浏览器打开公网地址登录（admin / 250:`/root/console-admin-pw.txt`），点验 workbench / chat / admin UI（AC-6/7 人工项）
 2. 决策一次真实文章生成与草稿推送（AC-5 完整闭环 + AC-7 重生成；注意 model.plan 上游 429 挂起风险）

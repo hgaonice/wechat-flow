@@ -57,6 +57,9 @@ EXCLUDES=(
   --exclude 'sessions/'
   --exclude 'logs/'
   --exclude '.env'
+  --exclude 'console/'      # 控制台运行时 DB（C1+；--delete 会删库，血训 2026-10-15）
+  --exclude 'backups/'      # console-backup.sh 产物（含 master.key）
+  --exclude '.wechat-console/'  # 主密钥（若仓内同层部署）
 )
 
 echo "· 源：$SRC/"

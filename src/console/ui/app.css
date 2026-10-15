@@ -58,6 +58,7 @@ button.danger { background: transparent; border-color: var(--danger); color: var
 button.ghost { background: transparent; }
 button:hover { filter: brightness(1.1); }
 .row { display: flex; gap: 12px; align-items: center; }
+.row.mt { margin-top: 14px; }
 .row > * { flex: 1; }
 .row > button { flex: 0 0 auto; }
 table { width: 100%; border-collapse: collapse; }
