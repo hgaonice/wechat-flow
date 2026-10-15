@@ -74,6 +74,13 @@ G6/G7 待用户浏览器人工确认后放行。
 
 **G6/G7 技术前提全部达成**，仅剩用户在收件箱确认邮件 + 门放行确认。
 
+## 会话页空「agent」气泡修复（2026-10-15 截图反馈）
+
+**现象**：Agent 会话发「查看最近推送的文章」后出现 4 个只有「agent」标签的空气泡。
+**根因**：上游网关 503（`No available channel for model claude-opus-4-8`，justwoker 侧无可用渠道）→ pi `message_end` 带 `stopReason=error` + `errorMessage` 但 `content` 空；console `manager.ts` 只存 stopReason 丢弃 errorMessage → UI 渲染空气泡（违反 H5 失败显形）。
+**修复**（`b6b3a39`）：manager 存 `errorMessage/api/model` 进 meta；chat.js 空正文 error 消息渲染红色错误气泡（新消息带真实原因 + request id，旧消息降级提示文案）。
+**250 实测**：新会话错误气泡完整显示 503 + request id。
+
 ## 需用户人工完成（G6/G7 放行）
 1. 浏览器打开公网地址登录（admin / 250:`/root/console-admin-pw.txt`），点验 workbench / chat / admin UI（AC-6/7 人工项）
 2. 决策一次真实文章生成与草稿推送（AC-5 完整闭环 + AC-7 重生成；注意 model.plan 上游 429 挂起风险）
