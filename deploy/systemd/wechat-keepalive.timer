@@ -1,0 +1,15 @@
+[Unit]
+Description=WeChat Flow — run MP session keep-alive every 12h
+Documentation=file:///root/wechat-flow/.trellis/spec/engine/verification.md
+
+[Timer]
+# Two runs a day = a 12h margin against the 4-day ticket expiry, so the session
+# survives even if a run or two is missed.
+OnBootSec=10min
+OnUnitActiveSec=12h
+AccuracySec=1min
+Persistent=true
+Unit=wechat-keepalive.service
+
+[Install]
+WantedBy=timers.target

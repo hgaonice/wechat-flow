@@ -10,7 +10,7 @@ import { runPublish, parseFrontmatter } from "./publisher.ts";
 import { loadState } from "./state.ts";
 import { checkEmail } from "./mailer.ts";
 import { checkBrowser } from "./browser.ts";
-import { listDrafts, verifyDraftPublished, verifyDraftBody, setDraftCover, probeDraftCover } from "./wechat.ts";
+import { listDrafts, listDraftTitles, verifyDraftPublished, verifyDraftBody, setDraftCover, probeDraftCover } from "./wechat.ts";
 import { ensureLoggedIn } from "./session.ts";
 import { notify } from "./notify.ts";
 import { todayInTz, isoWeek } from "./date.ts";
@@ -22,6 +22,7 @@ commands:
   run       plan 或 publish 自动判断  status    已发布清单
   accounts  列出所有公众号          doctor    环境自检
   login     建立/续期登录会话        drafts    查看草稿箱
+  keepalive 会话保活（4 天票据续期）
   cover     给草稿自动设封面
   mail-test 发送测试邮件
 
@@ -34,7 +35,8 @@ options:
       --force             忽略已发布记录，重新发布（修复历史草稿用）
   -t, --to <a@b,c@d>      邮件收件人（mail-test）
       --wait <sec>        登录等待秒数（login/drafts）
-      --qr                二维码同时发邮件
+      --qr                二维码同时发邮件（keepalive 默认开启）
+      --no-qr             不发送登录二维码邮件（keepalive）
       --title <t>         cover：直接指定草稿标题
       --cover <png>       cover：封面文件（默认 imgs/<date>/cover.png）
       --probe             cover：只读探测封面弹窗 DOM
@@ -200,6 +202,13 @@ async function main(): Promise<void> {
       }
       break;
     }
+    case "keepalive": {
+      for (const alias of targets) {
+        banner(alias);
+        await keepalive(cfgFor(alias, cmd), flags);
+      }
+      break;
+    }
     case "cover": {
       for (const alias of targets) {
         banner(alias);
@@ -210,6 +219,50 @@ async function main(): Promise<void> {
     default:
       console.log(USAGE);
   }
+}
+
+/**
+ * Keep the MP web session ticket alive.
+ *
+ * The ticket (`slave_sid` + `data_ticket`/`bizuin`/… ) carries a HARD 4-day
+ * expiry, and MP re-issues it on authenticated activity: measured on 250
+ * (2026-10-16) a `drafts` call moved `slave_sid` from +95.9h to +96.0h. So a
+ * cheap authenticated request well inside that window slides the session
+ * forever and the operator never has to rescan the QR.
+ *
+ * When the session is really gone we fail loudly and (by default) email a fresh
+ * QR, so the human can rescan at their convenience instead of discovering the
+ * breakage when the daily publish fails.
+ */
+async function keepalive(cfg: AppConfig, flags: Record<string, string | boolean>): Promise<void> {
+  if (cfg.publishMethod !== "browser") {
+    console.log(`publishMethod=${cfg.publishMethod}：API 方式不需要会话保活。`);
+    return;
+  }
+  const lg = await ensureLoggedIn({
+    browser: cfg.browser,
+    skillDir: cfg.skillDir,
+    account: cfg.account,
+    email: cfg.notify.email,
+    qrOutPath: path.join(cfg.paths.state, "wechat-login-qr.png"),
+    env: proxyEnv(cfg),
+    waitSec: flags.wait ? Number(flags.wait) : 0,
+    notifyQr: flags["no-qr"] !== true,
+  });
+  if (!lg.ok) {
+    console.error(`❌ 会话已失效：${lg.detail}${lg.emailed ? "（二维码已发邮件，扫码后下次保活即恢复）" : ""}`);
+    process.exitCode = 1;
+    return;
+  }
+  // The probe only proves the page rendered; an authenticated request is what
+  // actually slides the ticket, so make one and require it to succeed.
+  const titles = await listDraftTitles(cfg.browser, cfg.skillDir);
+  if (titles === null) {
+    console.error("❌ 鉴权请求失败（票据可能刚失效），请扫码重新登录。");
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`✅ 会话保活成功（票据已顺延）：草稿箱 ${titles.length} 条`);
 }
 
 /** List 草稿箱 titles; with --date also checks that day's article is present. */

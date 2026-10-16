@@ -92,6 +92,22 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 真机自检：`bun src/cli.ts drafts -a <acct>`（需真实会话）是唯一能证明登录态的命令；
 `login -a <acct> --qr --wait 0` 可只生成+邮件二维码用于人工扫码。
 
+### 会话寿命与保活（实测数据，2026-10-16）
+
+- MP 登录票据（`slave_sid` / `data_ticket` / `bizuin` / `slave_bizuin` / `rand_info` / `slave_user`）
+  在 Chrome profile 里的 Cookie 到期时间 = **签发 + 96h（4 天）**，是**硬过期**。
+- 但它在**有真实鉴权请求**时会**顺延**：实测调用一次草稿箱接口，`slave_sid` 到期从 `+95.9h` → `+96.0h`。
+  （单纯访问首页/重载 DOM **不会**顺延 —— 必须是一次带 token 的接口请求。）
+- 因此：`deploy/systemd/wechat-keepalive.{service,timer}` 每 **12h** 跑一次
+  `bun src/cli.ts keepalive --all`（每个账号一次鉴权请求）→ **只要服务器不停 4 天以上，就不再需要扫码**。
+- `keepalive` 失败即 exit 1（systemd 可见）并默认把新二维码发到 `emailTo`，
+  让人**提前**扫码，而不是等当天发布失败才发现。
+- 兜底方案（彻底免扫码）：改用 `publishMethod="api"`（`wechat-api.ts` 已支持
+  `media/uploadimg` + `material/add_material` + `draft/add`），需要 AppID/AppSecret +
+  后台 IP 白名单（并把 `api.weixin.qq.com` 加入 `no_proxy`，否则走代理导致白名单 IP 不对）。
+- 查票据剩余寿命（只读，不扰动会话）：读 `<profile>/Default/Cookies` 的
+  `slave_sid.expires_utc`（Chrome 时间基 = 1601-01-01，微秒）：
+
 ---
 
 ## 检查清单
@@ -104,3 +120,4 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 - [ ] 登录态用 `drafts -a <acct>` 或“禁缓存重载 + DOM”判定，**没有**用 URL 当证据。
 - [ ] 幂等跳过条件是 `ok === true`，失败记录不会阻断重试。
 - [ ] 引擎改动后已 `systemctl restart wechat-console`（worker 常驻）。
+- [ ] 浏览器发布方式下 `wechat-keepalive.timer` 已 enabled（否则 4 天后必过期）。

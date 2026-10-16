@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 15:06:31
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 15:13:18
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -89,7 +89,7 @@ src/wechat.ts
 
 导出：`BrowserConfig, defaultBrowserConfig, resolveProfileDir, displayUp, cdpVersion, ensureDisplay, ensureChrome, ensureBrowser, checkBrowser`
 
-### `src/cli.ts`  (464 行)
+### `src/cli.ts`  (517 行)
 >  Command-line entry: parse argv, resolve target accounts (-a/--all), dispatch to modules.
 
 导出：（无，或为可执行入口）

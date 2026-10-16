@@ -1,0 +1,25 @@
+[Unit]
+Description=WeChat Flow — MP session keep-alive (slides the 4-day login ticket)
+Documentation=file:///root/wechat-flow/.trellis/spec/engine/verification.md
+After=network-online.target
+Wants=network-online.target
+
+# The MP web ticket (slave_sid & friends) expires 4 days after issue, but MP
+# re-issues it on authenticated activity. This unit makes one authenticated
+# request per account every 12h, so the session never lapses and no QR rescan
+# is needed. If the session IS gone, it exits non-zero and emails a fresh QR.
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/wechat-flow
+Environment=HOME=/root
+Environment=PATH=/root/.nvm/versions/node/v24.14.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=http_proxy=http://127.0.0.1:7890
+Environment=https_proxy=http://127.0.0.1:7890
+Environment=no_proxy=127.0.0.1,localhost,192.168.0.0/16,10.0.0.0/8,::1,192.168.0.251
+Environment=DISPLAY=:99
+Environment=XDG_RUNTIME_DIR=/tmp/runtime-root
+EnvironmentFile=-/root/wechat-flow/.env
+TimeoutStartSec=600
+ExecStart=/root/.nvm/versions/node/v24.14.1/bin/bun /root/wechat-flow/src/cli.ts keepalive --all
