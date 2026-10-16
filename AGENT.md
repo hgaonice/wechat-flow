@@ -53,7 +53,7 @@
 | **S8** | 文档：README + 操作手册 | ✅ 完成 | — | `README.md`、`操作手册.md` |
 | **S9** | **上下文治理**：`.trellis` + `AGENT.md` + 分层文档 + repomap | ✅ 完成 | G4 | 已归档 `archive/2026-10/10-12-context-governance/` |
 | **S10** | 封面自动上传到草稿（O-B：CDP 驱动封面弹窗） | ✅ 完成 | G2 | `archive/2026-10/10-12-cover-auto-upload/` |
-| **S18** | **内容互动引导语（CTA）**：文末点赞/转发/收藏/评论引导（AI 写文风 + 代码断言必有） | 🟡 本地全绿 ／ 真机待 250 | G2 | `src/cta.ts`、`prompts/cta/{second,gaoh}.md`、`tools/cta-selftest.ts`、`.trellis/tasks/10-16-article-engagement-cta/` |
+| **S18** | **内容互动引导语（CTA）**：文末点赞/转发/收藏/评论引导（AI 写文风 + 代码断言必有） | ✅ 完成（本地 + 250 真机） | G2 | `src/cta.ts`、`prompts/cta/{second,gaoh}.md`、`tools/cta-selftest.ts`、`.trellis/tasks/10-16-article-engagement-cta/` |
 
 图例：⚪ 未开始 ／ 🟡 进行中 ／ ✅ 完成 ／ 🔴 阻塞
 
@@ -87,7 +87,7 @@
 | GATE | 位置 | 放行条件 | 状态 |
 |------|------|----------|------|
 | **G1** | 上线 250 | `doctor --all` 通过 + 端到端发布邮件送达 | ✅ 已放行（2026-10-12） |
-| **G2** | 发布链路改动后 | 真机 `publish --force --reuse` → `drafts --date` 显示 `✅ 正文校验` | ✅ 已放行（2026-10-12，含空正文修复复验） |
+| **G2** | 发布链路改动后 | 真机 `publish --force --reuse` → `drafts --date` 显示 `✅ 正文校验` | ✅ 已放行（2026-10-12，含空正文修复复验）；**2026-10-16 复验通过（CTA：second/gaoh 草稿 DOM 末尾 6 个动作词）** |
 | G3 | 内容真源策略变更 | 确认“本地仓库为真源”或改 `--keep-remote-content` | ✅ 已确认（本地为真源） |
 | **G4** | 上下文治理交付 | 用户确认 `AGENT.md` + 分层文档 + `.trellis` 可用 | ✅ 已放行（2026-10-12） |
 | **G5** | 封面自动化方案 | 用户选定 O-A / O-B 后再动发布链路 | ✅ 已选定 **O-B** 并经 **G2 真机验收通过**（2026-10-13） |
@@ -111,7 +111,7 @@
 | `archive/2026-10/10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-ops-tunnel/` | S16 | C5 运维与公网（邮箱/隧道地址下发/凭据/管理员视图） | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-deploy-hardening/` | S17 | C6 部署与加固（systemd/限流/备份/回归 + 文档/spec/AGENT） | ✅ 已归档（2026-10-14） |
-| `10-16-article-engagement-cta/` | S18 | 文末互动引导语 CTA（prompts/cta + 确定性补齐） | 🟡 本地全绿，真机待 250 |
+| `10-16-article-engagement-cta/` | S18 | 文末互动引导语 CTA（prompts/cta + 确定性补齐） | ✅ 已交付（2026-10-16，本地+250） |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
@@ -139,7 +139,17 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：① **文末互动引导语 CTA（`10-16-article-engagement-cta`，本会话）——本地全绿，真机 S8 待 250**；② **控制台 250 真机验收（`10-15-console-acceptance-250`）——部署+AC 自动化项全部通过；G6/G7 待用户人工确认。**
+**当前任务**：① **文末互动引导语 CTA（`10-16-article-engagement-cta`）——已交付并归档（本地 + 250 真机）**；② **控制台 250 真机验收（`10-15-console-acceptance-250`）——部署+AC 自动化项全部通过；G6/G7 待用户人工确认。**
+
+### 当前（引擎）· 文末互动引导语 CTA（2026-10-16）—— ✅ 已交付（本地 + 250 真机）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| S1–S7 | 文案资产 / `src/cta.ts` / 配置 / 注入点 / 自测 / 引擎验收 | ✅ | 见任务 `implement.md` 执行结果表；`BUILD_OK`/`TSC_OK`；`bun tools/cta-selftest.ts` **13 PASS** |
+| S8 | 250 真机：同步 + 重发 + 草稿箱回查（AC5） | ✅ | `rsync src/ prompts/`（含 `prompts/cta/`）；250 `BUILD_OK`/`TSC_OK`/selftest **ALL PASS**；两账号 `--reuse --dry-run` → `cta: appended (chars=156/161)`；真机 `publish --force --reuse` → second `body=3098→3224`、gaoh `3088→3219`；`drafts --date 2026-10-16` 两账号 `✅ 正文校验` |
+| AC5 目视 | **草稿箱真实 DOM 末尾**含引导语 | ✅ | 只读探针读 `appmsg_edit` 的 `.rich_media_content .ProseMirror` innerText 末 320 字：second「关注「巧思初数」，我们每天一道真题拆解…」/ gaoh「关注「gaoh的技术分享」，我们一起用更省力的方法学数学」；**末尾命中动作词 6/6** |
+| 附带发现 | 真机 `New tab not found: mp.weixin.qq.com`（E1） | ✅ 已记录 | 重复 `https://mp.weixin.qq.com/` 桩 tab 导致 skill `waitForNewTab` 超时；关掉桩 tab（保留带 `token=` 的 home tab）后重跑即成功（两账号各复现一次）；已沉淀到 `.trellis/spec/engine/error-handling.md` §E1 |
+| S9/S10 | 文档沉淀 + commit | ✅ | commit `b0d71cd`（本地）+ 真机验证 commit（见 §9） |
 
 ### 当前（引擎）· 文末互动引导语 CTA（2026-10-16）
 
@@ -399,6 +409,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-16 | **CTA 真机验收通过（AC5）+ 附带故障模式沉淀（S18 收官）**：250 同步 `src/` + `prompts/`（含 `prompts/cta/`）后 `BUILD_OK`/`TSC_OK`/`cta-selftest` **ALL PASS**；两账号 `publish --reuse --dry-run` → `cta: appended (from prompts/cta/second.md (chars=156))` / `gaoh.md (chars=161)`；真机 `publish --force --reuse` + `drafts --date 2026-10-16`：second `body=3098→3224`、gaoh `3088→3219`（增量≈引导语文本量），两账号均 `✅ 正文校验`；**只读探针读草稿箱真实 DOM**（`appmsg_edit` 的 `.rich_media_content .ProseMirror` innerText 末 320 字）：末尾为「关注「巧思初数」…」/「关注「gaoh的技术分享」…」，**末尾动作词 6/6**。**附带发现（两账号各复现一次）**：浏览器发布在 Chrome 内存在重复 `https://mp.weixin.qq.com/` 桩 tab 时会报 `New tab not found: mp.weixin.qq.com`（skill `waitForNewTab` 30s 超时，草稿箱保持旧版）；**处置**：只关桩 tab 与 `about:blank`、保留带 `token=` 的 home tab 后重跑即成功（**不要**重启 Chrome，会引出扫码）——已沉淀到 `.trellis/spec/engine/error-handling.md` §E1，`cleanupAppmsgTabs()` 的扩展属发布链路改动，**留待单独评审 + G2 后合入** | pi |
 | 2026-10-16 | **文末互动引导语 CTA（`10-16-article-engagement-cta`，S18）——本地全绿，真机待 250**：新增确定性模块 `src/cta.ts`（`applyCtaToArticle`/`hasCtaHint`/`ensureCtaBlock`/`resolveCtaBlock`，判定=正文**尾部 500 字命中 ≥2 个动作词**即视为已有；否则追加 `prompts/cta/<alias>.md`，缺失降级 `default.md` → 内置常量；**永不抛错**）+ 文案资产 `prompts/cta/{second,gaoh}.md` + `prompts/article.md` 第 5 条「结尾互动引导（必须）」+ `editor.md` 人设一条；唯一注入点 `publisher.runArticleGeneration()`（生成 / `--reuse` / 控制台 `generateArticle` 三条路径都经过），控制台 `OBJECT_ENTRY_KEYS` 放行 `cta`（无 DB 迁移），配置 `cta.enabled` 默认开（热回滚开关）。验证：`BUILD_OK`/`TSC_OK`；`bun tools/cta-selftest.ts` **13 PASS**（幂等字节一致 / 中段「收藏」不误判 / frontmatter 保留 / builtin 兜底 / disabled 不写 / `分享·关注` 不入检测词表）；真 CLI 两账号 `--reuse --dry-run` → second `cta: appended (from prompts/cta/second.md (chars=156))` → 二跑 `cta: present (tail hits=6)`；gaoh `cta: appended (from prompts/cta/gaoh.md (chars=161))`；控制台快照含 CTA 且 AI 已写时不重复；`cta.enabled=false` → `cta: disabled` 且文件逐字节未变。**独立复核（trellis-check）PASS-with-issues**，已修：F1 检测词表剔除非引导词 `分享/关注`（避免普通结尾误判→该补未补，破坏「必有」；已加回归断言）与 F5 `cta.file` 相对路径改按 `APP_DIR` 解析；F3 已用 250 只读探测证实 `displayName` 正常（渲染为「巧思初数」）。固化到 `spec/engine/ai-determinism.md`（第二例“AI 写文风、代码断言必有”）+ `src/README.md`。**AC5 真机发布待 250（G2）。** | pi |
 | 2026-10-16 | **九上数学 211 天计划入排程 + 登录态/幂等三处真 bug 修复（`10-15-grade9-math-plans`）**：① 新增 `tools/gen-grade9-plans.ts`（37 讲/174 板块 → 每板块 1 篇 + 每讲 1 篇汇总 = 211 天，2026-10-16~2027-05-14，含真题要点/易错/manimHint，两账号角度差异化）与 `tools/upload-plans-250.py`（登录控制台 API 逐周 PUT，W42 整周覆盖）；250 上两账号各 211 天落库并物化，`drafts` 验证 10-16 双账号均已进草稿箱（含 manim gif + ffmpeg 封面 + 双邮箱邮件）。② 新增 ffmpeg 封面 `generateFfmpegCover()`（含 drawtext 能力探测：250 的 PATH 首选静态 ffmpeg 无 drawtext，自动降级 `/usr/bin/ffmpeg`）+ `cover.mode="ffmpeg"`；`cover.uploadToDraft` 改按叶子回退（账号级 cover 只写 mode 时不再静默关掉封面上传）。③ `mailer.ts` 支持主机本地 600 权限凭据文件注入邮件正文（邮件附控制台账号密码）。④ 250 装 Manim v0.22.0 + `/opt/manim-venv/bin/manim` 软链。**修 3 个真 bug**：`runPublish` 幂等只认 `ok===true`（原来把失败记录当已发布 → 报 `ok:true, skipped` 使调度器**永不重试**）；登录态判定从 URL 改为「禁缓存重载 + DOM + `window.__wfcProbe` 标记确认上下文更换」（缓存页会继续渲染已登录菜单导致假 `session valid`）；二维码抓取（先跳登录页、支持顶层 img 与跨域 `qrconnect` iframe 两形态、裁切失败不覆盖好图、按 `emailTo` 逐邮箱发送、等待期不主动刷新以免作废旧码）。契约沉淀进 `.trellis/spec/engine/verification.md`。**运维教训：引擎改动后必须 `systemctl restart wechat-console`（worker 常驻，改磁盘不生效）**。⑤ **会话保活**：实测 MP 登录票据 Cookie（`slave_sid` 等）为**签发 +96h 硬过期**，但**真实鉴权请求会顺延**（`drafts` 调用把到期从 +95.9h → +96.0h；单纯访问首页不会）；新增 `keepalive` 命令 + `deploy/systemd/wechat-keepalive.{service,timer}`（每 12h `keepalive --all`），失败 exit 1 并把新二维码发 `emailTo` → **服务器不停 4 天以上就不再需要扫码**（250 已 enabled 并实测两账号保活成功） | pi |
 | 2026-10-15 | **端到端真 pi 闭环完成（AC-5/7/8 全部实测）**：① 配置账号+管理员收件邮箱，强制重发隧道通知 `sent:true recipients:1`（AC-8/G7 邮件半边达成）；② 控制台触发真实 generate（claude-opus，5m44s）→ v1 落库（快照 6789B）→ `drafts --date` 真相源回查 **正文校验 ✅**（body=2535 chars, svg=1, img=1）；③ regenerate + 反馈 → v2(parent=1) 落库（7889B）+ workbench 版本链可见（AC-7）；④ publish 因当天已发布正确 skip（幂等不伪装）。G6/G7 技术前提全部达成，待用户收件箱确认 + 门放行 | pi |
@@ -430,7 +441,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 1. **当前主线（控制台 S11+）**：C1 ✅ → C2 ✅ → C3 ✅ → C4 ✅ → C5 ✅ → **C6 ✅（已归档；父任务 6/6，第二阶段收官）**。下一步 = 真机（250）按 `deploy/console-acceptance.md` 跑 AC-1…AC-11，随后 G6/G7 请用户确认。见 §5。
 2. **真机待验（G2，需 250）**：C3 —— 真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench；C4 —— 真实 `pi` 流式、`pi --extension` 加载、浏览器 `/chat`（流式 + 决策卡片）。
 3. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
-4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）。
+4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）；**发布链路加固（待评审 + G2）：`cleanupAppmsgTabs()` 扩展为「保留带 `token=` 的 home tab，关掉其余重复/桩 tab」以消除 `New tab not found`（见 `.trellis/spec/engine/error-handling.md` §E1）**；CTA 文案抽样人工对齐（D1）。
 5. **日常运维**：按 `docs/操作手册.md` §5 做周与周衔接；每周五/日看 `status --all` 与 `drafts --all`。
 
 ---

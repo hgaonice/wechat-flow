@@ -65,7 +65,7 @@
 
 ## 阶段 6：250 真机复验（GATE G2，需用户确认可动 250）
 
-- [ ] **S8（BLOCKED: 250 / 需用户放行 G2）** `rsync` 同步 `src/` + `prompts/` → 250；`bun build`；`publish --force --reuse` → `drafts --date <日期>` 显示 `✅ 正文校验`；草稿箱正文末尾目视引导语（AC5）。
+- [x] **S8** `rsync` 同步 `src/` + `prompts/` → 250；`bun build`；`publish --force --reuse` → `drafts --date <日期>` 显示 `✅ 正文校验`；草稿箱正文末尾目视引导语（AC5）。
   - 顺序：**先本地全绿再动 250**；`prompts/cta/` 必须一起同步（否则 250 走内置兜底）
   - 若 250 不可用 → 本步标记 `BLOCKED(250)`，不得写"已完成"
 
@@ -116,7 +116,20 @@ grep -c -e 点赞 -e 在看 -e 转发 -e 收藏 -e 评论 data/second/articles/2
 | S6 自测 | ✅ | `bun tools/cta-selftest.ts` → **13 PASS / ALL PASS** |
 | S7 引擎验收 | ✅（AC4/AC5 见下） | `BUILD_OK`；`TSC_OK`；`publish -a second --date 2026-10-20 --reuse --dry-run` → `cta: appended (from prompts/cta/second.md (chars=156))`；gaoh → `cta: appended (from prompts/cta/gaoh.md (chars=161))`；二次跑 second → `cta: present (tail hits=6)`；`cta.enabled=false` → `cta: disabled (config — CTA 已关闭)` 且文件 76B 未变 |
 | AC6 控制台路径 | ✅ | 内存 DB + `generateArticle(db,cfg,id,date,{runner:真实 runArticleGeneration(reuse)})` → `2026-10-22-一次函数图象.v1.md` 尾部含 CTA；AI 已写引导语变体 → `cta: present (tail hits=2)`（不重复） |
-| S8 250 真机 | ⛔ BLOCKED | 本机缺 `convert` 与 `baoyu-post-to-wechat` skill（既有环境差异，非本次改动）；dry-run 走到 publish 步骤即因 skill 缺失失败；需 250 环境 + 用户放行 |
+| S8 250 真机 | ✅ 通过 | `rsync src/ prompts/` → 250（含 `prompts/cta/`）；250 `BUILD_OK` / `TSC_OK` / `bun tools/cta-selftest.ts` ALL PASS；两账号 `--reuse --dry-run` → `cta: appended (chars=156 / 161)`；真机 `publish --force --reuse` → `drafts --date 2026-10-16` 两账号 **✅ 正文校验**（second body 3098→3224、gaoh 3088→3219）；**只读探针读草稿 DOM** 末尾 320 字为引导语、**动作词 6/6** |
+| 附带发现 E1 | ✅ 已记录 | 真机 `New tab not found: mp.weixin.qq.com`（重复 mp 桩 tab 干扰 skill `waitForNewTab`）→ 关桩 tab（保留带 token 的 home）后重跑成功；沉淀 `.trellis/spec/engine/error-handling.md` §E1；`cleanupAppmsgTabs` 扩展留待单独评审 + G2 |
 | S9 文档 | ✅ | `AGENT.md`（S18 行 / 任务地图 / §5 Checkpoint / §9 变更日志）；`TREE.md`（`bash tools/repomap.sh`）；`.trellis/spec/engine/ai-determinism.md`（CTA 作为第二例）；`src/README.md`（新增 `cta.ts` 段 + publisher 坑位补充） |
 
-**遗留**：AC4 的「本机 dry-run 全绿」与 AC5 只能在 250 完成（环境缺 convert / 缺 skill，与本改动无关）；已在 `AGENT.md` §1/§5 标 `🟡 真机待 250`，**不谎报完成**。
+**遗留**：AC4 的「开发机 dry-run 全绿」受本机环境限制（缺 `convert` / `baoyu-post-to-wechat` skill，与本改动无关）——已在 250 完成等价真机验收（AC5）。
+
+## 验收清单（收口）
+
+| AC | 状态 | 证据 |
+|---|---|---|
+| AC1 两账号文末含引导语（本地） | ✅ | `cta: appended (chars=156/161)` + 文件 tail |
+| AC2 幂等/不误判/字节一致 | ✅ | `bun tools/cta-selftest.ts` **13 PASS** |
+| AC3 build + tsc | ✅ | 251 与 250 均 `BUILD_OK` / `TSC_OK` |
+| AC4 dry-run 不阻断 | ✅（250） | 250 两账号 `--reuse --dry-run` → `dry-run ok`（开发机环境缺 convert/skill） |
+| AC5 250 真机发布 + 正文校验 + 末尾可见 | ✅ | `drafts --date` ✅ 正文校验；草稿 DOM 末 320 字含引导语、动作词 6/6 |
+| AC6 控制台路径快照带 CTA | ✅ | 内存 DB `generateArticle` → `.v1.md` 含 CTA；AI 已写时不重复 |
+| AC7 关闭开关 | ✅ | `cta: disabled (config — CTA 已关闭)` + 文件未变 |
