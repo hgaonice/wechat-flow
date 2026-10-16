@@ -20,6 +20,8 @@ export interface EmailSkillConfig {
 
 export interface EmailConfig {
   enabled: boolean;
+  /** Path to a 0600 credentials note file appended to every email body (host-local, never in git). */
+  credentialsNotePath?: string;
   /** "publish" = only publish events; "all" = also weekly plan events. */
   on?: "publish" | "all";
   /** Override recipients; if empty the skill's default RECEIVER_EMAIL is used. */
@@ -34,6 +36,15 @@ export interface MailInput {
   body: string;
   /** Path to the article .md to attach (when attachArticle is enabled). */
   articlePath?: string;
+}
+
+function readCredentialsNote(p?: string): string {
+  if (!p) return "";
+  try {
+    return fs.readFileSync(p, "utf8").trim();
+  } catch {
+    return ""; // missing/unreadable note must never block the mail
+  }
 }
 
 function scriptPath(cfg: EmailConfig): string {
@@ -51,10 +62,14 @@ export async function sendMail(cfg: EmailConfig, input: MailInput): Promise<bool
 
   const recipients = cfg.to?.length ? cfg.to : [undefined];
   const attach = cfg.attachArticle !== false && input.articlePath && fs.existsSync(input.articlePath);
+  // Optional account/credentials block appended to the body (never committed;
+  // read from a 0600 file on the host, one "label: value" per line).
+  const note = readCredentialsNote(cfg.credentialsNotePath);
+  const body = note ? `${input.body}\n\n──────\n账号信息\n${note}` : input.body;
   let allOk = true;
 
   for (const to of recipients) {
-    const args: string[] = [script, "-b", input.body, "-s", input.subject];
+    const args: string[] = [script, "-b", body, "-s", input.subject];
     if (attach) args.push("-f", input.articlePath as string);
     if (to) args.push("-t", to);
 

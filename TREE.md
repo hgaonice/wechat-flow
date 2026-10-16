@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-14 17:54:57
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 15:06:31
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -12,6 +12,9 @@ wechat-flow/
   deploy/systemd
   docs
   docs/handoffs
+  docs/img
+  out
+  out/plans
   prompts
   src
   src/console
@@ -91,7 +94,7 @@ src/wechat.ts
 
 导出：（无，或为可执行入口）
 
-### `src/config.ts`  (342 行)
+### `src/config.ts`  (348 行)
 
 导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
 
@@ -115,7 +118,7 @@ src/wechat.ts
 
 导出：`FrameDecoder, createFrameDecoder`
 
-### `src/console/agent/manager.ts`  (820 行)
+### `src/console/agent/manager.ts`  (826 行)
 > Chat session manager (C4, I4-5 / design.md D1, D3, D4, D6, D8, D9, D13).
 
 导出：`ChatActor, ChatManagerDeps, SessionView, MessageView, DecisionView, ChatDetail, ChatManager, chatEventName`
@@ -305,10 +308,10 @@ src/wechat.ts
 
 导出：`AccountDiff, Ac3Report, verifyAc3, formatAc3`
 
-### `src/cover.ts`  (82 行)
+### `src/cover.ts`  (153 行)
 >  Generate a deterministic 900x500 cover via ImageMagick (`convert`).
 
-导出：`detectCjkFont, CoverInput, generateTemplateCover`
+导出：`generateFfmpegCover, detectCjkFont, CoverInput, generateTemplateCover`
 
 ### `src/date.ts`  (45 行)
 >  Date helpers (Asia/Shanghai by default).
@@ -319,7 +322,7 @@ src/wechat.ts
 
 导出：`initLog, log`
 
-### `src/mailer.ts`  (111 行)
+### `src/mailer.ts`  (126 行)
 > Email notifications are delegated to the pre-installed `email-sender` skill
 
 导出：`EmailSkillConfig, EmailConfig, MailInput, sendMail, checkEmail`
@@ -351,14 +354,14 @@ src/wechat.ts
 
 导出：`renderTemplate`
 
-### `src/publisher.ts`  (374 行)
+### `src/publisher.ts`  (405 行)
 
 导出：`PublishRunResult, parseFrontmatter, ArticleGenResult, buildArticlePrompt, runArticleGeneration, runPublish`
 
-### `src/session.ts`  (218 行)
+### `src/session.ts`  (461 行)
 > WeChat MP login-session helpers (browser/CDP method).
 
-导出：`EmailCfg, emailQrImage, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
+导出：`EmailCfg, LoginProbe, emailQrImage, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
 
 ### `src/state.ts`  (56 行)
 
@@ -380,4 +383,6 @@ src/wechat.ts
 ## tools/ 脚本
 
 - `tools/draft-probe.ts` — —
+- `tools/gen-grade9-plans.ts` — —
 - `tools/repomap.sh` — repomap.sh —— 生成/刷新 TREE.md（文件 + 符号索引，Aider repomap 的轻量等价物）
+- `tools/upload-plans-250.py` — —

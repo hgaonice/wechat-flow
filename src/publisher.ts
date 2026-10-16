@@ -5,7 +5,7 @@ import { runPi } from "./pi.ts";
 import { renderTemplate } from "./prompts.ts";
 import { publishArticle, publishArticleBrowser, verifyDraftPublished, verifyDraftBody, cleanupAppmsgTabs, setDraftCover } from "./wechat.ts";
 import { ensureLoggedIn } from "./session.ts";
-import { generateTemplateCover } from "./cover.ts";
+import { generateFfmpegCover, generateTemplateCover } from "./cover.ts";
 import { prepareArticleForPublish } from "./media.ts";
 import { findEntryForDate, proxyEnv, type PlanDay } from "./planner.ts";
 import { isPublished, recordPublished } from "./state.ts";
@@ -163,7 +163,11 @@ export async function runPublish(
   const { plan, day } = found;
 
   const existing = isPublished(cfg.paths.state, date);
-  if (existing && !opts.reuse && !opts.force) {
+  // Only a *successful* record counts as "already published". A failed attempt
+  // also writes a record (ok=false) so the retry must not be short-circuited —
+  // doing so reported `ok:true, skipped:"already published"` on a day that was
+  // never published, permanently blocking the scheduler's retry.
+  if (existing?.ok === true && !opts.reuse && !opts.force) {
     log.info(`already published ${date} (media_id=${existing.mediaId}); skip`);
     return { date, skipped: true, reason: "already published", ok: true, mediaId: existing.mediaId, title: existing.title };
   }
@@ -191,18 +195,37 @@ export async function runPublish(
   const publishFile = media.file;
   for (const w of media.warnings) log.warn(w);
 
-  // 2) Cover image.
+  // 2) Cover image. mode: ffmpeg → lavfi 封面（失败降级 ImageMagick）；template → ImageMagick。
   if (!(opts.reuse && fs.existsSync(coverPath))) {
-    await generateTemplateCover({
+    const coverInput = {
       outPath: coverPath,
       title,
       subtitle: `${cfg.accountName} · ${day.module}`,
       font: cfg.cover.font,
-    });
+    };
+    if (cfg.cover.mode === "ffmpeg") {
+      try {
+        await generateFfmpegCover(coverInput);
+      } catch (err) {
+        log.warn(`ffmpeg cover failed, falling back to template: ${(err as Error).message}`);
+        await generateTemplateCover(coverInput);
+      }
+    } else {
+      await generateTemplateCover(coverInput);
+    }
   }
 
   // 3a) Browser method: make sure the MP session is alive (self-heal by emailing a QR).
   if (!dryRun && cfg.publishMethod === "browser") {
+    // Drop leftover appmsg/editor tabs first. The skill reuses an existing
+    // mp.weixin.qq.com tab, and a stale editor tab from an earlier failed run is
+    // typically a dead "登录超时" page with no #title → "Editor did not load".
+    try {
+      const closed = await cleanupAppmsgTabs(cfg.browser, cfg.skillDir);
+      if (closed) log.info(`closed ${closed} stale editor tab(s) before publish`);
+    } catch {
+      /* tab hygiene must never block publishing */
+    }
     const lg = await ensureLoggedIn({
       browser: cfg.browser,
       skillDir: cfg.skillDir,
@@ -318,6 +341,14 @@ export async function runPublish(
   if (!pub.ok) {
     const msg = `publish failed: ${(pub.error ?? "").slice(0, 300)}`;
     log.error(msg);
+    // Leave no dead editor tab behind for the next retry to attach to.
+    if (!dryRun && cfg.publishMethod === "browser") {
+      try {
+        await cleanupAppmsgTabs(cfg.browser, cfg.skillDir);
+      } catch {
+        /* ignore */
+      }
+    }
     recordPublished(cfg.paths.state, {
       date, week: plan.week, topic: day.topic, title, file: articlePath,
       account: cfg.account, publishedAt: new Date().toISOString(), ok: false, error: msg,

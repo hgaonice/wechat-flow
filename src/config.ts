@@ -36,7 +36,7 @@ export interface AccountCfg {
   math?: { enabled?: boolean; height?: string; scale?: number; color?: string; python?: string };
   manim?: { enabled?: boolean; width?: number; fps?: number; maxMb?: number };
   /** Per-account cover overrides (template/agent + 是否自动上传到草稿). */
-  cover?: { mode?: "template" | "agent"; font?: string; uploadToDraft?: boolean };
+  cover?: { mode?: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
   /** Notification overrides. */
   subjectPrefix?: string;
   emailTo?: string[];
@@ -69,7 +69,7 @@ export interface AppConfig {
 
   model: { plan: ModelCfg; article: ModelCfg };
 
-  cover: { mode: "template" | "agent"; font?: string; uploadToDraft?: boolean };
+  cover: { mode: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
 
   /** LaTeX 公式（$...$ / $$...$$）在发布前转内联 SVG。 */
   math: {
@@ -258,11 +258,15 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
     model: { plan: pickModel("plan"), article: pickModel("article") },
 
     cover: {
-      mode: raw.cover?.mode ?? "template",
-      font: raw.cover?.font,
+      // mode: "template"=ImageMagick（默认）； "ffmpeg"=lavfi+drawtext（无 ImageMagick 的机器）；
+      // "agent"=由写作 agent 自行产出封面。账号级 cover.mode 可覆盖全局。
+      mode: (acct.cover?.mode ?? raw.cover?.mode) ?? "template",
+      font: acct.cover?.font ?? raw.cover?.font,
       // 浏览器方式发布后，用 CDP 把 imgs/<date>/cover.png 设成草稿封面（O-B）。
       // 默认关闭：需先在 250 上跑 `cover --probe` 定准选择器，再置 true。失败不影响发布。
-      uploadToDraft: (acct.cover ?? raw.cover)?.uploadToDraft === true,
+      // 按叶子回退：账号级 cover 只写了 mode 时，uploadToDraft 仍应继承全局值
+      // （否则给账号加 cover.mode 会静默关掉封面自动上传）。
+      uploadToDraft: (acct.cover?.uploadToDraft ?? raw.cover?.uploadToDraft) === true,
     },
 
     math: {
@@ -295,6 +299,8 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
             to: acct.emailTo ?? emailRaw.to ?? [],
             subjectPrefix: acct.subjectPrefix ?? emailRaw.subjectPrefix ?? "",
             attachArticle: emailRaw.attachArticle !== false,
+            // 主机本地凭据备注（0600，不进 git），发布后邮件自动附带账号信息块。
+            credentialsNotePath: emailRaw.credentialsNotePath,
             skill: {
               dir: emailRaw.skill?.dir ?? "/root/.claude/skills/email-sender",
               python: emailRaw.skill?.python ?? "python3",
