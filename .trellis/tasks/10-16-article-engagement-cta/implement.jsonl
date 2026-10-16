@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/10-16-article-engagement-cta/prd.md", "reason": "需求与验收标准（D1–D6 / AC1–AC7），实现前必读"}
+{"file": ".trellis/tasks/10-16-article-engagement-cta/design.md", "reason": "技术设计：唯一注入点、src/cta.ts 契约、检测阈值、配置降级链、回滚"}
+{"file": ".trellis/tasks/10-16-article-engagement-cta/implement.md", "reason": "执行清单 S1–S10 与逐步验证命令"}
+{"file": ".trellis/spec/engine/index.md", "reason": "引擎硬约束 + 开发前置清单 + 改动后必跑质量门"}
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "「AI 只做内容、其余确定性」铁律：CTA 文风归 prompts，检测/补齐归 src/，且不得阻断发布"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "按账号隔离路径 data/<alias>/、prompts 目录解析顺序，避免两账号串文"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "本项目实际验收命令（bun build / tsc / doctor / publish --dry-run / 真机 drafts）"}
+{"file": ".trellis/spec/console/api.md", "reason": "账号 overrides 更新 API 语义：新增顶层键 cta 需放行白名单，无 DB 迁移"}

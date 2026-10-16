@@ -37,6 +37,8 @@ export interface AccountCfg {
   manim?: { enabled?: boolean; width?: number; fps?: number; maxMb?: number };
   /** Per-account cover overrides (template/agent + 是否自动上传到草稿). */
   cover?: { mode?: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
+  /** Per-account article CTA (互动引导语) overrides. */
+  cta?: { enabled?: boolean; file?: string };
   /** Notification overrides. */
   subjectPrefix?: string;
   emailTo?: string[];
@@ -70,6 +72,9 @@ export interface AppConfig {
   model: { plan: ModelCfg; article: ModelCfg };
 
   cover: { mode: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
+
+  /** 正文末尾互动引导语（点赞/转发/收藏/评论）。默认开启；文案在 prompts/cta/<alias>.md。 */
+  cta: { enabled: boolean; file?: string };
 
   /** LaTeX 公式（$...$ / $$...$$）在发布前转内联 SVG。 */
   math: {
@@ -267,6 +272,12 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
       // 按叶子回退：账号级 cover 只写了 mode 时，uploadToDraft 仍应继承全局值
       // （否则给账号加 cover.mode 会静默关掉封面自动上传）。
       uploadToDraft: (acct.cover?.uploadToDraft ?? raw.cover?.uploadToDraft) === true,
+    },
+
+    cta: {
+      // 默认开启：与「每篇都要有引导语」的需求一致（design §2.3）。
+      enabled: (acct.cta ?? raw.cta)?.enabled !== false,
+      file: (acct.cta ?? raw.cta)?.file ?? undefined,
     },
 
     math: {

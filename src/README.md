@@ -34,7 +34,17 @@
 - **职责**：串起「查计划 → 生成文章 → 媒体预处理 → 封面 → 登录自愈 → 发布 → **草稿箱回查 + 正文校验 + 封面自动上传** → 状态 → 通知」。
 - **关键导出**：`runPublish(cfg,{date,dryRun,reuse,force})`、`runArticleGeneration(cfg,{date,feedback,reuse})`（C3 抽出的**纯生成**，不推送）、`buildArticlePrompt(cfg,day,date,articlePath,feedback?)`（空/缺 `feedback` 时字节不变）、`parseFrontmatter(md)`；返回 `PublishRunResult` / `ArticleGenResult`。
 - **输入→输出**：`plans/<周>.json` + `prompts/article.md` → `articles/<日期>-<slug>.md`、`imgs/<日期>/cover.png`、`state/published.json`。
-- **坑**：`reuse` 复用已有文章、`force` 忽略已发布记录（修复历史草稿用）；发布成功后**必须**过 `verifyDraftBody`，标题在但正文空要判失败；失败写 `ok:false` 并告警。
+- **坑**：`reuse` 复用已有文章、`force` 忽略已发布记录（修复历史草稿用）；发布成功后**必须**过 `verifyDraftBody`，标题在但正文空要判失败；失败写 `ok:false` 并告警；`runArticleGeneration` 末尾会**确定性补齐文末互动引导语**（见 `cta.ts`），日志 `cta: present|appended|disabled|skipped`。
+
+## cta.ts · 文末互动引导语（CTA）
+
+- **职责**：保证**每篇文章正文末尾都有互动引导语**（点赞/在看 + 转发 + 收藏 + 评论/留言）。文风由 `prompts/article.md` + `prompts/cta/<alias>.md` 交给 AI；「必须有」由本模块用可断言的方式兜底（铁律见 `ai-determinism.md`）。
+- **关键导出**：`applyCtaToArticle(cfg,articlePath)`（薄 I/O：读→判→需要时写回；**永不抛错**）、`hasCtaHint(body)`、`ensureCtaBlock(markdown,block)`、`resolveCtaBlock(cfg)`、`splitFrontmatter(markdown)`、`countActionWords(text)`。
+- **唯一注入点**：`publisher.runArticleGeneration()`（生成 / `--reuse` / 控制台 `generateArticle` 三条路径都经过它）。
+- **判定规则**：正文**尾部 500 字符**内命中 ≥2 个**不同**动作词（核心六词：`点赞/在看/转发/收藏/评论/留言`）→ 视为 AI 已写引导语，原样保留（**幂等**）；否则追加 `<prompts>/cta/<alias>.md`（缺失则 `default.md` → 内置常量）。追加块自身需含 ≥3 个动作词，否则降级。
+- **为什么检测词只有六词**：`分享/关注` 在普通结尾也常见，若入检测词表会把非引导结尾误判为“已有引导语”→ **该补未补**；由 `tools/cta-selftest.ts` 断言守护（复核 F1）。
+- **降级链**：`cta.enabled=false` → `cta.file` → `<prompts>/cta/<alias>.md` → `default.md` → 内置常量；配置异常只 warn，**绝不阻断发布**。
+- **坑**：阈值取 2 是**有意放宽**（避免与 AI 写的引导语重复）；`cta.file` 相对路径按 `APP_DIR` 解析（与其他 config 路径一致）；`cta` 文案属内容，禁止把文案硬编码进 `src/` 逻辑；控制台改账号 `cta` 键依赖 `OBJECT_ENTRY_KEYS` 白名单（`server.ts`）。自测：`bun tools/cta-selftest.ts`（13 项断言）。
 
 ## media.ts · 确定性后处理
 

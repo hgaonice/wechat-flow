@@ -53,6 +53,7 @@
 | **S8** | 文档：README + 操作手册 | ✅ 完成 | — | `README.md`、`操作手册.md` |
 | **S9** | **上下文治理**：`.trellis` + `AGENT.md` + 分层文档 + repomap | ✅ 完成 | G4 | 已归档 `archive/2026-10/10-12-context-governance/` |
 | **S10** | 封面自动上传到草稿（O-B：CDP 驱动封面弹窗） | ✅ 完成 | G2 | `archive/2026-10/10-12-cover-auto-upload/` |
+| **S18** | **内容互动引导语（CTA）**：文末点赞/转发/收藏/评论引导（AI 写文风 + 代码断言必有） | 🟡 本地全绿 ／ 真机待 250 | G2 | `src/cta.ts`、`prompts/cta/{second,gaoh}.md`、`tools/cta-selftest.ts`、`.trellis/tasks/10-16-article-engagement-cta/` |
 
 图例：⚪ 未开始 ／ 🟡 进行中 ／ ✅ 完成 ／ 🔴 阻塞
 
@@ -110,6 +111,7 @@
 | `archive/2026-10/10-13-console-agent-session/` | S15 | C4 Agent 会话与人在环 | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-ops-tunnel/` | S16 | C5 运维与公网（邮箱/隧道地址下发/凭据/管理员视图） | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-deploy-hardening/` | S17 | C6 部署与加固（systemd/限流/备份/回归 + 文档/spec/AGENT） | ✅ 已归档（2026-10-14） |
+| `10-16-article-engagement-cta/` | S18 | 文末互动引导语 CTA（prompts/cta + 确定性补齐） | 🟡 本地全绿，真机待 250 |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
@@ -137,7 +139,24 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：**控制台 250 真机验收（`10-15-console-acceptance-250`）——部署+AC 自动化项全部通过；G6/G7 待用户人工确认。**
+**当前任务**：① **文末互动引导语 CTA（`10-16-article-engagement-cta`，本会话）——本地全绿，真机 S8 待 250**；② **控制台 250 真机验收（`10-15-console-acceptance-250`）——部署+AC 自动化项全部通过；G6/G7 待用户人工确认。**
+
+### 当前（引擎）· 文末互动引导语 CTA（2026-10-16）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| S1 | 文案资产 `prompts/cta/{second,gaoh}.md` + `article.md` 第 5 条 + `editor.md` 人设 | ✅ | `grep -c -e 点赞 -e 在看 -e 转发 -e 收藏 -e 评论 prompts/cta/second.md` → **3**；`gaoh.md` → **3**；`prompts/article.md:11` |
+| S2–S4 | `src/cta.ts` + `config.ts`（`cta` 默认开） + `publisher.ts` 唯一注入点 | ✅ | `BUILD_OK` / `TSC_OK`；`git diff --stat` 30 insertions |
+| S5 | 控制台 `OBJECT_ENTRY_KEYS` 加 `cta` + `config.example.json` 文档 | ✅ | `server.ts:270`、`config.example.json` 顶层+账号级 |
+| S6 | 确定性自测 `tools/cta-selftest.ts` | ✅ | `bun tools/cta-selftest.ts` → **13 PASS / ALL PASS**（含幂等字节一致、中段「收藏」不误判、frontmatter 保留、`分享/关注` 不入检测词表） |
+| AC1 | 真 CLI：两账号 `publish --reuse --dry-run` 注入 CTA | ✅ | second → `cta: appended (from prompts/cta/second.md (chars=156))` → 二跑 `cta: present (tail hits=6)`；gaoh → `cta: appended (from prompts/cta/gaoh.md (chars=161))`；文件尾目视「关注「巧思初数」」/「关注「gaoh的技术分享」」 |
+| AC6 | 控制台路径（`generateArticle` → 版本快照） | ✅ | 内存 DB 探针：`snapshot …v1.md` 尾部含 CTA；AI 已写引导语时 `tail hits=2` → **present 不重复** |
+| AC7 | 关闭开关 | ✅ | `cta.enabled=false` → `cta: disabled (config — CTA 已关闭)`，正文**逐字节未变** |
+| 250 只读探测 | 账号名/默认开 | ✅ | `second='巧思初数'`、`gaoh='gaoh的技术分享'`、`top-level cta: None`（→ 默认开生效）；`prompts/cta` 尚未同步（S8 要带上） |
+| AC3 | `bun build` / `bunx tsc --noEmit` | ✅ | `BUILD_OK` / `TSC_OK` |
+| AC4/AC5 | 本机无法全绿的 dry-run / 真机发布 | 🟡 BLOCKED(250) | 本机缺 `convert`、`baoyu-post-to-wechat` skill（既有环境差异）；AC5 需 250 `publish --force --reuse` → `drafts` 正文校验 |
+
+**下一步（S8）**：本地全绿后续，`rsync` 同步 `src/` + **`prompts/`（含 `prompts/cta/`）** → 250 → `bun build` → `publish -a {second,gaoh} --date <日期> --force --reuse` → `drafts --date` 显示 `✅ 正文校验` + 草稿末尾目视引导语。**需用户放行 G2。**
 
 ### 当前 · 250 真机验收（2026-10-15）
 
@@ -380,6 +399,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-16 | **文末互动引导语 CTA（`10-16-article-engagement-cta`，S18）——本地全绿，真机待 250**：新增确定性模块 `src/cta.ts`（`applyCtaToArticle`/`hasCtaHint`/`ensureCtaBlock`/`resolveCtaBlock`，判定=正文**尾部 500 字命中 ≥2 个动作词**即视为已有；否则追加 `prompts/cta/<alias>.md`，缺失降级 `default.md` → 内置常量；**永不抛错**）+ 文案资产 `prompts/cta/{second,gaoh}.md` + `prompts/article.md` 第 5 条「结尾互动引导（必须）」+ `editor.md` 人设一条；唯一注入点 `publisher.runArticleGeneration()`（生成 / `--reuse` / 控制台 `generateArticle` 三条路径都经过），控制台 `OBJECT_ENTRY_KEYS` 放行 `cta`（无 DB 迁移），配置 `cta.enabled` 默认开（热回滚开关）。验证：`BUILD_OK`/`TSC_OK`；`bun tools/cta-selftest.ts` **13 PASS**（幂等字节一致 / 中段「收藏」不误判 / frontmatter 保留 / builtin 兜底 / disabled 不写 / `分享·关注` 不入检测词表）；真 CLI 两账号 `--reuse --dry-run` → second `cta: appended (from prompts/cta/second.md (chars=156))` → 二跑 `cta: present (tail hits=6)`；gaoh `cta: appended (from prompts/cta/gaoh.md (chars=161))`；控制台快照含 CTA 且 AI 已写时不重复；`cta.enabled=false` → `cta: disabled` 且文件逐字节未变。**独立复核（trellis-check）PASS-with-issues**，已修：F1 检测词表剔除非引导词 `分享/关注`（避免普通结尾误判→该补未补，破坏「必有」；已加回归断言）与 F5 `cta.file` 相对路径改按 `APP_DIR` 解析；F3 已用 250 只读探测证实 `displayName` 正常（渲染为「巧思初数」）。固化到 `spec/engine/ai-determinism.md`（第二例“AI 写文风、代码断言必有”）+ `src/README.md`。**AC5 真机发布待 250（G2）。** | pi |
 | 2026-10-16 | **九上数学 211 天计划入排程 + 登录态/幂等三处真 bug 修复（`10-15-grade9-math-plans`）**：① 新增 `tools/gen-grade9-plans.ts`（37 讲/174 板块 → 每板块 1 篇 + 每讲 1 篇汇总 = 211 天，2026-10-16~2027-05-14，含真题要点/易错/manimHint，两账号角度差异化）与 `tools/upload-plans-250.py`（登录控制台 API 逐周 PUT，W42 整周覆盖）；250 上两账号各 211 天落库并物化，`drafts` 验证 10-16 双账号均已进草稿箱（含 manim gif + ffmpeg 封面 + 双邮箱邮件）。② 新增 ffmpeg 封面 `generateFfmpegCover()`（含 drawtext 能力探测：250 的 PATH 首选静态 ffmpeg 无 drawtext，自动降级 `/usr/bin/ffmpeg`）+ `cover.mode="ffmpeg"`；`cover.uploadToDraft` 改按叶子回退（账号级 cover 只写 mode 时不再静默关掉封面上传）。③ `mailer.ts` 支持主机本地 600 权限凭据文件注入邮件正文（邮件附控制台账号密码）。④ 250 装 Manim v0.22.0 + `/opt/manim-venv/bin/manim` 软链。**修 3 个真 bug**：`runPublish` 幂等只认 `ok===true`（原来把失败记录当已发布 → 报 `ok:true, skipped` 使调度器**永不重试**）；登录态判定从 URL 改为「禁缓存重载 + DOM + `window.__wfcProbe` 标记确认上下文更换」（缓存页会继续渲染已登录菜单导致假 `session valid`）；二维码抓取（先跳登录页、支持顶层 img 与跨域 `qrconnect` iframe 两形态、裁切失败不覆盖好图、按 `emailTo` 逐邮箱发送、等待期不主动刷新以免作废旧码）。契约沉淀进 `.trellis/spec/engine/verification.md`。**运维教训：引擎改动后必须 `systemctl restart wechat-console`（worker 常驻，改磁盘不生效）**。⑤ **会话保活**：实测 MP 登录票据 Cookie（`slave_sid` 等）为**签发 +96h 硬过期**，但**真实鉴权请求会顺延**（`drafts` 调用把到期从 +95.9h → +96.0h；单纯访问首页不会）；新增 `keepalive` 命令 + `deploy/systemd/wechat-keepalive.{service,timer}`（每 12h `keepalive --all`），失败 exit 1 并把新二维码发 `emailTo` → **服务器不停 4 天以上就不再需要扫码**（250 已 enabled 并实测两账号保活成功） | pi |
 | 2026-10-15 | **端到端真 pi 闭环完成（AC-5/7/8 全部实测）**：① 配置账号+管理员收件邮箱，强制重发隧道通知 `sent:true recipients:1`（AC-8/G7 邮件半边达成）；② 控制台触发真实 generate（claude-opus，5m44s）→ v1 落库（快照 6789B）→ `drafts --date` 真相源回查 **正文校验 ✅**（body=2535 chars, svg=1, img=1）；③ regenerate + 反馈 → v2(parent=1) 落库（7889B）+ workbench 版本链可见（AC-7）；④ publish 因当天已发布正确 skip（幂等不伪装）。G6/G7 技术前提全部达成，待用户收件箱确认 + 门放行 | pi |
 | 2026-10-15 | **Playwright 浏览器验收 13/13 PASS**：登录/错误密码拒/账号表/工作台/会话/admin 隧道+凭据/设置/无 JS 错误全过。**发现并修复 2 个新问题**：① 8 处内联 `style` 被 CSP 拦截（改 `.row.mt` 类，250 复验样式生效+违规归零）；② **deploy.sh EXCLUDES 缺 `console/`+`backups/`，rsync --delete 删掉了 250 的 DB 与备份（严重）**——补齐排除项并在 250 重建（import+admin）+ 重新备份。新公网地址 `https://diet-compiler-phentermine-estimate.trycloudflare.com`（重启后变更） | pi |

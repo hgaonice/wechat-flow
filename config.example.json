@@ -26,6 +26,9 @@
       "dataDir": "./data/gaoh",
       "contentDir": "./content",
       "promptsDir": "./prompts",
+      "cta": {
+        "enabled": true
+      },
       "subjectPrefix": "[gaoh的技术分享] ",
       "emailTo": []
     }
@@ -84,6 +87,9 @@
     "mode": "template",
     "font": "",
     "uploadToDraft": false
+  },
+  "cta": {
+    "enabled": true
   },
   "notify": {
     "enabled": false,

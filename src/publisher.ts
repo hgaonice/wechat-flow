@@ -7,6 +7,7 @@ import { publishArticle, publishArticleBrowser, verifyDraftPublished, verifyDraf
 import { ensureLoggedIn } from "./session.ts";
 import { generateFfmpegCover, generateTemplateCover } from "./cover.ts";
 import { prepareArticleForPublish } from "./media.ts";
+import { applyCtaToArticle } from "./cta.ts";
 import { findEntryForDate, proxyEnv, type PlanDay } from "./planner.ts";
 import { isPublished, recordPublished } from "./state.ts";
 import { todayInTz } from "./date.ts";
@@ -141,6 +142,11 @@ export async function runArticleGeneration(
     await notify(cfg, { kind: "publish", title: `❌ ${date} 文章文件缺失`, body: articlePath });
     return { ok: false, date, articlePath, error: msg };
   }
+
+  // 确定性补齐文章末尾的互动引导语（唯一注入点；生成 / --reuse / 控制台三条路径都经过这里）。
+  // 永不抛错：异常时降级为 skipped，文章主体照常发布（R6）。
+  const cta = applyCtaToArticle(cfg, articlePath);
+  log.info(`cta: ${cta.action} (${cta.detail})`);
 
   const fm = parseFrontmatter(fs.readFileSync(articlePath, "utf8"));
   const title = fm.title || day.titleSuggestion || day.topic;

@@ -267,7 +267,7 @@ function cdpPortConflict(db: Database, entry: JsonObject, exceptId?: number): vo
 }
 
 const STRING_ENTRY_KEYS = ["displayName", "author", "theme", "color", "dataDir", "contentDir", "promptsDir", "subjectPrefix"];
-const OBJECT_ENTRY_KEYS = ["math", "manim", "cover", "model"];
+const OBJECT_ENTRY_KEYS = ["math", "manim", "cover", "model", "cta"];
 
 /** Reject malformed account entries so hot mirror columns + UNIQUE(cdp_port) stay trustworthy. */
 function assertEntryTypes(entry: JsonObject): void {

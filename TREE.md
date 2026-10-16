@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 15:13:18
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 16:17:22
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -16,6 +16,7 @@ wechat-flow/
   out
   out/plans
   prompts
+  prompts/cta
   src
   src/console
   tools
@@ -67,6 +68,7 @@ src/console/tunnel/cloudflared.ts
 src/console/types.ts
 src/console/verify-ac3.ts
 src/cover.ts
+src/cta.ts
 src/date.ts
 src/log.ts
 src/mailer.ts
@@ -94,7 +96,7 @@ src/wechat.ts
 
 导出：（无，或为可执行入口）
 
-### `src/config.ts`  (348 行)
+### `src/config.ts`  (359 行)
 
 导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
 
@@ -313,6 +315,11 @@ src/wechat.ts
 
 导出：`generateFfmpegCover, detectCjkFont, CoverInput, generateTemplateCover`
 
+### `src/cta.ts`  (167 行)
+> 文章末尾互动引导语（CTA）——确定性后处理。
+
+导出：`ACTION_WORDS, TAIL_CHARS, MIN_ACTION_HITS, MIN_BLOCK_ACTIONS, CtaApplyResult, countActionWords, splitFrontmatter, hasCtaHint, ensureCtaBlock, resolveCtaBlock, applyCtaToArticle`
+
 ### `src/date.ts`  (45 行)
 >  Date helpers (Asia/Shanghai by default).
 
@@ -354,7 +361,7 @@ src/wechat.ts
 
 导出：`renderTemplate`
 
-### `src/publisher.ts`  (405 行)
+### `src/publisher.ts`  (411 行)
 
 导出：`PublishRunResult, parseFrontmatter, ArticleGenResult, buildArticlePrompt, runArticleGeneration, runPublish`
 
@@ -382,6 +389,7 @@ src/wechat.ts
 
 ## tools/ 脚本
 
+- `tools/cta-selftest.ts` — —
 - `tools/draft-probe.ts` — —
 - `tools/gen-grade9-plans.ts` — —
 - `tools/repomap.sh` — repomap.sh —— 生成/刷新 TREE.md（文件 + 符号索引，Aider repomap 的轻量等价物）
