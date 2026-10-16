@@ -60,6 +60,40 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 
 ---
 
+## 登录态：URL 不是真相源（2026-10-16 事故）
+
+**症状**：发布连续失败 `Error: Editor did not load (#title not found)`；同时 `runPublish` 还把前一天
+的失败记录当成"已发布"，回报 `ok:true, skipped:already published`，使调度器**永不重试**。
+
+**根因（三层，缺一不可）**：
+
+1. MP 会话真的过期了，但 URL 仍带 `token=...`，且被复用的 tab 会用**缓存响应**继续渲染已登录首页
+   （`.new-creation__menu` 存在）→ 假 "session valid" → 跳过二维码自愈。
+2. 过期后跳到 **不带 token 的** `cgi-bin/home?t=home/index` 会渲染 "登录超时，请重新登录" 页
+   （`page_timeout`）——**即使会话是活的**。所以它既不能当"已登录"证据，也不能当探测跳转目标。
+3. `published.json` 里的失败记录（`ok:false`）也被当成了已发布。
+
+**规则**：
+
+- 登录判据 = **禁缓存重载后的 DOM**：`.new-creation__menu` 存在 且 非 `page_timeout`/"登录超时"。
+- 重载前先 `Network.setCacheDisabled{true}`；并注入 `window.__wfcProbe` 标记，**等标记消失**
+  （证明 JS 上下文真的换过）才读 DOM，否则读到的是旧 DOM（假阳性）。
+- 探测目标只允许：当前**带 token** 的 URL（reload）或根 `https://mp.weixin.qq.com/`（会话活则重定向到首页，
+  死了就是登录页+二维码）。**绝不**导航到不带 token 的 home URL。
+- 二维码只存在于登录页，必须**先跳登录页再截图**；且二维码有两种形态：
+  顶层 `img.login__type__container__scan__qrcode`，或跨域 `open.weixin.qq.com/...qrconnect` iframe
+  （后者读不到 DOM，只能用其 `getBoundingClientRect()` 当裁剪框）。
+- 等待扫码期间**不要主动刷新页面**（会作废用户正在扫的码）；只在微信自己轮换二维码时才重发邮件。
+- 裁切失败时**不得覆盖**已有的有效二维码文件（写到 `<path>.full.png` 兜底）。
+- 幂等／跳过只认 `ok === true`：`if (existing?.ok === true && !reuse && !force)`。
+- **引擎代码改动后必须 `systemctl restart wechat-console`**：worker 进程是常驻的，
+  只改磁盘文件不会生效（本次 job 11 的假成功就是旧进程内存里的旧代码）。
+
+真机自检：`bun src/cli.ts drafts -a <acct>`（需真实会话）是唯一能证明登录态的命令；
+`login -a <acct> --qr --wait 0` 可只生成+邮件二维码用于人工扫码。
+
+---
+
 ## 检查清单
 
 - [ ] 改动没有把“上游成功提示”当成“发布成功”。
@@ -67,3 +101,6 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 - [ ] 失败路径会写状态 + 报警，而不是静默跳过。
 - [ ] 封面成功以封面预览 `background-image` 变化为准；封面失败仍不阻断正文（降级已验证）。
 - [ ] 结论用真实命令输出表述（贴 `body=NNNN chars` / `cover set ✓ (after=https://mmbiz.qpic.cn/…)` 这类数字），不用“应该没问题”。
+- [ ] 登录态用 `drafts -a <acct>` 或“禁缓存重载 + DOM”判定，**没有**用 URL 当证据。
+- [ ] 幂等跳过条件是 `ok === true`，失败记录不会阻断重试。
+- [ ] 引擎改动后已 `systemctl restart wechat-console`（worker 常驻）。

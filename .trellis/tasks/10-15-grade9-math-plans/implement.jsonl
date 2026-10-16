@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 层封面/邮件改动前必读"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "登录态/幂等/封面契约（本轮踩坑沉淀）"}
