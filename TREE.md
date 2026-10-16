@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 16:17:22
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 23:43:46
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -361,14 +361,14 @@ src/wechat.ts
 
 导出：`renderTemplate`
 
-### `src/publisher.ts`  (411 行)
+### `src/publisher.ts`  (417 行)
 
 导出：`PublishRunResult, parseFrontmatter, ArticleGenResult, buildArticlePrompt, runArticleGeneration, runPublish`
 
-### `src/session.ts`  (461 行)
+### `src/session.ts`  (504 行)
 > WeChat MP login-session helpers (browser/CDP method).
 
-导出：`EmailCfg, LoginProbe, emailQrImage, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
+导出：`EmailCfg, LoginProbe, emailQrImage, focusMpTab, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
 
 ### `src/state.ts`  (56 行)
 

@@ -110,6 +110,30 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 
 ---
 
+## 弹窗/新标签页：tab 必须可见（2026-10-17 事故）
+
+**症状**：`publish failed: Error: New tab not found: mp.weixin.qq.com`。
+卡在 skill 点击「文章」菜单后 `waitForNewTab` 30s 超时。
+
+**根因**：同一个 Xvfb 显示上跑了两个 Chrome（9222/9223），被遮挡的那个窗口里
+`document.visibilityState === "hidden"`；Chrome **只允许可见 tab 弹窗**，因此点击「文章」
+根本不会开新标签页。实测对照：9222 `hidden`（失败）vs 9223 `visible`（成功）；
+且单独重跑 9222 仍失败 → 与并发无关，而是该 tab 的可见性。
+
+**规则**：
+
+- 浏览器发布前必须 `Page.bringToFront` 把该账号的 MP tab 置前；`src/session.ts#focusMpTab`
+  封装了它（返回置前后的 `visibilityState`，非 visible 会 warn）。`publisher.ts` 在
+  `ensureLoggedIn` 通过后、调用 skill 前调用它。
+- 验证方式：`document.visibilityState` 必须为 `visible`（日志行 `MP tab visibility: visible`）。
+- **两个账号的浏览器发布不能并发**：共用一个 X 显示，最后一个置前的会把另一个变 hidden。
+  因此 250 上 `CONSOLE_MAX_CONCURRENCY=1`（`/etc/default/wechat-console`）。
+- 区分两种“开不出编辑器”的错误：
+  - `Editor did not load (#title not found)` → 登录态过期 / 附到了死 tab（见上一节）。
+  - `New tab not found` → tab 不可见（弹窗被拦），与登录态无关。
+
+---
+
 ## 检查清单
 
 - [ ] 改动没有把“上游成功提示”当成“发布成功”。
@@ -121,3 +145,4 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 - [ ] 幂等跳过条件是 `ok === true`，失败记录不会阻断重试。
 - [ ] 引擎改动后已 `systemctl restart wechat-console`（worker 常驻）。
 - [ ] 浏览器发布方式下 `wechat-keepalive.timer` 已 enabled（否则 4 天后必过期）。
+- [ ] `CONSOLE_MAX_CONCURRENCY=1`（两个 Chrome 共用一个 X 显示，不能并发发布）。

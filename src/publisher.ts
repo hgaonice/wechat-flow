@@ -4,7 +4,7 @@ import type { AppConfig } from "./config.ts";
 import { runPi } from "./pi.ts";
 import { renderTemplate } from "./prompts.ts";
 import { publishArticle, publishArticleBrowser, verifyDraftPublished, verifyDraftBody, cleanupAppmsgTabs, setDraftCover } from "./wechat.ts";
-import { ensureLoggedIn } from "./session.ts";
+import { ensureLoggedIn, focusMpTab } from "./session.ts";
 import { generateFfmpegCover, generateTemplateCover } from "./cover.ts";
 import { prepareArticleForPublish } from "./media.ts";
 import { applyCtaToArticle } from "./cta.ts";
@@ -243,6 +243,12 @@ export async function runPublish(
     });
     if (lg.ok) {
       log.info(`wechat session: ${lg.detail}`);
+      // The skill opens the editor with a popup from the 「文章」 menu, which
+      // Chrome only allows for a VISIBLE tab. Two Chrome windows share one Xvfb
+      // display, so this tab can be occluded (visibilityState=hidden) and the
+      // click then dies with "New tab not found: mp.weixin.qq.com".
+      const vis = await focusMpTab(cfg.browser, cfg.skillDir);
+      if (vis) log.info(`MP tab visibility: ${vis}`);
     } else {
       const msg = `wechat login unavailable: ${lg.detail}`;
       log.error(msg);

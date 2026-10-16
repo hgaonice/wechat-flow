@@ -362,6 +362,49 @@ async function waitForScan(opts: {
   return { ok: false, detail: `login timeout after ${opts.waitSec}s (QR not scanned)` };
 }
 
+/**
+ * Bring the account's MP tab to the foreground.
+ *
+ * Chrome reports an occluded/backgrounded tab as
+ * `document.visibilityState === "hidden"`, and WeChat's 「文章」 menu cannot open
+ * the editor from there — Chrome blocks the popup, so the skill dies with
+ * `New tab not found: mp.weixin.qq.com` (measured 2026-10-17: port 9222 was
+ * `hidden` while 9223 was `visible`, and only 9222 failed to publish).
+ *
+ * Returns the resulting visibilityState, or null when the tab could not be reached.
+ */
+export async function focusMpTab(browser: BrowserConfig, skillDir: string): Promise<string | null> {
+  let cdp: Cdp;
+  try {
+    cdp = await connect(browser, skillDir);
+  } catch {
+    return null;
+  }
+  try {
+    const sess = await openWechatTab(cdp, false);
+    if (!sess) return null;
+    try {
+      await cdp.send("Page.enable", {}, sess);
+      await cdp.send("Page.bringToFront", {}, sess);
+    } catch {
+      return null;
+    }
+    await sleep(1200);
+    const state = await evalValue(cdp, sess, "document.visibilityState");
+    const value = state === undefined || state === null ? null : String(state);
+    if (value !== "visible") log.warn(`MP tab still not visible (visibilityState=${value}); popup may be blocked`);
+    return value;
+  } catch {
+    return null;
+  } finally {
+    try {
+      cdp.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export interface EnsureLoginOptions {
   browser: BrowserConfig;
   skillDir: string;
