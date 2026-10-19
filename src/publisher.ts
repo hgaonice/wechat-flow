@@ -6,6 +6,7 @@ import { renderTemplate } from "./prompts.ts";
 import { publishArticle, publishArticleBrowser, verifyDraftPublished, verifyDraftBody, cleanupAppmsgTabs, setDraftCover } from "./wechat.ts";
 import { ensureLoggedIn, focusMpTab } from "./session.ts";
 import { generateFfmpegCover, generateTemplateCover } from "./cover.ts";
+import { generateAiCover } from "./cover-ai.ts";
 import { prepareArticleForPublish } from "./media.ts";
 import { applyCtaToArticle } from "./cta.ts";
 import { findEntryForDate, proxyEnv, type PlanDay } from "./planner.ts";
@@ -228,23 +229,61 @@ export async function runPublish(
   const publishFile = media.file;
   for (const w of media.warnings) log.warn(w);
 
-  // 2) Cover image. mode: ffmpeg → lavfi 封面（失败降级 ImageMagick）；template → ImageMagick。
+  // 2) Cover image.
+  //    mode "ai"      → AI brief + image model, deterministic 900x383 crop.
+  //    mode "ffmpeg"  → lavfi gradient (also the AI fallback).
+  //    mode "template"→ ImageMagick (final fallback).
+  //    Every branch is non-fatal except the last one, and even that is caught
+  //    by the caller: a cover problem must never block the article.
+  let coverNote: string | undefined;
   if (!(opts.reuse && fs.existsSync(coverPath))) {
     const coverInput = {
       outPath: coverPath,
       title,
       subtitle: `${cfg.accountName} · ${day.module}`,
       font: cfg.cover.font,
+      size: cfg.cover.size,
     };
-    if (cfg.cover.mode === "ffmpeg") {
+    let done = false;
+    if (cfg.cover.mode === "ai") {
+      const ai = await generateAiCover({
+        outPath: coverPath,
+        rawPath: path.join(cfg.paths.imgs, date, "cover-raw.png"),
+        briefPath: path.join(cfg.paths.imgs, date, "cover-brief.json"),
+        title,
+        module: day.module,
+        body: md,
+        promptFile: path.join(cfg.paths.prompts, "cover.md"),
+        settings: cfg.cover.ai,
+        size: cfg.cover.size,
+        font: cfg.cover.font,
+        summaryModel: cfg.cover.ai.summaryModel || cfg.model.article.model,
+        summaryFallbacks: cfg.cover.ai.summaryModel ? [] : cfg.model.article.fallbacks,
+        piBin: cfg.piBin,
+        cwd: path.dirname(cfg.paths.data),
+      });
+      if (ai.ok) {
+        done = true;
+        log.info(`cover: AI 生成（${ai.model}，${ai.brief?.subject ?? ""}）`);
+      } else {
+        coverNote = `AI 封面失败，已回落渐变：${ai.reason}`;
+        log.warn(`cover-ai failed, falling back to ffmpeg: ${ai.reason}`);
+      }
+    }
+    if (!done) {
       try {
         await generateFfmpegCover(coverInput);
       } catch (err) {
         log.warn(`ffmpeg cover failed, falling back to template: ${(err as Error).message}`);
         await generateTemplateCover(coverInput);
       }
-    } else {
-      await generateTemplateCover(coverInput);
+    }
+  }
+  if (coverNote) {
+    try {
+      await notify(cfg, { kind: "publish", title: `⚠️ ${date} 封面降级`, body: coverNote });
+    } catch {
+      /* notification is best-effort */
     }
   }
 

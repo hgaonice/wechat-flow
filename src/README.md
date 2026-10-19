@@ -59,11 +59,25 @@
 - **关键导出**：`renderFormulasInMarkdown(md,opts)`、`hasFormula(md)`、`mathEnabled(cfg)`。
 - **坑**：为什么必须自己转 —— 上游 `baoyu-md` 只在 `window` 存在时才启用 MathJax；为什么用**内联 SVG** —— 实测微信编辑器保留内联 `<svg>`。语法/缓存/排障见 `操作手册.md` §7。
 
-## cover.ts · 模板封面
+## cover.ts · 确定性封面（尺寸/裁切/兜底）
 
-- **职责**：用 ImageMagick `convert` 生成 900×500 确定性封面。
-- **关键导出**：`generateTemplateCover(input)`、`detectCjkFont(configured?)`。
-- **坑**：中文字体缺失会出方框，`detectCjkFont` 负责探测；浏览器发布默认**不自动上传封面**，可开 `cover.uploadToDraft` 用 O-B 流程上传（失败降级为后台手选，不阻断发布）。
+- **职责**：三件事全部确定性 —— ① 尺寸 `cover.size`（默认 `900x383`，公众号 2.35:1 头条大图）；② 把任意尺寸的图**裁到恰好目标尺寸**（`fitImageTo`，ffmpeg `scale/crop`）；③ 无 AI 时的兜底渲染（`generateFfmpegCover` 渐变+文字 / `generateTemplateCover` ImageMagick）。
+- **关键导出**：`generateFfmpegCover(input)`、`generateTemplateCover(input)`、`fitImageTo(src,out,size)`、`parseSize(size?)`、`imageSize(file)`、`averageColor(file)`/`luminance(c)`、`detectCjkFont(configured?)`。
+- **坑**：
+  - `imageSize()` 是**纯二进制头解析**（PNG/GIF/WebP/JPEG）。**不要**改回 `ffprobe`：250 上 `/usr/local/bin/ffprobe` 是 `imageio_ffmpeg` 静态包的符号链接，不认 `-select_streams`；宿主也常常没有 ImageMagick `convert`，所以 template 模式可能是死路（ffmpeg 才是保底）。
+  - 中文字体缺失会出方框，`detectCjkFont` 负责探测；浏览器发布默认**不自动上传封面**，可开 `cover.uploadToDraft` 用 O-B 流程上传（失败降级为后台手选，不阻断发布）。
+  - **请求尺寸 ≠ 结果尺寸**：图像模型会吸附到自己的支持尺寸（请求 `900x383` 实测回 `896x368`），所以任何外部来源的图都必须过一遍 `fitImageTo`。
+
+## cover-ai.ts · AI 封面（简报 + 出图）
+
+- **职责**：AI 只决定「画什么/什么颜色」—— 文本模型读标题+正文产出 `cover-brief.json`（`subject/motif/palette/mood/avoid`），再按简报调图像网关出图；尺寸/裁切/落盘/降级全在代码里。
+- **关键导出**：`generateAiCover(input)`（**永不抛异常**，只回 `{ok,reason}`）、`summarizeCoverBrief(input)`、`parseCoverBrief(text,palette)`、`fallbackBrief(title,palette)`、`buildImagePrompt(brief,style)`、`resolveImageGateway({gateway,apiKey})`、`normalizeImageModelId(id)`、`listImageModels(gw)`、`defaultAiSettings()`。
+- **坑**：
+  - 网关（`meta-gateway`）只认**裸 id** `<group>:<model>`：`workbuddy/cn:hunyuan-image-alpha-edit` → 404，必须过 `normalizeImageModelId()`。
+  - `deepseek-v4.1-flash` **不出图**（503 `No available channel`）；能出图的只有 `cn:hunyuan-image-alpha-edit`（15–21s）和 `global:gpt-image-2.5-sunburst`（~35s）。
+  - **模型会画字符**：加再多“禁止文字”也只是降概率，真正的解法是**让简报本身不需要文字**（`prompts/cover.md` 要求 `subject` 能用几何表达，区间/范围用虚线/色块）。
+  - **深色底会被忽略**：`palette[0]` 必须是深色，prompt 明写“整幅画布填充深色、禁止白底”；`averageColor()+luminance()` 只打 WARN，**不自动改图**（自动调色会破坏“AI 决定配色”这个前提）。
+  - 凭据解析顺序：`cover.ai.gateway/apiKey` → `COVER_IMAGE_BASE_URL`/`COVER_IMAGE_API_KEY` → `~/.pi/agent/models.json` 的 `providers.meta-gateway`（支持 `$VAR` 间接引用）。
 
 ## wechat.ts · skill 调用 + 草稿箱真相
 

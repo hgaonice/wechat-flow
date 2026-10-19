@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "AI 只做内容、其余确定性的硬约束；封面链路必须遵守"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "降级链与故障模式记录方式；封面失败不得阻断发布"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "验收证据打勾规则；AC1/AC7 需要真实产物命令输出"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "新增 src/cover-ai.ts、prompts/cover.md、tools/cover-selftest.ts 的落位约定"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "零运行时依赖、bun 直跑 .ts、类型检查方式"}
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 层 spec 入口，确认没有遗漏的强制约定"}
+{"file": ".trellis/tasks/10-19-ai-cover/research-image-gateway.md", "reason": "meta-gateway 图像模型实测结论：可用模型、裸 id 规则、速度与实际返回尺寸"}

@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/engine/verification.md", "reason": "AC1/AC4/AC7 的证据必须是真实命令输出与产物尺寸"}
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "检查 AI 与确定性逻辑的边界是否被破坏"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "检查封面失败路径是否真的不阻断发布"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "检查零依赖、类型检查、无死代码"}
+{"file": ".trellis/spec/console/index.md", "reason": "若改动触及控制台设置接口，需符合 console 层约定"}

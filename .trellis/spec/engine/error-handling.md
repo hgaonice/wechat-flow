@@ -115,6 +115,26 @@ all 3 models failed (5 attempts): justwoker/claude-opus-4-8[no channel] → agen
   - 一个挂死的 `pi` 进程（无输出）能堵死整个发布窗口 → 必须用**空闲看门狗**而非只靠 `timeoutSec`；
   - 失败邮件必须包含「失败链路」，否则同类事故永远只能靠翻 journal 定位。
 
+### E3 · AI 封面失败（图像模型 503 / 坏 model id / 网关不可达）
+
+- **现象**（250 实测，2026-10-20）：
+  - `cover.ai.model` 写成不存在的 id → `http 503: No available channel for model cn:not-a-real-model`；
+  - 网关地址不可达 → `Unable to connect`（两个模型都失败）。
+- **根因**：
+  - 网关只认**裸 id** `<group>:<model>`；`workbuddy/cn:x` 这类 pi 写法会 404/503 → 必须 `normalizeImageModelId()`；
+  - 图像模型会把自己的 503/404 当“正常错误”返回，不做分类就会在同一个坏 id 上反复重试；
+  - 出图 15–35s，慢且贵，不能无限重试。
+- **处置**：
+  - **不抛异常**：`generateAiCover()` 一律返回 `{ok:false, reason}`，降级链 `AI → ffmpeg → template`，三级同尺寸；
+  - **错误分类**：`400/404/model_not_found` 视为 fatal → 立刻换下一个模型（`fatal, next model`）；网络/5xx 才在同一模型上有限重试；
+  - **总预算**：`cover.ai.timeoutSec`（单模型）+ `maxTotalSec`（整条链），超预算即降级，绝不拖住发布窗口；
+  - **邮件可见**：降级时发 `⚠️ <date> 封面降级`，正文含失败链路（沿用 E2 的“失败链路必须可读”教训）；
+  - **审计**：失败也写 `cover-brief.json`（含 `summaryOk/summaryReason`），事后能复盘是摘要坏了还是出图坏了。
+- **配套教训**：
+  - 摘要模型也要能降级：pi 挂了就用 `fallbackBrief()` 的确定性简报，**不要**因为摘要失败就放弃出图；
+  - 模型会无视“禁止文字”：prompt 只能降低概率，真正的兜底是**让简报本身不需要文字**（区间用虚线/色块表达）；
+  - 背景色同理：`averageColor()`+`luminance()` 打 WARN 而不是自动调色 —— 自动改图会毁掉“AI 决定配色”这个前提。
+
 ---
 
 ## 检查清单

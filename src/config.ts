@@ -15,6 +15,36 @@ export interface ModelCfg {
   fallbacks?: string[];
 }
 
+export interface CoverAiCfg {
+  /** Image model id. Gateway wants `<group>:<model>`; a `provider/` prefix is stripped. */
+  model?: string;
+  fallbacks?: string[];
+  /** Text model for the visual brief. Empty → inherits model.article.model. */
+  summaryModel?: string;
+  /** Image gateway base URL + key. Empty → env → ~/.pi/agent/models.json. */
+  gateway?: string;
+  apiKey?: string;
+  /** Fixed style phrase prepended to every image prompt (series consistency). */
+  style?: string;
+  /** Used when the brief has no usable colours. */
+  fallbackPalette?: string[];
+  /** Draw the title on the image (default false: WeChat already shows the title). */
+  overlayTitle?: boolean;
+  /** Per-image-model timeout, seconds. */
+  timeoutSec?: number;
+  /** Budget for the whole image chain (all models), seconds. */
+  maxTotalSec?: number;
+}
+
+export interface CoverCfg {
+  mode?: "template" | "ffmpeg" | "agent" | "ai";
+  font?: string;
+  uploadToDraft?: boolean;
+  /** Output canvas, default `900x383` (WeChat 头条大图 2.35:1). */
+  size?: string;
+  ai?: CoverAiCfg;
+}
+
 /** Per-account overrides. Anything omitted falls back to the top-level value. */
 export interface AccountCfg {
   alias: string;
@@ -35,8 +65,8 @@ export interface AccountCfg {
   /** Per-account LaTeX / manim overrides. */
   math?: { enabled?: boolean; height?: string; scale?: number; color?: string; python?: string };
   manim?: { enabled?: boolean; width?: number; fps?: number; maxMb?: number };
-  /** Per-account cover overrides (template/agent + 是否自动上传到草稿). */
-  cover?: { mode?: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
+  /** Per-account cover overrides (mode/size/ai + 是否自动上传到草稿). */
+  cover?: CoverCfg;
   /** Per-account article CTA (互动引导语) overrides. */
   cta?: { enabled?: boolean; file?: string };
   /** Notification overrides. */
@@ -71,7 +101,26 @@ export interface AppConfig {
 
   model: { plan: ModelCfg; article: ModelCfg };
 
-  cover: { mode: "template" | "ffmpeg" | "agent"; font?: string; uploadToDraft?: boolean };
+  cover: {
+    mode: "template" | "ffmpeg" | "agent" | "ai";
+    font?: string;
+    uploadToDraft?: boolean;
+    /** Final canvas, e.g. "900x383" (2.35:1 头条大图). */
+    size: string;
+    /** AI cover settings (only used when mode === "ai"). */
+    ai: {
+      model: string;
+      fallbacks: string[];
+      summaryModel?: string;
+      gateway?: string;
+      apiKey?: string;
+      style: string;
+      fallbackPalette: string[];
+      overlayTitle: boolean;
+      timeoutSec: number;
+      maxTotalSec: number;
+    };
+  };
 
   /** 正文末尾互动引导语（点赞/转发/收藏/评论）。默认开启；文案在 prompts/cta/<alias>.md。 */
   cta: { enabled: boolean; file?: string };
@@ -230,6 +279,10 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
   const data = resolveFrom(acct.dataDir ?? `./data/${acct.alias}`);
   const pickModel = (kind: "plan" | "article"): ModelCfg =>
     acct.model?.[kind] ?? raw.model?.[kind] ?? (kind === "plan" ? { thinking: "high" } : { thinking: "medium" });
+  // AI cover settings resolve per *leaf* so an account that only sets
+  // `cover.mode` still inherits the global ai config (see design §3).
+  const acctAi = acct.cover?.ai ?? {};
+  const rawAi = raw.cover?.ai ?? {};
 
   const cfg: AppConfig = {
     account: acct.alias,
@@ -264,7 +317,8 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
 
     cover: {
       // mode: "template"=ImageMagick（默认）； "ffmpeg"=lavfi+drawtext（无 ImageMagick 的机器）；
-      // "agent"=由写作 agent 自行产出封面。账号级 cover.mode 可覆盖全局。
+      //        "agent"=由写作 agent 自行产出封面； "ai"=AI 摘要→图像模型→确定性裁切。
+      // 账号级 cover.mode 可覆盖全局。
       mode: (acct.cover?.mode ?? raw.cover?.mode) ?? "template",
       font: acct.cover?.font ?? raw.cover?.font,
       // 浏览器方式发布后，用 CDP 把 imgs/<date>/cover.png 设成草稿封面（O-B）。
@@ -272,6 +326,22 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
       // 按叶子回退：账号级 cover 只写了 mode 时，uploadToDraft 仍应继承全局值
       // （否则给账号加 cover.mode 会静默关掉封面自动上传）。
       uploadToDraft: (acct.cover?.uploadToDraft ?? raw.cover?.uploadToDraft) === true,
+      // 公众号头条大图标准 900x383（2.35:1）。所有封面模式统一，降级时尺寸不变。
+      size: (acct.cover?.size ?? raw.cover?.size) ?? "900x383",
+      // AI 封面：AI 只产「画什么/什么颜色」，尺寸/裁切/落盘/降级全部由代码决定。
+      // 按叶子回退（与 mode/uploadToDraft 同语义）：账号只写 mode 时不会把 ai 配置清空。
+      ai: {
+        model: acctAi.model ?? rawAi.model ?? "cn:hunyuan-image-alpha-edit",
+        fallbacks: acctAi.fallbacks ?? rawAi.fallbacks ?? ["global:gpt-image-2.5-sunburst"],
+        summaryModel: acctAi.summaryModel ?? rawAi.summaryModel ?? undefined,
+        gateway: acctAi.gateway ?? rawAi.gateway ?? undefined,
+        apiKey: acctAi.apiKey ?? rawAi.apiKey ?? undefined,
+        style: acctAi.style ?? rawAi.style ?? "扁平矢量插画，几何极简，教育科技感，构图简洁留白大",
+        fallbackPalette: acctAi.fallbackPalette ?? rawAi.fallbackPalette ?? ["#0F4C81", "#2D8AE0", "#FFD54F"],
+        overlayTitle: (acctAi.overlayTitle ?? rawAi.overlayTitle) === true,
+        timeoutSec: acctAi.timeoutSec ?? rawAi.timeoutSec ?? 120,
+        maxTotalSec: acctAi.maxTotalSec ?? rawAi.maxTotalSec ?? 300,
+      },
     },
 
     cta: {

@@ -13,6 +13,7 @@ import { checkBrowser } from "./browser.ts";
 import { listDrafts, listDraftTitles, verifyDraftPublished, verifyDraftBody, setDraftCover, probeDraftCover } from "./wechat.ts";
 import { ensureLoggedIn } from "./session.ts";
 import { listAvailableModels, missingModels } from "./pi.ts";
+import { generateAiCover, listImageModels, normalizeImageModelId, resolveImageGateway } from "./cover-ai.ts";
 import { notify } from "./notify.ts";
 import { todayInTz, isoWeek } from "./date.ts";
 
@@ -24,7 +25,7 @@ commands:
   accounts  列出所有公众号          doctor    环境自检
   login     建立/续期登录会话        drafts    查看草稿箱
   keepalive 会话保活（4 天票据续期）
-  cover     给草稿自动设封面
+  cover     给草稿自动设封面（--ai 只重画 AI 封面，--upload 同时设到草稿）
   mail-test 发送测试邮件
 
 options:
@@ -40,6 +41,8 @@ options:
       --no-qr             不发送登录二维码邮件（keepalive）
       --title <t>         cover：直接指定草稿标题
       --cover <png>       cover：封面文件（默认 imgs/<date>/cover.png）
+      --ai                cover：用 AI 重画封面（不重跑文章）
+      --upload            cover：配合 --ai，重画后设到草稿
       --probe             cover：只读探测封面弹窗 DOM
       --explore           cover：逐步点击封面弹窗并快照（诊断）`;
 
@@ -352,10 +355,54 @@ async function cover(cfg: AppConfig, flags: Record<string, string | boolean>): P
     process.exitCode = 1;
     return;
   }
-  if (!flags.probe && !fs.existsSync(coverPath)) {
+  if (!flags.probe && !flags.ai && !fs.existsSync(coverPath)) {
     console.error(`❌ 封面文件不存在：${coverPath}（先生成文章/封面，或用 --cover 指定）`);
     process.exitCode = 1;
     return;
+  }
+
+  // `cover --ai`：只重画封面（不重跑文章、不碰草稿），故障排查与补救用。
+  if (flags.ai) {
+    const files = fs.existsSync(cfg.paths.articles)
+      ? fs.readdirSync(cfg.paths.articles).filter((f) => f.startsWith(`${date}-`) && f.endsWith(".md"))
+          .sort((a, b) => a.length - b.length)
+      : [];
+    const articleFile = files[0];
+    if (!articleFile) {
+      console.error(`❌ ${date} 的文章还没生成：${cfg.paths.articles}（先生成文章，或改 --date）`);
+      process.exitCode = 1;
+      return;
+    }
+    const md = fs.readFileSync(path.join(cfg.paths.articles, articleFile), "utf8");
+    console.log(`cover --ai: date=${date} 文章=${articleFile} 尺寸=${cfg.cover.size}`);
+    const r = await generateAiCover({
+      outPath: coverPath,
+      rawPath: path.join(path.dirname(coverPath), "cover-raw.png"),
+      briefPath: path.join(path.dirname(coverPath), "cover-brief.json"),
+      title,
+      module: findEntryForDate(cfg, date)?.day.module ?? "",
+      body: md,
+      promptFile: path.join(cfg.paths.prompts, "cover.md"),
+      settings: cfg.cover.ai,
+      size: cfg.cover.size,
+      font: cfg.cover.font,
+      summaryModel: cfg.cover.ai.summaryModel || cfg.model.article.model,
+      summaryFallbacks: cfg.cover.ai.summaryModel ? [] : cfg.model.article.fallbacks,
+      piBin: cfg.piBin,
+      cwd: APP_DIR,
+    });
+    if (!r.ok) {
+      console.error(`❌ AI 封面失败：${r.reason}`);
+      console.error(`   （发布时会自动回落渐变封面，但本次未写文件）`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`✅ AI 封面：${r.model} → ${coverPath} (${r.size?.w}x${r.size?.h}, ${((r.ms ?? 0) / 1000).toFixed(1)}s)`);
+    console.log(`   简报：${JSON.stringify(r.brief)}`);
+    if (flags.upload !== true) {
+      console.log(`   （只生成文件；设到草稿请加 --upload）`);
+      return;
+    }
   }
 
   if (cfg.publishMethod !== "browser") {
@@ -478,6 +525,30 @@ async function doctor(cfg: AppConfig): Promise<void> {
   }
   const bunV = spawnSync(cfg.bunBin, ["--version"], { encoding: "utf8" });
   checks.push([`bun (${cfg.bunBin})`, bunV.status === 0, (bunV.stdout || "").trim()]);
+
+  // AI 封面：网关可达 + 配置里的图像模型在网关的模型表里。
+  // 图像模型写错（或网关要的裸 id 写法不对）不会在发布时才报，而是当场能看出。
+  if (cfg.cover.mode === "ai") {
+    const gw = resolveImageGateway({ gateway: cfg.cover.ai.gateway, apiKey: cfg.cover.ai.apiKey });
+    if (!gw) {
+      checks.push(["cover-model (图像网关)", false, "未找到网关：配 cover.ai.gateway/apiKey 或 COVER_IMAGE_* env 或 ~/.pi/agent/models.json"]);
+    } else {
+      const ids = await listImageModels(gw);
+      const want = [cfg.cover.ai.model, ...cfg.cover.ai.fallbacks]
+        .filter(Boolean)
+        .map(normalizeImageModelId);
+      const absent = ids === null ? [] : want.filter((m) => !ids.includes(m));
+      checks.push([
+        "cover-model (图像模型)",
+        ids !== null && absent.length === 0,
+        ids === null
+          ? `网关不可达（${gw.baseUrl}，源 ${gw.source}）— 跳过，发布时会自动降级`
+          : absent.length
+            ? `网关里没有：${absent.join(", ")}（可用图像模型：${ids.join(", ") || "无"}）`
+            : `${want.join(" / ")} 存在 · 网关 ${gw.baseUrl}（${gw.source}）`,
+      ]);
+    }
+  }
   const conv = spawnSync("convert", ["-version"], { encoding: "utf8" });
   checks.push(["imagemagick convert", conv.status === 0, (conv.stdout || "").split("\n")[0] ?? ""]);
 

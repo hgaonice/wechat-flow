@@ -87,7 +87,26 @@
   "cover": {
     "mode": "template",
     "font": "",
-    "uploadToDraft": false
+    "uploadToDraft": false,
+    "size": "900x383",
+    "ai": {
+      "model": "cn:hunyuan-image-alpha-edit",
+      "fallbacks": [
+        "global:gpt-image-2.5-sunburst"
+      ],
+      "summaryModel": "",
+      "gateway": "",
+      "apiKey": "",
+      "style": "扁平矢量插画，几何极简，教育科技感，构图简洁留白大",
+      "fallbackPalette": [
+        "#0F4C81",
+        "#2D8AE0",
+        "#FFD54F"
+      ],
+      "overlayTitle": false,
+      "timeoutSec": 120,
+      "maxTotalSec": 300
+    }
   },
   "cta": {
     "enabled": true
