@@ -66,19 +66,20 @@
   },
   "model": {
     "plan": {
-      "model": "agentrouter/deepseek-v4-flash",
+      "model": "workbuddy/cn:deepseek-v4.1-flash",
       "thinking": "high",
       "fallbacks": [
-        "deepseek/deepseek-v4-pro",
+        "workbuddy/global:deepseek-v4.1-flash",
+        "agentrouter/deepseek-v4-flash",
         "deepseek/deepseek-flash"
       ]
     },
     "article": {
-      "model": "justwoker/claude-opus-4-8",
+      "model": "workbuddy/cn:deepseek-v4.1-flash",
       "thinking": "medium",
       "fallbacks": [
+        "workbuddy/global:deepseek-v4.1-flash",
         "agentrouter/claude-opus-5-5",
-        "anyrouter/claude-opus-4-8",
         "deepseek/deepseek-flash"
       ]
     }
