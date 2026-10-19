@@ -74,7 +74,7 @@
 | **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ✅ 完成 | G7（真机待 250） | `src/console/{tunnel,notify}/**`、`db/dao/{emails,secrets,tunnels}.ts`、`ui/admin.*`、`archive/2026-10/10-13-console-ops-tunnel/`、spec v5（ops-tunnel v1） |
 | **S17** | 部署与加固：systemd/反代/限流/备份/回归 | M5 | C6 | ✅ 完成 | G6/G7（真机待 250） | `src/console/http/ratelimit.ts`、`deploy/{systemd/*,install-console.sh,console-backup.sh,console-restore.sh,console-deploy.md,console-acceptance.md}`、`archive/2026-10/10-13-console-deploy-hardening/`、spec v6（ops-deploy v1） |
 | **S19** | **模型降级链韧性**：错误分类重试 + 链路摘要 + 模型自检 + 空闲看门狗 + 调度重试窗口 | — | — | ✅ 完成（本地 + 250 真机） | G2（10-19 双账号实跑） | `src/pi.ts`（`classifyPiFailure`/`formatChainError`/`listAvailableModels`/`runPiWith`）、`src/cli.ts#doctor`、`src/console/jobs/scheduler.ts`、`tools/pi-retry-selftest.ts`、`.trellis/tasks/archive/2026-10/10-18-model-fallback-resilience/` |
-| **S20** | **AI 封面**：AI 产出「封面简报」（主体/配色/氛围）→ 图像模型出图 → 代码裁切 900×383 + 四级降级 | — | — | ✅ 完成（250 真机） | G2（观察 2 天再切 second） | `src/cover-ai.ts`、`src/cover.ts`（`fitImageTo`/`parseSize`/`imageSize`/`averageColor`）、`prompts/cover.md`、`tools/cover-selftest.ts`、`.trellis/tasks/10-19-ai-cover/` |
+| **S20** | **AI 封面**：AI 产出「封面简报」（主体/配色/氛围）→ 图像模型出图 → 代码裁切 900×383 + 四级降级 | — | — | ✅ 完成（250 真机） | G2（观察 2 天再切 second） | `src/cover-ai.ts`、`src/cover.ts`（`fitImageTo`/`parseSize`/`imageSize`/`averageColor`）、`prompts/cover.md`、`tools/cover-selftest.ts`、`.trellis/tasks/archive/2026-10/10-19-ai-cover/` |
 
 > **C4 已完成并归档（S15/M3，2026-10-14）**：每账号多会话 ↔ `pi --mode rpc` 长活子进程；严格 JSONL 切帧（禁 readline）；进程内 `ChatBus` → SSE 流式；`extension_ui_request` → 决策卡片（`pending→{answered,cancelled,expired,lost}`，**预期/异常关闭均同事务清算 pending**，无悬挂，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + `console-decision.ts` 硬阻断 `wechat*/publish*/mail*/backup*`）。engine 零改动；`CONSOLE_CHAT_MAX`(3)/`CONSOLE_CHAT_TTL_MS`(30min)。详见 §5。
 
@@ -106,7 +106,7 @@
 | `archive/2026-10/10-12-context-governance/` | S9 | 上下文治理（已交付） | ✅ 已归档 |
 | `archive/2026-10/00-bootstrap-guidelines/` | — | 填充 `spec/engine/` 的初始化任务 | ✅ 已归档 |
 | `10-13-cross-env-handoff/` | —（规范治理） | 跨环境交接约定 + 模板 + 交接稿归档 | ✅ 已交付（2026-10-13） |
-| `10-19-ai-cover/` | S20 | AI 封面（简报 → 出图 → 900×383 裁切 → 降级） | ✅ 完成（250 真机；gaoh 已切 `cover.mode=ai`） |
+| `archive/2026-10/10-19-ai-cover/` | S20 | AI 封面（简报 → 出图 → 900×383 裁切 → 降级） | ✅ 完成（250 真机；gaoh 已切 `cover.mode=ai`） |
 | `10-13-wechat-flow-console/` | S11+ | 控制台父任务（需求集 + AC-1..AC-11 + 任务地图） | ✅ 完成（6/6：C1–C6 ✅） |
 | `archive/2026-10/10-13-console-foundation/` | S12 | C1 控制台基座（服务/DB/鉴权/RBAC/配置继承/迁移） | ✅ 已归档（2026-10-13） |
 | `archive/2026-10/10-13-console-scheduler/` | S13 | C2 调度与任务模型（plans/jobs/queue/worker/scheduler + timer 迁移脚本） | ✅ 已归档（2026-10-14） |
