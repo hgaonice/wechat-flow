@@ -69,17 +69,17 @@
       "model": "agentrouter/deepseek-v4-flash",
       "thinking": "high",
       "fallbacks": [
-        "packyapi-deepseek/deepseek-flash"
+        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-flash"
       ]
     },
     "article": {
       "model": "justwoker/claude-opus-4-8",
       "thinking": "medium",
       "fallbacks": [
-        "agentrouter/claude-opus-4-8",
-        "anyrouter/claude-opus-4-7",
-        "anyrouter/claude-sonnet-4-5-20250929",
-        "agentrouter/deepseek-v4-flash"
+        "agentrouter/claude-opus-5-5",
+        "anyrouter/claude-opus-4-8",
+        "deepseek/deepseek-flash"
       ]
     }
   },

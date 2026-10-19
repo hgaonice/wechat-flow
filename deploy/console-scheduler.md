@@ -28,6 +28,7 @@
   "schedule": {
     "enabled": true,        // false → 调度器空转（手动入队仍可用）
     "publishHour": 7,       // 当天该小时后允许入队 publish（Asia/Shanghai）
+    "publishDeadlineHour": 12, // 该小时后不再**重试**已失败的 publish（0 = 不限；首次尝试不受限）
     "planWeekday": 0,       // 0=周日；该周几检查「本周无计划则入队 plan」
     "tickSec": 60           // 扫描间隔秒（5–3600；改动需重启进程）
   }
@@ -141,3 +142,21 @@ bun src/console/main.ts --no-worker            # 仅 HTTP，不跑调度
 | 重启后旧任务变 `failed` | 正常：reaper 将遗留 `running` 标记为 `interrupted by restart`，重新入队即可 |
 | 改了 `tickSec` 不生效 | 间隔在启动时读取一次，需重启进程 |
 | 双重触发（timer + 控制台） | 必须只保留一个；停 timer 用 `disable-timer.sh` |
+
+---
+
+## 8. 失败重试窗口（M2a 补充，2026-10-19）
+
+上游中转站抖一早上是常态，调度器要能“整个上午陪着重试”，而不是三次就放弃。
+
+| 参数（env） | 默认 | 含义 |
+|---|---|---|
+| `CONSOLE_JOB_MAX_ATTEMPTS` | 8 | 单账号+日期维度最大失败次数（0=不限） |
+| `CONSOLE_JOB_RETRY_COOLDOWN_MIN` | 15 | **基础**冷却分钟数 |
+| `CONSOLE_JOB_RETRY_COOLDOWN_MAX_MIN` | 60 | 指数冷却上限 |
+| `schedule.publishDeadlineHour` | 12 | 该小时后停止**重试**（0=不限；首次尝试不受限） |
+
+冷却随连续失败次数指数增长：`min(15 × 2^(n-1), 60)` 分钟 →
+07:00 失败后依次在 **07:15 / 07:45 / 08:45 / 09:45 / 10:45 / 11:45** 重试，覆盖整个上午。
+超过 `publishDeadlineHour` 且当天已失败过 → 日志 `[scheduler] skip publish for <alias> (deadline)`。
+

@@ -73,6 +73,7 @@
 | **S15** | 会话与人在环：pi RPC + 流式 + 决策卡片 + 最小权限 | M3 | C4 | ✅ 完成 | G2（真机待 250） | `src/console/agent/**`、`src/console/ui/chat.*`、`archive/2026-10/10-13-console-agent-session/`、spec v4（agent-session v2） |
 | **S16** | 运维与公网：邮箱 + CF 隧道地址下发 + 凭据加密 + 管理员视图 | M4 | C5 | ✅ 完成 | G7（真机待 250） | `src/console/{tunnel,notify}/**`、`db/dao/{emails,secrets,tunnels}.ts`、`ui/admin.*`、`archive/2026-10/10-13-console-ops-tunnel/`、spec v5（ops-tunnel v1） |
 | **S17** | 部署与加固：systemd/反代/限流/备份/回归 | M5 | C6 | ✅ 完成 | G6/G7（真机待 250） | `src/console/http/ratelimit.ts`、`deploy/{systemd/*,install-console.sh,console-backup.sh,console-restore.sh,console-deploy.md,console-acceptance.md}`、`archive/2026-10/10-13-console-deploy-hardening/`、spec v6（ops-deploy v1） |
+| **S19** | **模型降级链韧性**：错误分类重试 + 链路摘要 + 模型自检 + 空闲看门狗 + 调度重试窗口 | — | — | ✅ 完成（本地 + 250 真机） | G2（10-19 双账号实跑） | `src/pi.ts`（`classifyPiFailure`/`formatChainError`/`listAvailableModels`/`runPiWith`）、`src/cli.ts#doctor`、`src/console/jobs/scheduler.ts`、`tools/pi-retry-selftest.ts`、`.trellis/tasks/10-18-model-fallback-resilience/` |
 
 > **C4 已完成并归档（S15/M3，2026-10-14）**：每账号多会话 ↔ `pi --mode rpc` 长活子进程；严格 JSONL 切帧（禁 readline）；进程内 `ChatBus` → SSE 流式；`extension_ui_request` → 决策卡片（`pending→{answered,cancelled,expired,lost}`，**预期/异常关闭均同事务清算 pending**，无悬挂，I21/I23）；双层最小权限（`--tools read,grep,find,ls,console_ask` + `console-decision.ts` 硬阻断 `wechat*/publish*/mail*/backup*`）。engine 零改动；`CONSOLE_CHAT_MAX`(3)/`CONSOLE_CHAT_TTL_MS`(30min)。详见 §5。
 
@@ -139,7 +140,19 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：① **文末互动引导语 CTA（`10-16-article-engagement-cta`）——已交付并归档（本地 + 250 真机）**；② **控制台 250 真机验收（`10-15-console-acceptance-250`）——部署+AC 自动化项全部通过；G6/G7 待用户人工确认。**
+**当前任务**：① **模型降级链韧性（`10-18-model-fallback-resilience`）——已交付（本地 + 250 真机）**；② **文末互动引导语 CTA（`10-16-article-engagement-cta`）——已归档**；③ **控制台 250 真机验收（`10-15-console-acceptance-250`）——G6/G7 待用户人工确认。**
+
+### 当前（引擎）· 模型降级链韧性（2026-10-19）—— ✅ 已交付（本地 + 250 真机）
+
+| # | 步骤 | 状态 | 证据 |
+|---|------|------|------|
+| S1 | 修配置（真源=console DB `PUT /api/settings`，回渲 `config.json`） | ✅ | 存档 `backups/settings-20261019-075408.json`；链路改为 `justwoker → agentrouter/claude-opus-5-5 → anyrouter/claude-opus-4-8 → deepseek/deepseek-flash` |
+| S2–S4 | 错误分类 / 链路摘要 / 模型自检 / 空闲看门狗 / 链路预算 / 调度窗口 | ✅ | `src/pi.ts`、`src/cli.ts#doctor`、`src/console/jobs/scheduler.ts` |
+| S5 | 自测 | ✅ | `PI_RETRY_BASE_MS=0 bun tools/pi-retry-selftest.ts` → **40 PASS** |
+| AC1/AC5 | 250 `doctor --all` | ✅ | `✅ models (pi --list-models) 7 个模型全部存在`；manim 也已恢复 |
+| AC2/AC6 | 线上行为 | ✅ | `[pi] justwoker/… is not retryable (no channel); moving on`；降级邮件 `⚠️ 已降级到 agentrouter/claude-opus-5-5` |
+| AC7 | 两账号 10-19 出文 | ✅ | `drafts --all --date 2026-10-19` → second 2526 字 / gaoh 2943 字，两账号 **✅ 草稿校验 + ✅ 正文校验** |
+| 连带 | `drafts --date` 假阴性 + `deploy.sh` 删 `.venv` | ✅ | 均已修（见任务 `implement.md`「连带修复」） |
 
 ### 当前（引擎）· 文末互动引导语 CTA（2026-10-16）—— ✅ 已交付（本地 + 250 真机）
 
@@ -410,6 +423,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-19 | **模型降级链韧性（`10-18-model-fallback-resilience`，S19）—— 修复「文章生成反复失败」**：根因是 ① 配置里有**本地不存在的模型**（`agentrouter/claude-opus-4-8`、`packyapi-deepseek/deepseek-flash`）；② 5 个 fallback 全在同一 meta-gateway 单点；③ `src/pi.ts` 对 `Model not found` 也退避重试；④ 错误只保留最后一跳（用户只看到 `provider: 500 Upstream request failed`）；⑤ 调度 3 次即放弃。修复：`classifyPiFailure`（fatal 立刻换模型 / retryable 指数退避 30→60→120s ±jitter）、`formatChainError`（`all N models failed: a[x] → b[y]`）、`listAvailableModels`/`missingModels`（doctor 新增 `models` 行，7 个模型全部存在 ✅）、`runPiWith` 链路预算 900s、**空闲看门狗 600s**（真机发现 job#21 的 `pi` 无输出挂了 15 分钟堵死窗口）、降级成功发「⚠️ 已降级到 X」、调度冷却改指数（15→60min，`publishDeadlineHour=12`，`MAX_ATTEMPTS` 3→8）。250 真机：`gaoh` 10-19 已推送草稿（first-try 即 fatal 跳过 → `agentrouter/claude-opus-5-5` 生成，降级邮件已发）。**附带事故与修复**：`deploy.sh` EXCLUDES 缺 `.venv` → rsync --delete **删掉 250 的 manim venv**（已补排除项；用 `python3 -m venv --upgrade` + wrapper 在 `/opt/manim-venv` 原地恢复，渲染冒烟通过）；`drafts --date` 盲取 `readdirSync()[0]` 会拿到 `.v1.md`/`.math.md` 导致**假阴性 ❌**（已排除版本快照与副本并打印所用文件，修复后 gaoh 从 ❌ → ✅） | pi |
 | 2026-10-17 | **修复 `New tab not found: mp.weixin.qq.com`（巧思初数 10-17 发布失败）**：根因是同一 Xvfb 显示上两个 Chrome，被遮挡窗口的 MP tab `document.visibilityState === "hidden"`，而 Chrome 只允许**可见 tab** 弹窗 → 点击「文章」不开新标签页（实测 9222 hidden 失败 / 9223 visible 成功；单独重跑仍失败，与并发无关）。修复：① `src/session.ts#focusMpTab` 用 `Page.bringToFront` 置前并回报 `visibilityState`，`publisher` 在登录校验后、调 skill 前调用（日志 `MP tab visibility: visible`）；② 250 上 `CONSOLE_MAX_CONCURRENCY=2 → 1`，避免两账号浏览器发布并发争抢唯一的可见窗口。实测重跑 second 10-17 成功（正文 2958 字 + 封面 `draft cover set ✓`），两账号 10-17 均已 `ok=true`。**区分错误**：`Editor did not load` = 登录态/死 tab；`New tab not found` = tab 不可见。已沉淀 `spec/engine/verification.md` | pi |
 | 2026-10-16 | **CTA 真机验收通过（AC5）+ 附带故障模式沉淀（S18 收官）**：250 同步 `src/` + `prompts/`（含 `prompts/cta/`）后 `BUILD_OK`/`TSC_OK`/`cta-selftest` **ALL PASS**；两账号 `publish --reuse --dry-run` → `cta: appended (from prompts/cta/second.md (chars=156))` / `gaoh.md (chars=161)`；真机 `publish --force --reuse` + `drafts --date 2026-10-16`：second `body=3098→3224`、gaoh `3088→3219`（增量≈引导语文本量），两账号均 `✅ 正文校验`；**只读探针读草稿箱真实 DOM**（`appmsg_edit` 的 `.rich_media_content .ProseMirror` innerText 末 320 字）：末尾为「关注「巧思初数」…」/「关注「gaoh的技术分享」…」，**末尾动作词 6/6**。**运维关键（已做）**：日常发布已由**控制台 Mode A**（`wechat-console` 常驻，旧 `wechat-publish.timer` inactive）接管，**改 `src/` 必须 `systemctl restart wechat-console`**（旧进程 23:06:25 CST → 重启 00:29:40 CST；`/health` ok/db ok/tunnel up；隧道地址已轮换为 `https://reunion-connection-cash-discharge.trycloudflare.com`）。**附带发现（两账号各复现一次）**：浏览器发布在 Chrome 内存在重复 `https://mp.weixin.qq.com/` 桩 tab 时会报 `New tab not found: mp.weixin.qq.com`（skill `waitForNewTab` 30s 超时，草稿箱保持旧版）；**处置**：只关桩 tab 与 `about:blank`、保留带 `token=` 的 home tab 后重跑即成功（**不要**重启 Chrome，会引出扫码）——已沉淀到 `.trellis/spec/engine/error-handling.md` §E1，`cleanupAppmsgTabs()` 的扩展属发布链路改动，**留待单独评审 + G2 后合入** | pi |
 | 2026-10-16 | **文末互动引导语 CTA（`10-16-article-engagement-cta`，S18）——本地全绿，真机待 250**：新增确定性模块 `src/cta.ts`（`applyCtaToArticle`/`hasCtaHint`/`ensureCtaBlock`/`resolveCtaBlock`，判定=正文**尾部 500 字命中 ≥2 个动作词**即视为已有；否则追加 `prompts/cta/<alias>.md`，缺失降级 `default.md` → 内置常量；**永不抛错**）+ 文案资产 `prompts/cta/{second,gaoh}.md` + `prompts/article.md` 第 5 条「结尾互动引导（必须）」+ `editor.md` 人设一条；唯一注入点 `publisher.runArticleGeneration()`（生成 / `--reuse` / 控制台 `generateArticle` 三条路径都经过），控制台 `OBJECT_ENTRY_KEYS` 放行 `cta`（无 DB 迁移），配置 `cta.enabled` 默认开（热回滚开关）。验证：`BUILD_OK`/`TSC_OK`；`bun tools/cta-selftest.ts` **13 PASS**（幂等字节一致 / 中段「收藏」不误判 / frontmatter 保留 / builtin 兜底 / disabled 不写 / `分享·关注` 不入检测词表）；真 CLI 两账号 `--reuse --dry-run` → second `cta: appended (from prompts/cta/second.md (chars=156))` → 二跑 `cta: present (tail hits=6)`；gaoh `cta: appended (from prompts/cta/gaoh.md (chars=161))`；控制台快照含 CTA 且 AI 已写时不重复；`cta.enabled=false` → `cta: disabled` 且文件逐字节未变。**独立复核（trellis-check）PASS-with-issues**，已修：F1 检测词表剔除非引导词 `分享/关注`（避免普通结尾误判→该补未补，破坏「必有」；已加回归断言）与 F5 `cta.file` 相对路径改按 `APP_DIR` 解析；F3 已用 250 只读探测证实 `displayName` 正常（渲染为「巧思初数」）。固化到 `spec/engine/ai-determinism.md`（第二例“AI 写文风、代码断言必有”）+ `src/README.md`。**AC5 真机发布待 250（G2）。** | pi |

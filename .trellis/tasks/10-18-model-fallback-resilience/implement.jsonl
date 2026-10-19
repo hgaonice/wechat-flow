@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/engine/index.md", "reason": "engine 硬约束：运行时零新增 npm 依赖、bun 直跑 TS、系统工具调用边界"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "现有重试/降级/失败邮件契约，本任务要在此之上加错误分类与链路摘要"}
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "AI 只做内容、其余确定性的分层铁律；模型降级属确定性容错层"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "改动后必跑的自检命令与验收基线（build/tsc/doctor/dry-run）"}
+{"file": ".trellis/spec/console/index.md", "reason": "调度与 job 模型所在层；本次要改 scheduler 的重试窗口"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "jobs 表结构与 error 字段语义，链路摘要要落到这里"}

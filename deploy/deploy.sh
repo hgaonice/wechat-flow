@@ -60,6 +60,7 @@ EXCLUDES=(
   --exclude 'console/'      # 控制台运行时 DB（C1+；--delete 会删库，血训 2026-10-15）
   --exclude 'backups/'      # console-backup.sh 产物（含 master.key）
   --exclude '.wechat-console/'  # 主密钥（若仓内同层部署）
+  --exclude '.venv/'        # manim 虚拟环境（250 本地安装；--delete 会连 python/manim 一起删，血训 2026-10-19）
 )
 
 echo "· 源：$SRC/"

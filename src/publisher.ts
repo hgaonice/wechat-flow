@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AppConfig } from "./config.ts";
-import { runPi } from "./pi.ts";
+import { runPi, listAvailableModels, missingModels } from "./pi.ts";
 import { renderTemplate } from "./prompts.ts";
 import { publishArticle, publishArticleBrowser, verifyDraftPublished, verifyDraftBody, cleanupAppmsgTabs, setDraftCover } from "./wechat.ts";
 import { ensureLoggedIn, focusMpTab } from "./session.ts";
@@ -108,6 +108,16 @@ export async function runArticleGeneration(
   const reused = opts.reuse === true && fs.existsSync(articlePath);
 
   if (!reused) {
+    // Config drift guard (B4): a fallback id that does not exist on this host
+    // silently burns a retry round every single failure. Never fatal.
+    const absent = missingModels(
+      [cfg.model.article.model, ...(cfg.model.article.fallbacks ?? [])],
+      listAvailableModels(cfg.piBin),
+    );
+    if (absent.length) {
+      log.warn(`model config has unknown id(s): ${absent.join(", ")} — run "doctor" and fix model.fallbacks`);
+    }
+
     const prompt = buildArticlePrompt(cfg, day, date, articlePath, opts.feedback);
     const gen = await runPi({
       prompt,
@@ -133,6 +143,23 @@ export async function runArticleGeneration(
         body: `日期：${date}\n模块：${day.module}\n选题：${day.topic}\n错误：${gen.error}`,
       });
       return { ok: false, date, articlePath, error: msg };
+    }
+    // Degradation is not silent: the article is fine, but the user must know
+    // that the primary model was down (repeated degradation = upstream problem).
+    if ((gen.chain?.length ?? 0) > 1) {
+      const failed = (gen.chain ?? []).filter((a) => a.class !== "ok");
+      log.warn(`degraded to ${gen.usedModel ?? "(default)"} after ${failed.length} failed attempt(s)`);
+      await notify(cfg, {
+        kind: "publish",
+        title: `⚠️ ${date} 已降级到 ${gen.usedModel ?? "默认模型"}`,
+        body: [
+          `日期：${date}`,
+          `模块：${day.module}`,
+          `实际使用：${gen.usedModel ?? "(default)"}`,
+          "失败链路：",
+          ...failed.map((a) => `  - ${a.model ?? "(default)"} [${a.class}] ${a.error ?? ""}`.slice(0, 200)),
+        ].join("\n"),
+      });
     }
   }
 

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AppConfig } from "./config.ts";
-import { runPi } from "./pi.ts";
+import { runPi, listAvailableModels, missingModels } from "./pi.ts";
 import { renderTemplate } from "./prompts.ts";
 import { isoWeek, weekRange, todayInTz, weekdayCn } from "./date.ts";
 import { log } from "./log.ts";
@@ -89,6 +89,14 @@ export async function runPlan(cfg: AppConfig, opts: { date?: string; dryRun?: bo
     accountName: cfg.accountName,
   });
 
+  const absent = missingModels(
+    [cfg.model.plan.model, ...(cfg.model.plan.fallbacks ?? [])],
+    listAvailableModels(cfg.piBin),
+  );
+  if (absent.length) {
+    log.warn(`model config has unknown id(s): ${absent.join(", ")} — run "doctor" and fix model.fallbacks`);
+  }
+
   const result = await runPi({
     prompt,
     cwd: cfg.paths.content,
@@ -113,6 +121,10 @@ export async function runPlan(cfg: AppConfig, opts: { date?: string; dryRun?: bo
       body: `${result.error}\n${result.stderr.slice(-400)}`,
     });
     throw new Error(`planner agent failed: ${result.error}`);
+  }
+
+  if ((result.chain?.length ?? 0) > 1) {
+    log.warn(`plan degraded to ${result.usedModel ?? "(default)"} after ${result.chain!.length - 1} failed attempt(s)`);
   }
 
   if (!fs.existsSync(writePath)) {

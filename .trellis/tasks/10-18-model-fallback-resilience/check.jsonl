@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "核对错误分类矩阵是否与既有降级契约冲突，并回写新契约"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "验收要求：不接受上游自报成功，链路摘要必须来自真实事件流"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "收尾必须跑 build/tsc/doctor/dry-run 全绿"}
+{"file": ".trellis/spec/console/api.md", "reason": "PUT /api/settings 的契约与鉴权，用于修正 250 的 model 配置"}
+{"file": ".trellis/spec/console/ops-deploy.md", "reason": "部署到 250 与 systemd 环境变量覆盖方式"}

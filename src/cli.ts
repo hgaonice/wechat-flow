@@ -12,6 +12,7 @@ import { checkEmail } from "./mailer.ts";
 import { checkBrowser } from "./browser.ts";
 import { listDrafts, listDraftTitles, verifyDraftPublished, verifyDraftBody, setDraftCover, probeDraftCover } from "./wechat.ts";
 import { ensureLoggedIn } from "./session.ts";
+import { listAvailableModels, missingModels } from "./pi.ts";
 import { notify } from "./notify.ts";
 import { todayInTz, isoWeek } from "./date.ts";
 
@@ -298,15 +299,24 @@ async function drafts(cfg: AppConfig, flags: Record<string, string | boolean>): 
 
   if (typeof flags.date === "string") {
     const date = flags.date;
-    const files = fs.existsSync(cfg.paths.articles)
+    // Only the canonical article is the truth source. Two other file kinds live
+    // next to it and both carry a *different* title:
+    //   *.math.md  — media-preprocessed copy (same title, different body)
+    //   *.v<N>.md  — console workbench version snapshots (OLD titles)
+    // Picking one of those made `drafts --date` report a false ❌.
+    const all = fs.existsSync(cfg.paths.articles)
       ? fs.readdirSync(cfg.paths.articles).filter((f) => f.startsWith(`${date}-`) && f.endsWith(".md"))
       : [];
+    const files = all
+      .filter((f) => !/\.v\d+\.md$/.test(f) && !/\.math\.md$/.test(f))
+      .sort((a, b) => a.length - b.length || a.localeCompare(b));
     if (!files.length) {
       console.log(`\n(${date} 无本地文章文件)`);
       return;
     }
     const md = fs.readFileSync(path.join(cfg.paths.articles, files[0]), "utf8");
     const fm = parseFrontmatter(md);
+    console.log(`(据 ${files[0]} 的标题校验：${fm.title ?? "(无 title)"})`);
     const v = await verifyDraftPublished(cfg.browser, cfg.skillDir, fm.title ?? "");
     console.log(`\n${v === true ? "✅" : v === false ? "❌" : "⚠️"} ${date} 草稿校验: ${v === true ? "已确认在草稿箱" : v === false ? "未找到" : "无法查询"}`);
     // 标题存在不等于正文存在——务必用后台编辑器实测正文字数。
@@ -443,6 +453,29 @@ async function doctor(cfg: AppConfig): Promise<void> {
 
   const piV = spawnSync(cfg.piBin, ["--version"], { encoding: "utf8" });
   checks.push([`pi (${cfg.piBin})`, piV.status === 0, (piV.stdout || piV.stderr || "").trim()]);
+
+  // Model config drift: a fallback id that does not exist on this host burns a
+  // retry round on every failure (`Model "x" not found`) and shrinks the real
+  // fallback depth. Cheap to check, expensive to discover at 07:00.
+  {
+    const configured = [
+      cfg.model.plan.model,
+      ...(cfg.model.plan.fallbacks ?? []),
+      cfg.model.article.model,
+      ...(cfg.model.article.fallbacks ?? []),
+    ].filter((m): m is string => typeof m === "string" && m.length > 0);
+    const available = listAvailableModels(cfg.piBin);
+    const absent = missingModels(configured, available);
+    checks.push([
+      "models (pi --list-models)",
+      available !== null && absent.length === 0,
+      available === null
+        ? "探测失败（跳过，不阻塞发布）"
+        : absent.length
+          ? `配置里不存在的模型：${absent.join(", ")} — 改 model.plan/article.fallbacks`
+          : `${configured.length} 个模型全部存在`,
+    ]);
+  }
   const bunV = spawnSync(cfg.bunBin, ["--version"], { encoding: "utf8" });
   checks.push([`bun (${cfg.bunBin})`, bunV.status === 0, (bunV.stdout || "").trim()]);
   const conv = spawnSync("convert", ["-version"], { encoding: "utf8" });

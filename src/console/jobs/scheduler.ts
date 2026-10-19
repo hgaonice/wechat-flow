@@ -24,6 +24,8 @@ export const TZ = "Asia/Shanghai";
 export interface ScheduleConfig {
   enabled: boolean;
   publishHour: number;
+  /** Stop *retrying* a failed publish after this hour (0 = no deadline). */
+  publishDeadlineHour: number;
   planWeekday: number;
   tickSec: number;
 }
@@ -35,8 +37,10 @@ function clampInt(v: unknown, def: number, lo: number, hi: number): number {
 
 // ── failure backoff (C6, I32 / design.md D31) ──────────────────────────────
 
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_RETRY_COOLDOWN_MIN = 30;
+const DEFAULT_MAX_ATTEMPTS = 8;
+const DEFAULT_RETRY_COOLDOWN_MIN = 15;
+const DEFAULT_RETRY_COOLDOWN_MAX_MIN = 60;
+const DEFAULT_PUBLISH_DEADLINE_HOUR = 12;
 
 /** Read an integer env var and clamp it; non-numeric values fall back to `def`. */
 function envIntClamped(name: string, def: number, lo: number, hi: number): number {
@@ -63,6 +67,7 @@ export function readSchedule(db: Database): ScheduleConfig {
   return {
     enabled: !disabled,
     publishHour: clampInt(s.publishHour, 7, 0, 23),
+    publishDeadlineHour: clampInt(s.publishDeadlineHour, DEFAULT_PUBLISH_DEADLINE_HOUR, 0, 23),
     planWeekday: clampInt(s.planWeekday, 0, 0, 6),
     tickSec: clampInt(s.tickSec, 60, 5, 3600),
   };
@@ -102,20 +107,25 @@ export function schedulerTick(db: Database, now: Date = new Date()): ScheduleAct
   const actions: ScheduleAction[] = [];
 
   // C6 backoff budget/cooldown (env-driven; 0 disables each dimension).
+  // The cooldown grows with consecutive failures (15 → 30 → 60 … capped), so an
+  // all-morning upstream outage is retried across the whole morning instead of
+  // giving up after three tries inside 40 minutes.
   const maxAttempts = envIntClamped("CONSOLE_JOB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, 0, 100);
-  const cooldownMin = envIntClamped("CONSOLE_JOB_RETRY_COOLDOWN_MIN", DEFAULT_RETRY_COOLDOWN_MIN, 0, 1440);
-  const cooldownMs = cooldownMin * 60_000;
+  const cooldownBaseMin = envIntClamped("CONSOLE_JOB_RETRY_COOLDOWN_MIN", DEFAULT_RETRY_COOLDOWN_MIN, 0, 1440);
+  const cooldownMaxMin = envIntClamped("CONSOLE_JOB_RETRY_COOLDOWN_MAX_MIN", DEFAULT_RETRY_COOLDOWN_MAX_MIN, 0, 1440);
   const nowMs = now.getTime();
 
   /** Reason string when this account/kind/key is still backing off, else null. */
   const backoffReason = (accountId: number, kind: "plan" | "publish", key: string): string | null => {
-    if (maxAttempts > 0 && queue.countFailed(db, accountId, kind, key) >= maxAttempts) {
+    const failures = queue.countFailed(db, accountId, kind, key);
+    if (maxAttempts > 0 && failures >= maxAttempts) {
       return "attempts-exhausted";
     }
-    if (cooldownMs > 0) {
+    if (cooldownBaseMin > 0 && failures > 0) {
       const last = queue.lastFailureAt(db, accountId, kind, key);
       if (last) {
         const t = parseDbTime(last);
+        const cooldownMs = Math.min(cooldownBaseMin * 2 ** (failures - 1), cooldownMaxMin) * 60_000;
         if (t !== null && nowMs - t < cooldownMs) return "backoff";
       }
     }
@@ -153,7 +163,13 @@ export function schedulerTick(db: Database, now: Date = new Date()): ScheduleAct
         }
       }
       if (!published && !queue.hasPublishJobForDate(db, row.id, today)) {
-        const skip = backoffReason(row.id, "publish", today);
+        // Deadline only stops *retries* — a first attempt is still allowed at
+        // any hour (the user may have fixed the plan/config mid-day).
+        const pastDeadline =
+          cfg.publishDeadlineHour > 0 &&
+          hour >= cfg.publishDeadlineHour &&
+          queue.countFailed(db, row.id, "publish", today) > 0;
+        const skip = pastDeadline ? "deadline" : backoffReason(row.id, "publish", today);
         if (skip) {
           console.log(`[scheduler] skip publish for ${row.alias} (${skip})`);
         } else {
