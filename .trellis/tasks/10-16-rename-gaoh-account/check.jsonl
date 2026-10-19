@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/10-16-rename-gaoh-account/prd.md", "reason": "逐条核对 AC1–AC8 是否有真实产物/命令输出支撑"}
+{"file": ".trellis/tasks/10-16-rename-gaoh-account/implement.md", "reason": "核对 S1–S12 完成情况与验证命令是否真跑过"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "复核 config.json 与 DB 一致（真源/派生未分叉）"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "AC5 草稿验收必须基于草稿箱真实 DOM，不看上游自报成功"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "复核未误改 alias/dataDir/cdpPort（隔离不变量）"}
+{"file": ".trellis/spec/console/security.md", "reason": "凭据使用边界：改名操作不得把控制台密码落到仓库/日志"}

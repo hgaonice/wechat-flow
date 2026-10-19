@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/10-16-rename-gaoh-account/prd.md", "reason": "改名需求、边界（别名/计划数据/历史草稿）、AC1–AC8"}
+{"file": ".trellis/tasks/10-16-rename-gaoh-account/design.md", "reason": "真源→派生链路、PUT overrides 契约、文件级改动清单、回滚"}
+{"file": ".trellis/tasks/10-16-rename-gaoh-account/implement.md", "reason": "S1–S12 执行顺序与逐步验证命令（改 250 前的本地全绿门）"}
+{"file": ".trellis/spec/console/data-model.md", "reason": "控制台 DB 是真源、config.json 是派生产物：禁止手改 config.json"}
+{"file": ".trellis/spec/console/api.md", "reason": "PUT /api/accounts/:id 的 overrides 语义与错误码；审计 account.update"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "按账号隔离不变量：alias/dataDir/cdpPort 不动，只改显示名"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "改动后必跑的命令与健康基线（build/tsc、真机 drafts）"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "E1（New tab not found）处置：重发草稿前需保证 Chrome tab 干净"}
