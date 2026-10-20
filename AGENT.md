@@ -54,6 +54,7 @@
 | **S9** | **上下文治理**：`.trellis` + `AGENT.md` + 分层文档 + repomap | ✅ 完成 | G4 | 已归档 `archive/2026-10/10-12-context-governance/` |
 | **S10** | 封面自动上传到草稿（O-B：CDP 驱动封面弹窗） | ✅ 完成 | G2 | `archive/2026-10/10-12-cover-auto-upload/` |
 | **S18** | **内容互动引导语（CTA）**：文末点赞/转发/收藏/评论引导（AI 写文风 + 代码断言必有） | ✅ 完成（本地 + 250 真机） | G2 | `src/cta.ts`、`prompts/cta/{second,gaoh}.md`、`tools/cta-selftest.ts`、`.trellis/tasks/10-16-article-engagement-cta/` |
+| **S22** | **图像模型普查与封面链接入**（网关 5 个图像模型真实出图矩阵 + 兜底尺寸放大修复 + 成本护栏 + doctor `cover-candidates`） | ✅ 完成（250 真机；AC5 人工目视待用户复核） | G2 | `tools/image-model-probe.ts`、`tools/image-model-probe-selftest.ts`、`src/cover-ai.ts`（`isSizeRejection`/`SIZE_ESCALATION`/stats/`dailyBudget`/`describeCoverCandidates`）、`docs/research/image-models.md` |
 | **S21** | **登录态滚动更新 + 浏览器生命周期解耦**（三态判定/抗抖动/快照回滚/独立 systemd unit） | ✅ 完成（本地 + 250 真机；AC3 真实扫码、AC6b 预警邮件待用户在场） | G2 | `src/{session-probe,session-state,session-snapshot,session-warn,browser-agent}.ts`、`deploy/systemd/{wechat-xvfb.service,wechat-browser@.service}`、`deploy/session-check.sh`、`tools/session*-selftest.ts` |
 
 图例：⚪ 未开始 ／ 🟡 进行中 ／ ✅ 完成 ／ 🔴 阻塞
@@ -143,7 +144,7 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：① **登录态滚动更新 + 浏览器托管解耦（`10-20-wechat-session-rolling`，S21）——已交付本地 + 250 真机**；② **模型降级链韧性（`10-18-model-fallback-resilience`）——已归档**；③ **控制台 250 真机验收（`10-15-console-acceptance-250`）——G6/G7 待用户人工确认。**
+**当前任务**：① **登录态滚动更新 + 浏览器托管解耦（`10-20-wechat-session-rolling`，S21）——已归档**；② **图像模型普查（`10-20-image-model-scout`，S22）——已交付 + 250 真机（人工目视待复核）**；③ **前端设计系统重构（`10-20-console-ui-redesign`，C3）——待启动**；④ **控制台 250 真机验收（`10-15-console-acceptance-250`）——G6/G7 待用户人工确认。**
 
 ### 当前（引擎）· 登录态滚动更新 + 浏览器生命周期解耦（2026-10-20，S21）—— ✅ 已交付（本地 + 250 真机）
 
@@ -161,6 +162,21 @@
 | 7 | 250 真机验收 | ✅ AC4/AC5/AC7；✅ AC6a / ⏳ AC6b / ⏳ AC3 | **AC4：连续 3 轮 deploy + restart console → 两账号全程 `verdict=valid`、0 扫码、MainPID 不变**；AC5：删 Cookies → `invalid(cookie:missing)` → `session restore` → 真实鉴权保活成功，**全程无需扫码**；AC7 `drafts --all --date 2026-10-20` 双账号 `✅ 正文校验`。**未验**：AC3 真实扫码（需用户在场）、AC6b 24h 预警邮件（当前票剩 96h，发不出） |
 
 **运维新事实（务必记住）**：① `Chrome/Xvfb` 现在归 `wechat-browser@<alias>.service` / `wechat-xvfb.service` 托管，**重启 console 与登录态彻底无关**；② 会话判定是**三态**，`unknown` 不是故障、不会发二维码；③ **`deploy/install.sh` 不再自动 enable legacy `wechat-plan/publish.timer`**（2026-10-20 真实事故：跑一次 install.sh 立刻触发 plan+publish；控制台调度器才是发布真源，需要时设 `WFC_ENABLE_LEGACY_TIMERS=1`）；④ 非登录 ssh 下 `bun` 不在 PATH，`deploy/session-check.sh` 自带解析（`WFC_BUN_PATH` 可覆盖）。
+
+### 当前（引擎）· 图像模型普查（2026-10-20，S22）—— ✅ 已交付 + 250 真机（人工目视待复核）
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| 0 | `design.md`（契约 C-1..C-4）+ `implement.md`（Gate 2 看矩阵 / Gate 3 才动配置） | ✅ |
+| 1 | `tools/image-model-probe.ts` + `-selftest.ts`（71 断言，离线，`Bun.serve` 假网关） | ✅ |
+| 2 | 250 真实出图矩阵（5 个图像模型，样张 `data/research/samples/`） | ✅ |
+| 3 | `docs/research/image-models.md`（§A 矩阵 / §B 外部源清单 / §C 结论 / §D 人工目视 / §E 复读命令） | ✅ |
+| 4 | 兜底修复：`isSizeRejection()` + `SIZE_ESCALATION` 放大重试（真机 900×383→1536×1024→裁回 900×383） | ✅ |
+| 5 | `cover-model-stats.json` + `cover.ai.dailyBudget` + doctor `cover-candidates` + selftest 46→93 | ✅ |
+| 6 | `deploy.sh --keep-remote-content` + AC3 坏网关→ffmpeg 不阻断 + AC6 双账号正文校验 | ✅ |
+
+**结论一句话**：不换主力模型（hunyuan），修的是「第二级兜底从来没生效」——`gpt-image-2.5` 拒绝 900×383，被网关包成 502，导致实际降级直接跳到 ffmpeg。`cogview` 系不可用（水印 / 无额度）。
+**待用户**：① AC5 人工目视复核（`docs/research/image-models.md` §D）；② 外部免费源（Pollinations / 智谱直连 / Cloudflare FLUX）逐个放行后才实测接入。
 
 ### 当前（引擎）· 模型降级链韧性（2026-10-19）—— ✅ 已交付（本地 + 250 真机）
 
@@ -443,6 +459,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 日期 | 变更 | 作者 |
 |------|------|------|
+| 2026-10-20 | **图像模型普查（`10-20-image-model-scout`，S22）—— 结论不是「换模型」，而是「兜底一直是死的」**：250 网关 `192.168.0.251:3011` 真实出图 5 个图像模型（报告 `data/research/image-models-2026-10-20.json` + 样张）：`cn:hunyuan-image-alpha-edit` **8.8–14.5s**/配色符合/无文字 → 主力；`global:gpt-image-2.5-sunburst` **只接受 ≥1024 像素预算且边长 ÷16**，`900x383` 直接 400（被网关包成 502），**即第二级 AI 兜底在生产从未生效**；`cogview-3-flash` 9.5s 但**忽略配色 + 右下角烧进「AI生成」水印** → 淘汰；`cogview-4`/`cogview-4-250304` **429 无额度且失败要等 114s** → 不接入。修复：`isSizeRejection()` + `SIZE_ESCALATION="1536x1024"`（命中尺寸拒绝→放大重试→`fitImageTo()` 裁回 900×383，真机 74.3s 成功）；`listImageModels()` 正则补 `cogview\|kolors\|hunyuan-image\|sd3\|sdxl`（doctor 由错报变 `7 image models`）；新增 `data/<alias>/state/cover-model-stats.json`（成功/失败/耗时/脱敏原因，原子写，失败只 WARN）+ `cover.ai.dailyBudget`（默认 0=不限，按**文章**计数，第 n+1 次拒绝并回落 ffmpeg）+ doctor 单行 `cover-candidates`；`tools/image-model-probe.ts` 提供可复跑矩阵（`--all-image/--models/--size`，结构分 + 原始像素 metrics + 同日 merge history）。**阈值教训**：`darkBgMax` 0.95→0.995 都误杀合格封面（实测 darkRatio 0.978/0.998/0.999），最终**只设下界**。`cover-selftest` **46→93 PASS**、`tsc` 0 错、250 `deploy.sh` 自检全绿、AC3 坏网关→ffmpeg 900×383 不阻断、AC6 双账号 `✅ 正文校验`（1864/3148 chars）、AC4 doctor 绿 | pi |
 | 2026-10-20 | **登录态滚动更新 + 浏览器生命周期解耦（`10-20-wechat-session-rolling`，S21）——「改代码就要重扫码」的真正根因是探测误判，不是会话存不住**：只读诊断否证初始假设（重启 console 不杀 Chrome：Chrome 在 `app-com.google.Chrome-*.scope`、已跑 7.7 天；14 天真失效仅 1 次），确证**误判链**（10-20 07:02 判 expired → 3 次二维码 + 失败邮件 → 900s 超时 → 07:18 同账号判 valid、07:19 推送成功，全程无人扫码）。交付：① `src/session-state.ts` 只读 Cookies DB 取 `slave_sid` 到期（本地强证据，读失败=`unknown`）；② `src/session-probe.ts` **三态判定**（`page_timeout` 壳页≠退登）+ 抗抖动（连续 3 次或 cookie 过期才发码，`WFC_SESSION_FAIL_THRESHOLD=1` 回旧行为）+ 判定证据入日志/邮件；③ `src/session-snapshot.ts` cookie 原子快照/校验/回滚（`session snapshot|restore|list`）；④ `src/session-warn.ts` 到期前 24h 预警（每 24h ≤1 封）；⑤ **`wechat-xvfb.service` + `wechat-browser@.service`**（`browser-agent.ts` execve 起 Chrome，参数逐字不变，`MainPID=chrome`、`KillMode=mixed`），console 退化为 CDP 客户端（`WFC_BROWSER_MODE=external\|inline` 自动判定 + 一键回滚）；⑥ keepalive 12h→5h；⑦ `deploy/session-check.sh` 部署后自检（xvfb→unit MainPID→三态 probe，只有 invalid 判红）。**250 真机**：迁移零扫码，**AC4 连续 3 轮 deploy+restart console 两账号全程 valid**，AC5 删 cookie→restore→真实鉴权保活成功，AC7 双账号 `✅ 正文校验`。**连带修 2 个真 bug**：`deploy/install.sh` 会误 enable legacy `wechat-plan/publish.timer`（当场触发一次 plan+publish，已改显式 opt-in）；`deploy/session-check.sh` 在非登录 ssh 下 `bun: command not found` 导致自检整体失效（已自带路径解析）。engine 零回退、零新增依赖 | pi |
 | 2026-10-20 | **AI 封面（`10-19-ai-cover`，S20）—— 封面从「模板色块」升级为「读懂文章再画」**：两级 AI 分工 —— 文本模型读标题+正文产出 `cover-brief.json`（`subject/motif/palette`(深底+线条+强调)/`mood`/`avoid`），图像模型按简报出图；**尺寸/裁切/落盘/兜底全由代码定**。选型实测（250 网关 `192.168.0.251:3011`）：`deepseek-v4.1-flash` **不出图**（503），99 个模型里能出图的只有 `cn:hunyuan-image-alpha-edit`（15–21s）与 `global:gpt-image-2.5-sunburst`（~35s），且网关只认**裸 id**（`workbuddy/cn:x` → 404）→ 新增 `normalizeImageModelId()`。画布统一改 **900×383**（公众号 2.35:1 头条大图，原 900×500），但图像模型会吸附尺寸（请求 900×383 回 896×368）→ `fitImageTo()` 强制二次裁切。降级链 **AI → ffmpeg → template** 同级同尺寸，`generateAiCover()` 只回 `{ok:false,reason}` 不抛，降级发「⚠️ 封面降级」邮件。prompt 侧两条硬教训：① 简报必须**能不用文字表达**（区间用虚线/色块），否则模型一定画数字；② `palette[0]` 必须深色，且明写“整幅填充深色、禁止白底”。验收：`cover-selftest` **46 PASS**、`tsc` 0 错、250 `doctor` 新增 `✅ cover-model`、`cover --ai 2026-10-20` 出图 900×383（20–23s）、AC5 故障注入 `cn:not-a-real-model` → 自动换模型出图、AC4 坏网关 → 回落 ffmpeg 且 `dry-run ok words=2951`、AC7 10-21 草稿封面 `draft cover set ✓` 换成 AI 图。**gaoh 已切 `cover.mode=ai`（second 仍 `ffmpeg`，观察 2 天再切）**，回滚只需改回 `ffmpeg` | pi |
 | 2026-10-19 | **模型主链换成 `workbuddy/cn:deepseek-v4.1-flash`（对齐 pi agent 当前配置）**：`model.plan/article` 主模型均为 `workbuddy/cn:deepseek-v4.1-flash`（thinking: plan=high / article=medium），fallback 保留跨上游冗余 `workbuddy/global:deepseek-v4.1-flash → agentrouter/claude-opus-5-5(article) / agentrouter/deepseek-v4-flash(plan) → deepseek/deepseek-flash`。经 `PUT /api/settings` 落库并回渲 `config.json`（备份 `backups/settings-20261019-081626.json`）。验证：250 `doctor` → `✅ models (pi --list-models) 8 个模型全部存在`；`publish -a gaoh --date 2026-10-20 --dry-run` → **首次命中不降级**、2 分 07 秒、words=2680、formulas=1、`cta: present`、封面生成 | pi |
@@ -477,7 +494,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（运营韧性，`10-20-ops-resilience-upgrade`）**：#1 登录态滚动更新 ✅（S21，已真机）；**下一步 = #3 图像模型普查（`10-20-image-model-scout`，网关 5 个图像模型实测）→ #2 前端设计系统重构（`10-20-console-ui-redesign`，4 步增量）**。控制台 S11–S17（C1–C6）已交付并归档，真机按 `deploy/console-acceptance.md` 跑 AC-1…AC-11，随后 G6/G7 请用户确认。见 §5。
+1. **当前主线（运营韧性，`10-20-ops-resilience-upgrade`）**：#1 登录态滚动更新 ✅（S21，已归档）；#3 图像模型普查 ✅（S22，已真机，矩阵在 `docs/research/image-models.md`）；**下一步 = #2 前端设计系统重构（`10-20-console-ui-redesign`，4 步增量）**。控制台 S11–S17（C1–C6）已交付并归档，真机按 `deploy/console-acceptance.md` 跑 AC-1…AC-11，随后 G6/G7 请用户确认。见 §5。
 2. **真机待验（G2，需 250）**：C3 —— 真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench；C4 —— 真实 `pi` 流式、`pi --extension` 加载、浏览器 `/chat`（流式 + 决策卡片）。
 3. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
 4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）；**发布链路加固（待评审 + G2）：`cleanupAppmsgTabs()` 扩展为「保留带 `token=` 的 home tab，关掉其余重复/桩 tab」以消除 `New tab not found`（见 `.trellis/spec/engine/error-handling.md` §E1）**；CTA 文案抽样人工对齐（D1）。

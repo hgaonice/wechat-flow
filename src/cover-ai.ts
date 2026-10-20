@@ -8,6 +8,11 @@
  * Nothing here throws into the publishing path. Every failure returns
  * `{ ok: false, reason }` so `publisher.ts` can fall back to the deterministic
  * gradient cover and still ship the article.
+ *
+ * Side channels (both optional, keyed off `AiCoverInput.stateDir`):
+ *   `<stateDir>/cover-model-stats.json` — last ok/fail per model, for `doctor`.
+ *   `<stateDir>/cover-budget.json`      — `cover.ai.dailyBudget` counter.
+ * Neither may ever turn a working cover into a failed one: write errors are WARNs.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -16,6 +21,7 @@ import { averageColor, fitImageTo, imageSize, luminance, parseSize } from "./cov
 import { log } from "./log.ts";
 import { renderTemplate } from "./prompts.ts";
 import { runPi } from "./pi.ts";
+import { atomicWriteJson } from "./state.ts";
 
 // ── types ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +44,12 @@ export interface AiCoverSettings {
   overlayTitle: boolean;
   timeoutSec: number;
   maxTotalSec: number;
+  /**
+   * Cost guardrail: max AI cover generations per article date per account.
+   * `0` (default) = unlimited — i.e. the pre-guardrail behaviour.
+   * Counted per *article* (one `generateAiCover()` call), not per model attempt.
+   */
+  dailyBudget?: number;
 }
 
 export interface SummaryInput {
@@ -77,6 +89,14 @@ export interface AiCoverInput {
   cwd?: string;
   summaryModel?: string;
   summaryFallbacks?: string[];
+  /**
+   * Per-account state dir (`cfg.paths.state`). When set, model stats
+   * (`cover-model-stats.json`) and the daily budget counter (`cover-budget.json`)
+   * are persisted there. Omitted → no side effects (backward compatible).
+   */
+  stateDir?: string;
+  /** Article date `YYYY-MM-DD`; drives budget day rollover. Defaults to local date. */
+  date?: string;
 }
 
 export interface AiCoverResult {
@@ -275,6 +295,27 @@ interface ImageGenResponse {
   error?: { message?: string; code?: string; type?: string };
 }
 
+/**
+ * Some gateways/models refuse the cover-sized request outright instead of snapping it.
+ * Measured 2026-10-20 on the 250 gateway: `global:gpt-image-2.5-sunburst` returns
+ * `invalid_value: Invalid size '900x383'` (divisible-by-16 / minimum pixel budget),
+ * while the same model happily renders `1536x1024` in ~24s. Without this escalation the
+ * whole second AI fallback was dead in production and only surfaced as a generic
+ * 502 after the 180s budget — the deterministic crop (`fitImageTo`) can always bring a
+ * bigger canvas back to 900x383, so retrying bigger is free of risk.
+ */
+export const SIZE_ESCALATION = "1536x1024";
+
+export function isSizeRejection(reason: string): boolean {
+  // Deliberately *size*-specific: a blanket `invalid[_ ]value.*size` also matched
+  // unrelated 400s (e.g. `invalid value for 'steps': … size 1024x1024 ok`) and each
+  // false positive burns a 1536x1024 retry (25–74s). Real strings matched here are
+  // quoted verbatim in tools/cover-selftest.ts §10 (captured from the 250 gateway).
+  return /divisible by 16|invalid size|unsupported size|invalid resolution|unsupported resolution|size (?:must be|is not supported|not supported|is invalid|is unsupported)|invalid[_ ]value for ['"]?size|below the current minimum pixel|resolution is below|width and height must/i.test(
+    reason,
+  );
+}
+
 async function generateOneImage(
   gw: ImageGateway,
   model: string,
@@ -333,10 +374,277 @@ export async function listImageModels(gw: ImageGateway, timeoutSec = 15): Promis
     if (!res.ok) return null;
     const body: any = await res.json();
     const ids: string[] = (body?.data ?? []).map((m: any) => String(m?.id ?? "")).filter(Boolean);
-    return ids.filter((id) => /image|dall|flux|seedream|wanx|imagen|t2i/i.test(id));
+    return ids.filter((id) => /image|dall|flux|seedream|wanx|imagen|t2i|cogview|kolors|hunyuan-image|sd3|sdxl/i.test(id));
   } catch {
     return null;
   }
+}
+
+// ── observability: per-model stats (doctor) ────────────────────────────────
+//
+// Why this exists: image models fail in ways that only show up in the publish log
+// (`all image models failed: …`), i.e. after the article already shipped with a
+// fallback cover. Recording the last ok/fail per model lets `doctor` answer
+// "is model X still alive, and why did it die" without a real image request.
+//
+// A model can be *reachable but unusable* (e.g. `cogview-3-flash` renders but
+// ignores the palette and stamps an "AI生成" watermark). Those are still `ok:true`
+// here — this file is about availability, the brief-conformance judgement lives in
+// tools/cover-selftest.ts + human review. `lastFailReason` is kept verbatim
+// (redacted + truncated) so "429 no quota" stays distinguishable from "model missing".
+
+export interface CoverModelStat {
+  /** ISO timestamp of the last successful image generation. */
+  lastOkAt?: string;
+  /** Latency of that success, milliseconds. */
+  lastOkMs?: number;
+  /** ISO timestamp of the last failure. */
+  lastFailAt?: string;
+  /** Redacted, ≤200 chars — the gateway's own words, so the cause survives. */
+  lastFailReason?: string;
+  okCount: number;
+  failCount: number;
+}
+
+export type CoverModelStats = Record<string, CoverModelStat>;
+
+export const COVER_STATS_FILE = "cover-model-stats.json";
+export const COVER_BUDGET_FILE = "cover-budget.json";
+
+/** Absolute path of the per-model stats file (`<stateDir>/cover-model-stats.json`). */
+export function coverStatsPath(stateDir: string): string {
+  return path.join(stateDir, COVER_STATS_FILE);
+}
+
+/** Absolute path of the daily budget counter (`<stateDir>/cover-budget.json`). */
+export function coverBudgetPath(stateDir: string): string {
+  return path.join(stateDir, COVER_BUDGET_FILE);
+}
+
+/** Local-timezone `YYYY-MM-DD`; the article date wins when the caller already knows it. */
+export function localDateStr(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Strip credential-looking substrings before anything is persisted.
+ * The gateway happily echoes `Authorization: Bearer …` back inside 401/403 bodies.
+ * (Deliberately duplicated from the probe tool: `src/` must not import `tools/`.)
+ */
+export function redactCoverReason(input: string, known: (string | undefined)[] = []): string {
+  let s = String(input ?? "");
+  for (const secret of known) {
+    const k = (secret ?? "").trim();
+    if (k.length >= 6) s = s.split(k).join("***");
+  }
+  s = s.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{6,}/gi, "Bearer ***");
+  s = s.replace(/\bsk-[A-Za-z0-9._-]{4,}/g, "sk-***");
+  s = s.replace(
+    /((?:api[_-]?key|x-api-key|apikey|token|access[_-]?token|authorization)["'\s]*[:=]\s*["']?)([A-Za-z0-9._~+/=-]{8,})/gi,
+    "$1***",
+  );
+  return s;
+}
+
+function clipText(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+/** Tolerant read: a corrupt/missing file must never break a cover or `doctor`. */
+export function readCoverModelStats(stateDir: string | undefined): CoverModelStats {
+  const out: CoverModelStats = {};
+  if (!stateDir) return out;
+  try {
+    const file = coverStatsPath(stateDir);
+    if (!fs.existsSync(file)) return out;
+    const raw: any = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!raw || typeof raw !== "object") return out;
+    for (const [model, v] of Object.entries<any>(raw)) {
+      if (!v || typeof v !== "object") continue;
+      out[model] = {
+        lastOkAt: typeof v.lastOkAt === "string" ? v.lastOkAt : undefined,
+        lastOkMs: typeof v.lastOkMs === "number" && Number.isFinite(v.lastOkMs) ? v.lastOkMs : undefined,
+        lastFailAt: typeof v.lastFailAt === "string" ? v.lastFailAt : undefined,
+        lastFailReason: typeof v.lastFailReason === "string" ? v.lastFailReason : undefined,
+        okCount: Math.max(0, Math.floor(Number(v.okCount) || 0)),
+        failCount: Math.max(0, Math.floor(Number(v.failCount) || 0)),
+      };
+    }
+  } catch {
+    /* best-effort: stats are observability, never a dependency */
+  }
+  return out;
+}
+
+/**
+ * Record one model attempt (success or failure). Never throws: a read-only or
+ * full state dir must not turn a working cover into a failed one.
+ * No `stateDir` → no-op (callers that don't pass one keep the old behaviour).
+ */
+export function recordCoverModelStat(
+  stateDir: string | undefined,
+  model: string,
+  result: { ok: boolean; ms: number; reason?: string },
+  opts: { now?: Date; apiKey?: string } = {},
+): void {
+  if (!stateDir || !model) return;
+  try {
+    const all = readCoverModelStats(stateDir);
+    const prev = all[model] ?? { okCount: 0, failCount: 0 };
+    const at = (opts.now ?? new Date()).toISOString();
+    const ms = Math.max(0, Math.round(Number(result.ms) || 0));
+    all[model] = result.ok
+      ? { ...prev, lastOkAt: at, lastOkMs: ms, okCount: prev.okCount + 1 }
+      : {
+          ...prev,
+          lastFailAt: at,
+          lastFailReason: clipText(redactCoverReason(result.reason ?? "unknown", [opts.apiKey]), 200),
+          failCount: prev.failCount + 1,
+        };
+    atomicWriteJson(coverStatsPath(stateDir), all);
+  } catch (err) {
+    log.warn(`cover-ai: 写 ${COVER_STATS_FILE} 失败（不影响出图）：${(err as Error).message}`);
+  }
+}
+
+// ── cost guardrail: daily AI cover budget ──────────────────────────────────
+
+export interface CoverBudget {
+  /** Article date the counter belongs to (`YYYY-MM-DD`). */
+  date: string;
+  used: number;
+}
+
+/**
+ * Read the counter for `date`. A counter belonging to another date reads as 0 —
+ * that *is* the cross-day rollover (the next `consumeCoverBudget` rewrites the file
+ * with the new date), so no timer and no timezone arithmetic is involved.
+ *
+ * Corrupt / unreadable / non-numeric counter → read as 0 (the next consume rewrites a
+ * valid file, so it self-heals) but **with a WARN**, because a silent reset is exactly
+ * the "guardrail quietly turned itself off" failure mode. The date mismatch stays
+ * silent: that is the intended rollover.
+ */
+export function readCoverBudget(stateDir: string | undefined, date: string): CoverBudget {
+  if (!stateDir) return { date, used: 0 };
+  const file = coverBudgetPath(stateDir);
+  let text: string;
+  try {
+    if (!fs.existsSync(file)) return { date, used: 0 };
+    text = fs.readFileSync(file, "utf8");
+  } catch (err) {
+    log.warn(`cover-ai: 读 ${COVER_BUDGET_FILE} 失败，本次按 0 计（护栏可能失效）：${(err as Error).message}`);
+    return { date, used: 0 };
+  }
+  let raw: any;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    log.warn(`cover-ai: ${COVER_BUDGET_FILE} 不是合法 JSON，本次按 0 计并会在下次调用时重写`);
+    return { date, used: 0 };
+  }
+  if (!raw || typeof raw !== "object") {
+    log.warn(`cover-ai: ${COVER_BUDGET_FILE} 结构异常（${typeof raw}），本次按 0 计并会在下次调用时重写`);
+    return { date, used: 0 };
+  }
+  if (raw.date !== date) return { date, used: 0 }; // normal cross-day rollover — silent by design
+  const n = Number(raw.used);
+  if (!Number.isFinite(n) || n < 0) {
+    log.warn(`cover-ai: ${COVER_BUDGET_FILE} 的 used=${JSON.stringify(raw.used)} 非法，本次按 0 计并会重写`);
+    return { date, used: 0 };
+  }
+  return { date, used: Math.floor(n) };
+}
+
+/**
+ * Reserve one AI-cover slot for `date` (called immediately before the *first*
+ * image request, so a release that never reaches the gateway costs nothing).
+ *
+ * Contract (design §C-3):
+ *  - `limit <= 0` → unlimited, **no file written** (today's behaviour).
+ *  - `limit = n` → calls 1..n are allowed, call n+1 is refused (`ok:false`).
+ *  - one call per `generateAiCover()` — the *article* is counted, not the model,
+ *    otherwise a 3-model fallback chain would burn 3 slots for one cover.
+ */
+export function consumeCoverBudget(
+  stateDir: string | undefined,
+  date: string,
+  limit: number,
+): { ok: boolean; used: number; limit: number } {
+  const lim = Math.max(0, Math.floor(Number(limit) || 0));
+  if (lim === 0) return { ok: true, used: 0, limit: 0 };
+  if (!stateDir) {
+    log.warn(`cover-ai: cover.ai.dailyBudget=${lim} 但没有 stateDir，预算护栏未生效（出图照常）`);
+    return { ok: true, used: 0, limit: lim };
+  }
+  const prev = readCoverBudget(stateDir, date);
+  if (prev.used >= lim) return { ok: false, used: prev.used, limit: lim };
+  const next: CoverBudget = { date, used: prev.used + 1 };
+  try {
+    // Atomic per write (tmp + rename, pid-suffixed tmp) so a crash mid-write cannot
+    // leave a half file. The read-modify-write is NOT cross-process locked: two racing
+    // processes can both read `used` and write the same +1 (measured: 5 concurrent
+    // processes → used=4). Accepted, because per-account publishing is serialized
+    // (`CONSOLE_MAX_CONCURRENCY=1`) and this is a cost guardrail, not billing — but it
+    // means the counter may under-count, never over-count.
+    atomicWriteJson(coverBudgetPath(stateDir), next);
+  } catch (err) {
+    // Counting is a guardrail, not a publish dependency: warn and let the cover go.
+    log.warn(`cover-ai: 写 ${COVER_BUDGET_FILE} 失败（预算未计数，出图照常）：${(err as Error).message}`);
+  }
+  return { ok: true, used: next.used, limit: lim };
+}
+
+// ── observability: the `doctor` line (design §C-4) ──────────────────────────
+
+function agoLabel(iso: string, nowMs: number): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "?";
+  const s = Math.max(0, Math.round((nowMs - t) / 1000));
+  if (s < 90) return `${s}s ago`;
+  const m = s / 60;
+  if (m < 90) return `${Math.round(m)}m ago`;
+  const h = m / 60;
+  if (h < 48) return `${h.toFixed(1)}h ago`;
+  return `${(h / 24).toFixed(1)}d ago`;
+}
+
+function latestBy(
+  stats: CoverModelStats,
+  pick: (s: CoverModelStat) => string | undefined,
+): [string, CoverModelStat] | undefined {
+  return Object.entries(stats)
+    .filter(([, s]) => Boolean(pick(s)))
+    .sort((a, b) => Date.parse(pick(b[1])!) - Date.parse(pick(a[1])!))[0];
+}
+
+/**
+ * Build the `cover-candidates` detail (the caller prefixes `cover-candidates: `).
+ * Pure and model-name-agnostic on purpose: the numbers come from the live gateway
+ * listing and the local stats file, never from a hardcoded list (AC4).
+ */
+export function describeCoverCandidates(input: {
+  models: string[] | null;
+  stats?: CoverModelStats;
+  now?: Date;
+}): string {
+  if (input.models === null) return "models ? (gateway unreachable)";
+  const models = input.models; // may legitimately be [] (gateway up, no image model)
+  const parts = [`${models.length} image model${models.length === 1 ? "" : "s"} (gateway ok)`];
+  const stats = input.stats ?? {};
+  const now = (input.now ?? new Date()).getTime();
+  const lastOk = latestBy(stats, (s) => s.lastOkAt);
+  const lastFail = latestBy(stats, (s) => s.lastFailAt);
+  if (lastOk) {
+    const ms = lastOk[1].lastOkMs;
+    parts.push(`last ok ${lastOk[0]} (${agoLabel(lastOk[1].lastOkAt!, now)}${ms ? `, ${(ms / 1000).toFixed(1)}s` : ""})`);
+  }
+  if (lastFail) {
+    parts.push(`last fail ${lastFail[0]} (${agoLabel(lastFail[1].lastFailAt!, now)}: ${clipText(lastFail[1].lastFailReason ?? "unknown", 60)})`);
+  }
+  return parts.join(" · ");
 }
 
 /**
@@ -347,10 +655,25 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
   const t0 = Date.now();
   const size = input.size ?? "900x383";
   const s = input.settings;
+  const stateDir = input.stateDir;
+  const budgetDate = input.date || localDateStr();
+  const dailyBudget = Math.max(0, Math.floor(Number(s.dailyBudget ?? 0) || 0));
 
   const gw = resolveImageGateway({ gateway: s.gateway, apiKey: s.apiKey });
   if (!gw) {
     return { ok: false, reason: "no image gateway (set cover.ai.gateway/apiKey, COVER_IMAGE_* env, or ~/.pi/agent/models.json)" };
+  }
+
+  // 0) Cost guardrail — checked *before* the summary call: a budget-exhausted day
+  //    must not spend a text-model request either. `>= limit` → the n+1-th cover
+  //    of the day is refused here; the n-th is still allowed (see consumeCoverBudget).
+  if (dailyBudget > 0) {
+    const peek = readCoverBudget(stateDir, budgetDate);
+    if (peek.used >= dailyBudget) {
+      const reason = `daily cover budget exhausted (${peek.used}/${dailyBudget}) — 降级 ffmpeg`;
+      log.warn(`cover-ai: ${reason}`);
+      return { ok: false, reason };
+    }
   }
 
   // 1) brief — a summary failure is not fatal: fall back to a deterministic one.
@@ -385,36 +708,67 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
   const rawPath = input.rawPath ?? path.join(path.dirname(input.outPath), "cover-raw.png");
   const failures: string[] = [];
   const deadline = t0 + Math.max(30, s.maxTotalSec) * 1000;
+  // One budget slot per article: reserved lazily, right before the first gateway
+  // request, so a call that never reaches the gateway costs nothing.
+  let budgetReserved = false;
 
   for (const model of chain) {
     if (Date.now() > deadline) {
       failures.push("total budget exhausted");
       break;
     }
+    if (!budgetReserved) {
+      const slot = consumeCoverBudget(stateDir, budgetDate, dailyBudget);
+      if (!slot.ok) {
+        const reason = `daily cover budget exhausted (${slot.used}/${slot.limit}) — 降级 ffmpeg`;
+        log.warn(`cover-ai: ${reason}`);
+        return { ok: false, reason, brief };
+      }
+      budgetReserved = true;
+    }
     const remaining = Math.max(10, Math.round((deadline - Date.now()) / 1000));
     const budget = Math.min(s.timeoutSec, remaining);
     const started = Date.now();
-    const r = await generateOneImage(gw, model, prompt, size, budget);
+    let r = await generateOneImage(gw, model, prompt, size, budget);
+    if (!r.ok && isSizeRejection(r.reason) && size !== SIZE_ESCALATION) {
+      log.warn(`cover-ai: ${model} rejected size ${size} (${r.reason.slice(0, 80)}) — retrying at ${SIZE_ESCALATION}`);
+      // Re-derive the budget from the chain deadline: a rejection can take ~40s
+      // (measured), and reusing the first attempt's full budget let one model
+      // overrun `maxTotalSec` by up to `timeoutSec`.
+      const remainMs = deadline - Date.now();
+      const escalationBudget = Math.min(s.timeoutSec, Math.max(5, Math.round(remainMs / 1000)));
+      r = await generateOneImage(gw, model, prompt, SIZE_ESCALATION, escalationBudget);
+    }
+    const modelMs = Date.now() - started;
     if (r.ok) {
       const b64size = r.b64.length;
       try {
         fs.mkdirSync(path.dirname(rawPath), { recursive: true });
         fs.writeFileSync(rawPath, Buffer.from(r.b64, "base64"));
       } catch (err) {
-        return { ok: false, reason: `write raw failed: ${(err as Error).message}` };
+        const reason = `write raw failed: ${(err as Error).message}`;
+        recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason }, { apiKey: gw.apiKey });
+        return { ok: false, reason };
       }
       try {
         await fitImageTo(rawPath, input.outPath, size);
       } catch (err) {
-        return { ok: false, reason: `fit failed: ${(err as Error).message}` };
+        const reason = `fit failed: ${(err as Error).message}`;
+        recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason }, { apiKey: gw.apiKey });
+        return { ok: false, reason };
       }
       const dim = imageSize(input.outPath);
       const want = parseSize(size);
       if (!dim || dim.w !== want.w || dim.h !== want.h) {
-        return { ok: false, reason: `unexpected final size ${dim ? `${dim.w}x${dim.h}` : "?"} (want ${want.w}x${want.h})` };
+        const reason = `unexpected final size ${dim ? `${dim.w}x${dim.h}` : "?"} (want ${want.w}x${want.h})`;
+        recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason }, { apiKey: gw.apiKey });
+        return { ok: false, reason };
       }
       const ms = Date.now() - t0;
       log.info(`cover-ai: model=${model} ${((Date.now() - started) / 1000).toFixed(1)}s b64=${b64size}B → ${dim.w}x${dim.h} (总 ${(ms / 1000).toFixed(1)}s)`);
+      // Only a *usable* cover counts as a success here (usable size + fitted):
+      // "reachable but broken" must not look identical to "working" in doctor.
+      recordCoverModelStat(stateDir, model, { ok: true, ms: modelMs }, { apiKey: gw.apiKey });
       // Sanity probe: a light background means the model ignored the palette.
       // Non-blocking — the cover is still usable, but the log makes it visible.
       const avg = await averageColor(input.outPath);
@@ -426,6 +780,7 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
       return { ok: true, model, brief, size: dim, ms };
     }
     failures.push(`${model}[${r.reason}]`);
+    recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason: r.reason }, { apiKey: gw.apiKey });
     log.warn(`cover-ai: ${model} failed — ${r.reason}${r.fatal ? " (fatal, next model)" : ""}`);
   }
 
@@ -443,6 +798,7 @@ export function defaultAiSettings(overrides: Partial<AiCoverSettings> = {}): AiC
     overlayTitle: false,
     timeoutSec: 120,
     maxTotalSec: 300,
+    dailyBudget: 0,
     ...overrides,
   };
 }

@@ -158,3 +158,13 @@ all 3 models failed (5 attempts): justwoker/claude-opus-4-8[no channel] → agen
   - ❌ 单次探测失败就发二维码/失败邮件；
   - ❌ 用 URL 或「页面出现登录菜单」当唯一证据（缓存页会撒谎）；
   - ❌ 把 `unknown` 当 `invalid`（会让一次网络抖动变成一次人工扫码）。
+
+---
+
+## E9：模型"拒绝尺寸"必须放大重试，否则整条降级链是死的（C2，2026-10-20）
+
+- **现象**：`cover.ai.fallbacks = ["global:gpt-image-2.5-sunburst"]` 看着有兜底，实际从未生效——该模型拒绝 900×383（`divisible by 16` / `below the current minimum pixel budget`），网关把它包成 **502**，日志只有 `failed — http 502: Create image failed…`。
+- **为什么没被发现**：主力 `hunyuan` 几乎总成功，兜底分支平时不跑；而"兜底失败"和"模型不存在"在日志里长得一样。
+- **处置（已实现）**：`isSizeRejection(reason)` 命中尺寸类拒绝 → 用 `SIZE_ESCALATION=1536x1024` 重试**同一个模型**，再由 `fitImageTo()` 确定性裁回目标尺寸（真机：`900x383` 拒 → `1536x1024` 成功 → `900x383` ✓）。
+- **通用规则**：任何"兜底模型"都必须**真机验证过一次成功路径**，否则等于没有兜底；探测矩阵（`tools/image-model-probe.ts`）就是这条规则的执行器。
+- **反面模式**：把网关的 502 当成"模型不可用"直接淘汰 —— 502 里可能藏着 400 级参数错误（本例就是）。

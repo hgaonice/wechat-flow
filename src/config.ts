@@ -34,6 +34,12 @@ export interface CoverAiCfg {
   timeoutSec?: number;
   /** Budget for the whole image chain (all models), seconds. */
   maxTotalSec?: number;
+  /**
+   * Max AI cover generations per article date per account. `0` (default) = unlimited.
+   * Counted once per published article, not per model attempt: when it is used up the
+   * cover degrades to ffmpeg (publishing never blocks) and a WARN is logged.
+   */
+  dailyBudget?: number;
 }
 
 export interface CoverCfg {
@@ -119,6 +125,8 @@ export interface AppConfig {
       overlayTitle: boolean;
       timeoutSec: number;
       maxTotalSec: number;
+      /** 0 = unlimited (default). See CoverAiCfg.dailyBudget. */
+      dailyBudget: number;
     };
   };
 
@@ -341,6 +349,8 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
         overlayTitle: (acctAi.overlayTitle ?? rawAi.overlayTitle) === true,
         timeoutSec: acctAi.timeoutSec ?? rawAi.timeoutSec ?? 120,
         maxTotalSec: acctAi.maxTotalSec ?? rawAi.maxTotalSec ?? 300,
+        // 0 = 不限（默认，保持已有绑定行为不变）；负数/NaN 一律当 0。
+        dailyBudget: Math.max(0, Math.floor(Number(acctAi.dailyBudget ?? rawAi.dailyBudget ?? 0) || 0)),
       },
     },
 

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "复核：降级链是否仍成立、失败是否显形（非空 reason）"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "复核：发布成功判定未被放宽、drafts 校验仍为唯一真相源"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "复核：新 selftest 覆盖率与零依赖约束"}

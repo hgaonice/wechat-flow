@@ -261,6 +261,10 @@ export async function runPublish(
         summaryFallbacks: cfg.cover.ai.summaryModel ? [] : cfg.model.article.fallbacks,
         piBin: cfg.piBin,
         cwd: path.dirname(cfg.paths.data),
+        // Observability + cost guardrail (C2 §C-3/C-4): per-account state dir + the
+        // article date (not UTC now) so the daily budget rolls over with the article.
+        stateDir: cfg.paths.state,
+        date,
       });
       if (ai.ok) {
         done = true;

@@ -23,7 +23,7 @@ import { describeCookieFacts, readCookieFacts } from "./session-state.ts";
 import { listSnapshots, restore, snapshot } from "./session-snapshot.ts";
 import { maybeWarnExpiringSession } from "./session-warn.ts";
 import { listAvailableModels, missingModels } from "./pi.ts";
-import { generateAiCover, listImageModels, normalizeImageModelId, resolveImageGateway } from "./cover-ai.ts";
+import { generateAiCover, describeCoverCandidates, listImageModels, normalizeImageModelId, readCoverModelStats, resolveImageGateway } from "./cover-ai.ts";
 import { notify } from "./notify.ts";
 import { todayInTz, isoWeek } from "./date.ts";
 
@@ -665,6 +665,10 @@ async function cover(cfg: AppConfig, flags: Record<string, string | boolean>): P
       summaryFallbacks: cfg.cover.ai.summaryModel ? [] : cfg.model.article.fallbacks,
       piBin: cfg.piBin,
       cwd: APP_DIR,
+      // Same state dir + article date as the publish path, so a manual `cover --ai`
+      // run is counted by the daily budget too (no free bypass).
+      stateDir: cfg.paths.state,
+      date,
     });
     if (!r.ok) {
       console.error(`❌ AI 封面失败：${r.reason}`);
@@ -744,6 +748,9 @@ async function login(cfg: AppConfig, flags: Record<string, string | boolean>): P
 async function doctor(cfg: AppConfig): Promise<void> {
   const checks: [string, boolean, string][] = [];
   const exists = (p: string) => fs.existsSync(p);
+  // Printed verbatim after the checks (C2 §C-4). Pure observability: it is NOT a
+  // ✅/❌ check, so an unreachable gateway can never change doctor's exit code.
+  let candidatesLine = "cover-candidates: models ? (not probed)";
   checks.push(["config.json", exists(path.join(APP_DIR, "config.json")), path.join(APP_DIR, "config.json")]);
   checks.push(["syllabus", exists(path.join(cfg.paths.content, "syllabus.md")), path.join(cfg.paths.content, "syllabus.md")]);
   checks.push(["editor prompt", exists(path.join(cfg.paths.prompts, "editor.md")), ""]);
@@ -826,6 +833,24 @@ async function doctor(cfg: AppConfig): Promise<void> {
       ]);
     }
   }
+  // 图像模型候选行（C2 §C-4）：实时枚举网关 + 本地 stats（最近成功/失败）。
+  // best-effort：任何异常都只降级为 `models ?`，不改退出码、不让 doctor 失败。
+  // 模型名一律来自实时枚举，禁止硬编码（AC4）。
+  {
+    try {
+      const gw = resolveImageGateway({ gateway: cfg.cover.ai.gateway, apiKey: cfg.cover.ai.apiKey });
+      if (!gw) {
+        candidatesLine = "cover-candidates: models ? (no image gateway configured)";
+      } else {
+        // 5s: doctor 不该为了这一行等满 listImageModels 的默认超时。
+        const models = await listImageModels(gw, 5);
+        candidatesLine = `cover-candidates: ${describeCoverCandidates({ models, stats: readCoverModelStats(cfg.paths.state) })}`;
+      }
+    } catch (err) {
+      candidatesLine = `cover-candidates: models ? (probe failed: ${(err as Error).message.slice(0, 80)})`;
+    }
+  }
+
   const conv = spawnSync("convert", ["-version"], { encoding: "utf8" });
   checks.push(["imagemagick convert", conv.status === 0, (conv.stdout || "").split("\n")[0] ?? ""]);
 
@@ -922,6 +947,7 @@ async function doctor(cfg: AppConfig): Promise<void> {
   for (const [name, ok, detail] of checks) {
     console.log(`${ok ? "✅" : "❌"} ${name}${detail ? "  " + detail : ""}`);
   }
+  console.log(candidatesLine);
   console.log(`\naccount       : ${cfg.accountName} (${cfg.account})${cfg.accountAlias === cfg.defaultAccount ? "  [默认]" : ""}`);
   console.log(`publishMethod : ${cfg.publishMethod}`);
   console.log(`cdpPort       : ${cfg.browser.cdpPort}`);

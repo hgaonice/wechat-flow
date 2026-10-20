@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-20 04:18:40
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-20 05:53:44
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -13,6 +13,7 @@ wechat-flow/
   docs
   docs/handoffs
   docs/img
+  docs/research
   out
   out/plans
   prompts
@@ -102,12 +103,12 @@ src/wechat.ts
 
 导出：`BrowserConfig, defaultBrowserConfig, resolveProfileDir, BrowserMode, browserUnit, SystemctlOutcome, unitInstalled, unitActive, BrowserModeInfo, describeBrowserMode, resolveBrowserMode, buildChromeArgs, displayUp, cdpVersion, ensureDisplay, ensureChrome, EnsureBrowserOptions, ensureBrowser, checkBrowser`
 
-### `src/cli.ts`  (930 行)
+### `src/cli.ts`  (966 行)
 >  Command-line entry: parse argv, resolve target accounts (-a/--all), dispatch to modules.
 
 导出：（无，或为可执行入口）
 
-### `src/config.ts`  (429 行)
+### `src/config.ts`  (439 行)
 
 导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, CoverAiCfg, CoverCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
 
@@ -321,10 +322,10 @@ src/wechat.ts
 
 导出：`AccountDiff, Ac3Report, verifyAc3, formatAc3`
 
-### `src/cover-ai.ts`  (455 行)
+### `src/cover-ai.ts`  (775 行)
 > AI cover: article → structured visual brief → image model → exact-size PNG.
 
-导出：`CoverBrief, AiCoverSettings, SummaryInput, AiCoverInput, AiCoverResult, ImageGateway, normalizeImageModelId, resolveImageGateway, parseCoverBrief, fallbackBrief, buildImagePrompt, summarizeCoverBrief, listImageModels, generateAiCover, defaultAiSettings, defaultCoverPrompt, HOME_DIR`
+导出：`CoverBrief, AiCoverSettings, SummaryInput, AiCoverInput, AiCoverResult, ImageGateway, normalizeImageModelId, resolveImageGateway, parseCoverBrief, fallbackBrief, buildImagePrompt, summarizeCoverBrief, SIZE_ESCALATION, isSizeRejection, listImageModels, CoverModelStat, CoverModelStats, COVER_STATS_FILE, COVER_BUDGET_FILE, coverStatsPath, coverBudgetPath, localDateStr, redactCoverReason, readCoverModelStats, recordCoverModelStat, CoverBudget, readCoverBudget, consumeCoverBudget, describeCoverCandidates, generateAiCover, defaultAiSettings, defaultCoverPrompt, HOME_DIR`
 
 ### `src/cover.ts`  (315 行)
 > Deterministic covers. Two renderers (ffmpeg / ImageMagick) plus a
@@ -377,16 +378,16 @@ src/wechat.ts
 
 导出：`renderTemplate`
 
-### `src/publisher.ts`  (484 行)
+### `src/publisher.ts`  (488 行)
 
 导出：`PublishRunResult, parseFrontmatter, ArticleGenResult, buildArticlePrompt, runArticleGeneration, runPublish`
 
-### `src/session-probe.ts`  (420 行)
+### `src/session-probe.ts`  (427 行)
 > Three-state MP session verdict + anti-flapping state machine (C1, design §C-1).
 
 导出：`SessionVerdict, HttpEvidence, DomEvidence, PageEvidence, SessionFacts, detectPageTimeoutShell, decideVerdict, ResourceThresholds, resolveProbeSettings, ProbeState, EMPTY_PROBE_STATE, readProbeState, writeProbeState, nextProbeState, shouldRequestScan, describeHttp, describeDom, RawAuthResponse, classifyAuthResponse, evidenceLine, verdictReason, evidenceSummary, ProbeOptions, ProbeResult, probeSession, LoginAction, planLoginAction, markKeepalive, resetFailureCount, hoursSince`
 
-### `src/session-snapshot.ts`  (703 行)
+### `src/session-snapshot.ts`  (712 行)
 > Cookie snapshot / restore (C1, design §C-3).
 
 导出：`SNAPSHOT_DIR_NAME, DEFAULT_KEEP, SnapshotFileFact, SnapshotManifest, snapshotsDir, snapshotIdOf, sha256File, verifyCookiesDb, SnapshotOptions, SnapshotResult, snapshot, SnapshotInfo, listSnapshots, PruneResult, pruneSnapshots, SystemctlResult, RestoreOptions, RestoreResult, restore`
@@ -430,6 +431,8 @@ src/wechat.ts
 - `tools/cta-selftest.ts` — —
 - `tools/draft-probe.ts` — —
 - `tools/gen-grade9-plans.ts` — —
+- `tools/image-model-probe-selftest.ts` — —
+- `tools/image-model-probe.ts` — —
 - `tools/pi-retry-selftest.ts` — —
 - `tools/repomap.sh` — repomap.sh —— 生成/刷新 TREE.md（文件 + 符号索引，Aider repomap 的轻量等价物）
 - `tools/session-selftest.ts` — —

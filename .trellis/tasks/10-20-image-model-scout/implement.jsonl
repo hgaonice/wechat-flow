@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/engine/index.md", "reason": "引擎层入口与铁律：改 src/ 前必读"}
+{"file": ".trellis/spec/engine/ai-determinism.md", "reason": "「AI 只做内容、其余确定性」边界：封面质量评分必须区分自动结构分与人眼内容分"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "E7 封面四级降级的既有契约：新增 budget/探测不得破坏「绝不阻断发布」"}
+{"file": ".trellis/spec/engine/directory-structure.md", "reason": "新增 tools/ 脚本与 data/research 产物的落位规则"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "自测与断言风格：新 selftest 必须可离线跑、失败必须显形"}
+{"file": ".trellis/tasks/10-20-image-model-scout/design.md", "reason": "本任务契约 C-1..C-4（探测 JSON / 评分边界 / budget / doctor 行）"}
