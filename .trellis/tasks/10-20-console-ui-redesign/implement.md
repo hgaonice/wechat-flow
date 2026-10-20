@@ -7,13 +7,13 @@
 
 ## Step 0 · 基线（先能"看见"再改）
 
-- [ ] 0.1 落库截图脚本 `tools/ui-visual.py`（Python Playwright 1.64，本机已有；**不进 package.json**）
+- [x] 0.1 落库截图脚本 `tools/ui-visual.py`（Python Playwright 1.64，本机已有；**不进 package.json**）
   - 参数：`--base-url`（默认 `http://127.0.0.1:8787`）`--page all|<name>` `--theme dark|light|both` `--update`（写基线）`--diff-dir`
   - 首轮以 `--update` 生成 **现状 7 页 × dark** 基线 → `tools/ui-baselines/`（这是"改之前"的样子，作为回滚参照，不与终版共用文件名：存 `<page>-before.png`）
   - 断言与失败口径：`console` 有 `error` / 触发 `securitypolicyviolation` / 关键元素不可见 → 退出码 2 并列出原因（不静默）
-- [ ] 0.2 落库静态闸门 `tools/ui-gates.sh`（G1–G5，见 design §9.1；Step 7 前 G4 只警告不失败）
-- [ ] 0.3 记录现状类清单：`grep -ho 'class="[^"]*"' src/console/ui/*.html | sort -u` → 存 `tools/ui-baselines/classes-before.txt`（迁移时对照，避免漏迁）
-- [ ] 0.4 起本地控制台跑通基线（`bun src/console/main.ts` 或既有启动方式；登录用临时管理员）
+- [x] 0.2 落库静态闸门 `tools/ui-gates.sh`（G1–G5，见 design §9.1；Step 7 前 G4 只警告不失败）
+- [x] 0.3 记录现状类清单：`grep -ho 'class="[^"]*"' src/console/ui/*.html | sort -u` → 存 `tools/ui-baselines/classes-before.txt`（迁移时对照，避免漏迁）
+- [x] 0.4 起本地控制台跑通基线（`bun src/console/main.ts` 或既有启动方式；登录用临时管理员）
 
 **Done**：`bash tools/ui-gates.sh` 全绿（G4 除外）；`python3 tools/ui-visual.py --theme dark --update` 生成 7 张 `*-before.png` 且无 error 断言。
 
@@ -22,15 +22,15 @@
 ## Step 1 · DS-1 令牌 + 布局骨架（结构变、观感只变导航）
 
 **新增**
-- [ ] 1.1 `src/console/ui/ds.css`：§4 全部令牌 + §7 布局（`.ds-sidebar/.ds-nav/.ds-topbar/.ds-content/.ds-scrim`）+ 极简 base（`box-sizing`、`:focus-visible`、`.ds-sr-only`、`.ds-no-anim`）
-- [ ] 1.2 `src/console/ui/ds.js`：`DS.mount()`（design §3 的纯搬移）+ `DS.setTheme/theme` + 汉堡按钮（<768）+ 幂等与 `catch` 降级
-- [ ] 1.3 7 个 HTML 各加两行：`<link rel="stylesheet" href="/ds.css">`（在旧 CSS 之前）、`<script src="/ds.js" defer>`（在页面 js 之前）；`<head>` 加 `<meta name="color-scheme" content="dark light">`
+- [x] 1.1 `src/console/ui/ds.css`：§4 全部令牌 + §7 布局（`.ds-sidebar/.ds-nav/.ds-topbar/.ds-content/.ds-scrim`）+ 极简 base（`box-sizing`、`:focus-visible`、`.ds-sr-only`、`.ds-no-anim`）
+- [x] 1.2 `src/console/ui/ds.js`：`DS.mount()`（design §3 的纯搬移）+ `DS.setTheme/theme` + 汉堡按钮（<768）+ 幂等与 `catch` 降级
+- [x] 1.3 7 个 HTML 各加两行：`<link rel="stylesheet" href="/ds.css">`（在旧 CSS 之前）、`<script src="/ds.js" defer>`（在页面 js 之前）；`<head>` 加 `<meta name="color-scheme" content="dark light">`
 
-**Gate 1（人工 + 自动）**
-- [ ] `bash tools/ui-gates.sh` → G1/G2 绿
-- [ ] 逐页冒烟：登录 → 账号表有行 → 工作台能载入周期 → 会话列表能出 → admin 区块在 → 设置页在
-- [ ] `python3 tools/ui-visual.py --page all --theme dark --diff-dir /tmp/ui-diff` → 只有"导航从顶栏移到侧栏"的预期差异，**无 JS 错误、无 CSP 违规**
-- [ ] `#who` `#logout` `#nav-admin` `#account-name` 在 DOM 中存在（脚本断言）
+**Gate 1（人工 + 自动）** ✅ 2026-10-20
+- [x] `bash tools/ui-gates.sh` → G1/G2 绿
+- [x] 逐页冒烟：登录 → 账号表有行 → 工作台能载入周期 → 会话列表能出 → admin 区块在 → 设置页在
+- [x] `python3 tools/ui-visual.py --page all --theme dark` → 只有"导航从顶栏移到侧栏"的预期差异，**无 JS 错误、无 CSP 违规**
+- [x] `#who` `#logout` `#nav-admin` `#account-name` 在 DOM 中存在（`ui-visual.py` 内置 DOM 断言）
 
 > 本步**不动**任何业务 HTML/JS，不改观感（字体/卡片仍走旧 CSS）。回滚：删两行。
 
@@ -38,17 +38,17 @@
 
 ## Step 2 · DS-2 组件层 + `/_ds` 演示页 + 主题切换 + 可访问性
 
-- [ ] 2.1 `ds.css` 补齐 design §5 全部组件类（card/stat/table/badge/btn/field/tabs/dialog/toast/skeleton/empty/tip/工具类）
-- [ ] 2.2 `ds.js` 补 `toast()` / `confirm()`（原生 `<dialog>`）/ `icon()`（8 个内联 SVG）
-- [ ] 2.3 `src/console/ui/_ds.html` + `src/console/http/static.ts` 路由：`/_ds` 仅 `WFC_DS_PREVIEW=1` 可达，否则 404
-- [ ] 2.4 顶栏加主题切换按钮（`DS.setTheme`，`aria-pressed`），侧栏加 `aria-current="page"`，内容区前加 `.ds-sr-only` 跳转链接
-- [ ] 2.5 对比度实测：把两套主题的 `text/bg`、`muted/panel`、`accent/panel`、`danger/panel` 实测值写进 `design.md` §4 附注
+- [x] 2.1 `ds.css` 补齐 design §5 全部组件类（card/stat/table/badge/btn/field/tabs/dialog/toast/skeleton/empty/tip/工具类）
+- [x] 2.2 `ds.js` 补 `toast()` / `confirm()`（原生 `<dialog>`）/ `icon()`（8 个内联 SVG）
+- [x] 2.3 `src/console/ui/_ds.html` + `src/console/http/static.ts` 路由：`/_ds` 仅 `WFC_DS_PREVIEW=1` 可达，否则 404
+- [x] 2.4 顶栏加主题切换按钮（`DS.setTheme`，`aria-pressed`），侧栏加 `aria-current="page"`，内容区前加 `.ds-sr-only` 跳转链接
+- [x] 2.5 对比度实测：把两套主题的 `text/bg`、`muted/panel`、`accent/panel`、`danger/panel` 实测值写进 `design.md` §4 附注
 
-**Gate 2**
-- [ ] `WFC_DS_PREVIEW=1` 时 `/_ds` 200 且 14 个组件在 dark/light 都可渲染；未设该变量时 `curl -o /dev/null -w '%{http_code}' localhost:8787/_ds` = **404**
-- [ ] 主题切换后刷新仍保持（localStorage）；`prefers-color-scheme` 生效
-- [ ] 键盘走查：Tab 顺序 侧栏→顶栏→内容；`Escape` 关 dialog；focus ring 可见
-- [ ] `ui-visual.py --page _ds --theme both --update` 生成组件基线
+**Gate 2** ✅ 2026-10-20
+- [x] `WFC_DS_PREVIEW=1` 时 `/_ds` 200 且 14 个组件在 dark/light 都可渲染；未设该变量时 `curl -o /dev/null -w '%{http_code}' localhost:8787/_ds` = **404**
+- [x] 主题切换后刷新仍保持（localStorage）；`prefers-color-scheme` 生效
+- [x] 键盘走查：Tab 顺序 侧栏→顶栏→内容；`Escape` 关 dialog；focus ring 可见
+- [x] `ui-visual.py --page _ds --theme both --update` 生成组件基线
 
 ---
 

@@ -220,9 +220,11 @@
     var menu = el("button", "ds-menu-btn");
     menu.type = "button";
     menu.setAttribute("aria-label", "打开导航");
+    menu.setAttribute("aria-expanded", "false");
     menu.innerHTML = icon("menu");
     menu.addEventListener("click", function () {
-      document.body.classList.toggle("ds-nav-open");
+      var open = document.body.classList.toggle("ds-nav-open");
+      menu.setAttribute("aria-expanded", open ? "true" : "false");
     });
     left.appendChild(menu);
 
@@ -248,10 +250,10 @@
       setTheme(DS.theme() === "light" ? "dark" : "light");
     });
     right.appendChild(toggle);
-    setTheme(storedTheme()); // paints the toggle icon + html[data-theme]
 
     header.appendChild(left);
     header.appendChild(right);
+    setTheme(storedTheme()); // paints the toggle icon + html[data-theme] (in-DOM now)
 
     var scrim = el("div", "ds-scrim");
     scrim.addEventListener("click", function () {

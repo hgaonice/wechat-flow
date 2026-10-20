@@ -28,9 +28,30 @@ const ROUTES: Record<string, string> = {
   "/admin": "admin.html",
 };
 
+/**
+ * Component showcase. Unlisted by default: it is a dev/migration aid, not a
+ * product page, so production stays 404 unless WFC_DS_PREVIEW=1 (design S-6).
+ */
+const PREVIEW_ROUTES: Record<string, string> = {
+  "/_ds": "_ds.html",
+};
+
+function previewEnabled(): boolean {
+  return process.env.WFC_DS_PREVIEW === "1";
+}
+
 export function serveUi(pathname: string): Response {
-  const rel = ROUTES[pathname] ?? pathname.replace(/^\/+/, "");
+  let rel: string | undefined = ROUTES[pathname];
+  if (!rel && PREVIEW_ROUTES[pathname]) {
+    if (!previewEnabled()) return notFoundResponse();
+    rel = PREVIEW_ROUTES[pathname];
+  }
+  rel = rel ?? pathname.replace(/^\/+/, "");
   if (!rel || rel.includes("..") || rel.startsWith("/")) return notFoundResponse();
+
+  const isPreviewAsset = rel === "_ds.html" || rel === "_ds.js";
+  if (isPreviewAsset && !previewEnabled()) return notFoundResponse();
+  if (rel.startsWith("_") && !isPreviewAsset) return notFoundResponse();
 
   const file = path.join(UI_DIR, rel);
   if (!file.startsWith(UI_DIR)) return notFoundResponse(); // defense in depth

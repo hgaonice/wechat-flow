@@ -75,7 +75,7 @@ start() {
   CONSOLE_DB="$DB" "$BUN" src/console/main.ts --status >/dev/null 2>&1 || { echo "db init failed"; exit 1; }
   seed
 
-  HOME="$HOME_DIR" CONSOLE_DB="$DB" CONSOLE_PORT="$PORT" \
+  HOME="$HOME_DIR" CONSOLE_DB="$DB" CONSOLE_PORT="$PORT" WFC_DS_PREVIEW="${WFC_DS_PREVIEW:-1}" \
     nohup "$BUN" src/console/main.ts >"$LOG" 2>&1 &
   echo $! >"$PIDFILE"
 

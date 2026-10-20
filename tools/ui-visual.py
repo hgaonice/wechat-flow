@@ -48,6 +48,7 @@ PAGES: dict[str, tuple[str, str, list[str]]] = {
     "admin": ("/admin", "main", []),
     "workbench": ("/workbench", "#account", []),
     "chat": ("/chat", "#chat-list", []),
+    "_ds": ("/_ds", ".ds-table", []),
 }
 
 # ids the page JS binds to; the shell must never lose them (design S-1 invariant 1)

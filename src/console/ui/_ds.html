@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>设计系统 · wechat-flow console</title>
+<link rel="stylesheet" href="/ds.css">
+<script src="/ds.js" defer></script>
+<script src="/_ds.js" defer></script>
+</head>
+<body data-page="ds">
+<header>
+  <span class="brand">设计系统预览</span>
+  <a href="/app">公众号账号</a>
+  <a href="/workbench">工作台</a>
+  <a href="/chat">Agent 会话</a>
+  <a href="/settings">全局设置</a>
+  <a href="/admin">运维</a>
+</header>
+<main>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <h2 class="ds-card__title">令牌</h2>
+      <p class="ds-card__desc">所有颜色/间距/圆角/字号都来自 --ds-*；组件不得写死色值。</p>
+    </div>
+    <div class="ds-row">
+      <span class="ds-badge ds-badge--accent">accent</span>
+      <span class="ds-badge ds-badge--ok">ok</span>
+      <span class="ds-badge ds-badge--warn">warn</span>
+      <span class="ds-badge ds-badge--danger">danger</span>
+      <span class="ds-badge ds-badge--info">info</span>
+      <span class="ds-badge">neutral</span>
+    </div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <h2 class="ds-card__title">按钮</h2>
+      <div class="ds-card__actions"><button class="ds-btn ds-btn--sm ds-btn--ghost" type="button" id="toggle-loading">切换 loading</button></div>
+    </div>
+    <div class="ds-row">
+      <button class="ds-btn ds-btn--primary" type="button">主要操作</button>
+      <button class="ds-btn" type="button">次要操作</button>
+      <button class="ds-btn ds-btn--ghost" type="button">幽灵</button>
+      <button class="ds-btn ds-btn--quiet" type="button">安静</button>
+      <button class="ds-btn ds-btn--danger" type="button">危险操作</button>
+      <button class="ds-btn ds-btn--primary is-loading" type="button" id="loading-btn">提交中</button>
+      <button class="ds-btn ds-btn--primary" type="button" disabled>禁用</button>
+    </div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">统计</h2></div>
+    <div class="ds-stats">
+      <div class="ds-stat"><div class="ds-stat__label">登录态</div><div class="ds-stat__value ds-stat--ok">valid</div></div>
+      <div class="ds-stat ds-stat--warn"><div class="ds-stat__label">待推送</div><div class="ds-stat__value">3</div></div>
+      <div class="ds-stat ds-stat--danger"><div class="ds-stat__label">失败任务</div><div class="ds-stat__value">1</div></div>
+      <div class="ds-stat"><div class="ds-stat__label">最近成功</div><div class="ds-stat__value">07:18</div></div>
+    </div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">表格</h2></div>
+    <div class="ds-table-wrap">
+      <table class="ds-table">
+        <thead>
+          <tr><th>alias</th><th>显示名</th><th class="is-num">CDP</th><th>登录态</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ds-mono">second</td><td>巧思初数</td><td class="is-num">9223</td>
+            <td><span class="ds-badge ds-badge--ok"><span class="ds-badge__dot"></span>valid</span></td>
+            <td><button class="ds-btn ds-btn--sm ds-btn--ghost" type="button">详情</button></td>
+          </tr>
+          <tr>
+            <td class="ds-mono">gaoh</td><td>每天讲点理</td><td class="is-num">9222</td>
+            <td><span class="ds-badge ds-badge--warn"><span class="ds-badge__dot"></span>unknown</span></td>
+            <td><button class="ds-btn ds-btn--sm ds-btn--ghost" type="button">详情</button></td>
+          </tr>
+          <tr>
+            <td class="ds-mono">demo</td><td>示例账号</td><td class="is-num">9224</td>
+            <td><span class="ds-badge ds-badge--danger"><span class="ds-badge__dot"></span>invalid</span></td>
+            <td><button class="ds-btn ds-btn--sm ds-btn--ghost" type="button" disabled>详情</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">表单</h2></div>
+    <div class="ds-grid ds-grid--2">
+      <div class="ds-field">
+        <label class="ds-field__label" for="demo-name">显示名</label>
+        <input class="ds-input" id="demo-name" placeholder="例如：巧思初数">
+        <span class="ds-field__hint">留空则沿用 alias</span>
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="demo-port">CDP 端口</label>
+        <input class="ds-input is-invalid" id="demo-port" value="abc" aria-invalid="true">
+        <span class="ds-field__error" role="alert">必须是 1024–65535 的整数</span>
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="demo-theme">主题</label>
+        <select class="ds-select" id="demo-theme">
+          <option>暗色</option><option>亮色</option><option>跟随系统</option>
+        </select>
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="demo-json">配置 JSON</label>
+        <textarea class="ds-textarea" id="demo-json" spellcheck="false">{"cover":{"ai":{"dailyBudget":0}}}</textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">反馈</h2></div>
+    <div class="ds-row">
+      <button class="ds-btn ds-btn--ghost" type="button" id="toast-ok">成功 toast</button>
+      <button class="ds-btn ds-btn--ghost" type="button" id="toast-danger">失败 toast</button>
+      <button class="ds-btn ds-btn--ghost" type="button" id="confirm-demo">确认对话框</button>
+    </div>
+    <div class="ds-tip ds-tip--danger">失败必须显形：错误信息写清楚「哪个账号、哪个阶段、原始原因」。</div>
+    <div class="ds-empty">
+      <div>暂无数据</div>
+      <div class="ds-muted">空态不是空白页：给出下一步动作。</div>
+    </div>
+    <div class="ds-skeleton"></div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">进度与版本链</h2></div>
+    <div class="ds-progress"><div class="ds-progress__bar" id="demo-progress"></div></div>
+    <ul class="ds-timeline">
+      <li class="ds-timeline__item is-active">v3 · 2026-10-20 07:18 · pushed</li>
+      <li class="ds-timeline__item">v2 · 2026-10-19 07:00 · generated</li>
+      <li class="ds-timeline__item">v1 · 2026-10-18 06:55 · generated</li>
+    </ul>
+    <div class="ds-diff"><span class="ds-diff__add">+ 新增：函数图像的对称性</span>
+<span class="ds-diff__del">- 删除：待补充</span></div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head"><h2 class="ds-card__title">会话气泡</h2></div>
+    <div class="ds-stack">
+      <div class="ds-bubble ds-bubble--user">帮我把今天的推文改短一点</div>
+      <div class="ds-bubble ds-bubble--agent">已生成 v4，正文 1864 字，封面 900×383。</div>
+      <div class="ds-bubble ds-bubble--tool">tool: publish_draft → 200 (12.4s)</div>
+      <div class="ds-bubble ds-bubble--agent is-error">上游 503：网关超时（已重试 2 次）</div>
+    </div>
+    <div class="ds-decision">
+      即将推送草稿到「每天讲点理」，是否继续？
+      <div class="ds-decision__actions">
+        <button class="ds-btn ds-btn--primary ds-btn--sm" type="button" id="decision-ok">继续推送</button>
+        <button class="ds-btn ds-btn--ghost ds-btn--sm" type="button" id="decision-no">拒绝</button>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
