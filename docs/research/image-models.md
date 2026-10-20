@@ -112,16 +112,36 @@ curl -sS -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/r
 
 ---
 
+## §B.3 上游厂牌与中转链（2026-10-20 取证，用户提问）
+
+`global:gpt-image-2.5-sunburst` 不是直连 `api.openai.com`：
+
+```
+wechat-flow → http://192.168.0.251:3011/v1（自建 New API 网关，品牌前缀 workbuddy，pi provider = meta-gateway）
+             → global: 分组（vendor_id = -1012）→ 上游中转「TokenHub」→ OpenAI gpt-image-2.5
+```
+
+- 网关软件 = **New API**：`GET /api/status` → `docs_link=https://docs.newapi.pro`、`passkey_display_name="New API"`；`/api/pricing` 99 条。
+- 厂牌 = **OpenAI**：`/v1/models` → `owned_by: "openai"`；错误体 `{"code":"invalid_value","type":"image_generation_user_error"}`
+  且约束为「边长 ÷16 + 最小像素预算」（OpenAI 图像 API 特征）。
+- 中转 = **TokenHub**：网关 502 原文 `Create image failed with error: TokenHub returned HTTP 400: {…"request_id":"<uuid>"}`。
+- 混元是另一渠道：`cn:hunyuan-image-alpha-edit → vendor_id=-1020`。
+- 计费在网关侧：两者 `model_ratio=37.5 / quota_type=0`，单价需管理员 token 查 `/api/vendors`（401）。
+
 ## §C 结论：生产链路建议
 
 | 档位 | 建议 | 理由 |
 |---|---|---|
-| **主力** | `cn:hunyuan-image-alpha-edit`（保持不变） | 最快（8.8–14.5s）、配色符合、无文字水印；连续多日真机封面目视合格 |
-| **兜底** | `global:gpt-image-2.5-sunburst`（**依赖尺寸放大重试**） | 出图质量可接受、无文字；但只在 ≥1024 像素预算时可用，已由 `SIZE_ESCALATION` 自动处理；耗时 24–74s，属于"能用但慢" |
+| **主力**（2026-10-20 切换） | `global:gpt-image-2.5-sunburst`（**依赖尺寸放大重试**） | 同题 4 题 4:0 胜出：语义准确、深底、无文字；代价 71.7–75.9s/张 + 必走一次 `1536x1024` 放大。决策依据：`.trellis/tasks/10-20-cover-model-upgrade/report.md` |
+| **兜底**（2026-10-20 起） | `cn:hunyuan-image-alpha-edit` | 最快（8.8–14.5s）、原生贴合 900×383 无需放大 → 主力失败时最快补位；但约 1/4 白底、语义常跑偏，只作兜底 |
 | **备用（不接入）** | `cogview-*` | 3-flash 有水印且忽略配色；4 系无额度且失败耗时 114s |
 | **确定性最终兜底** | `ffmpeg` → `template` | 不变；封面失败绝不阻断正文 |
 
-**生产不动的部分**：`cover.ai.model/fallbacks` 维持现状（hunyuan → gpt-image-2.5），因为本次修的是"兜底为什么从来没生效"（尺寸），而不是"该换谁"。
+**2026-10-20 决策变更（S24 / `10-20-cover-model-upgrade`）**：用户目视同题 4 组对比后选 **A（gpt-image-2.5 当主力）**。
+生产配置已改为 `model=global:gpt-image-2.5-sunburst`、`fallbacks=[cn:hunyuan-image-alpha-edit]`；
+`SIZE_ESCALATION` 是新主力的**必需**路径（900×383 必被拒 → 1536×1024 → `fitImageTo` 裁回）。
+真机：`model=global:gpt-image-2.5-sunburst 71.7s → 900x383` + `draft cover set ✓`。
+回滚：把 `model/fallbacks` 两行对调回原值（config 每请求读取，无需重启）。
 
 ---
 
@@ -132,6 +152,8 @@ curl -sS -X POST "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/r
 | 2026-10-20 | `global:gpt-image-2.5-sunburst`（1536×1024 → 裁切） | 抛物线 + 顶点水平切线 + 两侧虚线区间，深底 + 金色强调，**无文字/无数字/无乱码**；构图契合"留白大"要求 | pi（待用户复核） |
 | 2026-10-20 | `cogview-3-flash` | 全灰阶几何图，右下角 **"AI生成" 水印**；无强调色 | pi |
 | 2026-10-20 | `cn:hunyuan-image-alpha-edit` | 与简报一致的深底 + 强调色，无文字 | pi |
+| 2026-10-20 | 同题对比（4 题 × hunyuan/gpt-image-2.5） | **gpt-image-2.5 4:0 胜**：hunyuan 1 题白底、2 题语义错乱；gpt 4 题全中主题 | pi（用户 GATE-1 裁决：选 A） |
+| 2026-10-20 | `global:gpt-image-2.5-sunburst`（250 真机 2026-10-21 封面） | 深底 + 书本/知识地图 + 6 分支 + 三个抛物线模型框，无文字/水印，配色符合；已替换草稿封面（`before≠after`） | pi（待用户签字） |
 
 > AC5 要求「至少 1 张真机封面人工目视认可」：2026-10-20 用真草稿封面复核后在此补一行。
 

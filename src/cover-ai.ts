@@ -316,7 +316,7 @@ export function isSizeRejection(reason: string): boolean {
   );
 }
 
-async function generateOneImage(
+export async function generateOneImage(
   gw: ImageGateway,
   model: string,
   prompt: string,
