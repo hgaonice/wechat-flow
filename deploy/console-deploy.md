@@ -135,7 +135,34 @@ systemctl start wechat-console.service
 | 大量 429 | 调大 `CONSOLE_RATE_PER_MIN/BURST`，或置 `CONSOLE_RATE_PER_MIN=0` |
 | 发布会话失败 | 先确认 Chrome/`DISPLAY=:99`；必要时临时移除 `NoNewPrivileges`（保守沙箱说明见 service 注释） |
 | 凭据无法解密 | 主密钥丢失/更换；用备份的 `master.key` 恢复 |
+| 地址变更邮件里写「未配置（请管理员在控制台补录）」 | `secrets` 表缺该账号的 `wechat_login`。见 §7.1 录入 |
 | 计划不触发 | 看 `journalctl -u wechat-console`；确认账号 `enabled`、`schedule` 与服务时钟 |
+
+### 7.1 录入公众号后台账密（地址变更邮件会带上它）
+
+C5 的隧道地址邮件正文含「【本账号后台账密】」一段，取自 `secrets` 表该账号的
+`wechat_login`（AES-256-GCM 加密，只写不读）。**表里没有这一行，邮件就只写「未配置」**。
+
+两条录入路径，任选：
+
+1. **控制台 UI**：`/account` → 账号详情 → 凭据 → 类型 `wechat_login` → 明文填
+   `{"username":"后台账号","password":"口令"}`（或只填口令）。
+2. **命令行**（明文不进 shell 历史/不回显，适合批量）：
+
+```bash
+cd /root/wechat-flow
+for A in gaoh second; do          # 每个账号各跑一次（同样的两行，换 alias）
+  read -rsp "[$A] 公众号后台密码: " P; echo
+  printf '%s' "$P" | bun tools/console-secret.ts set --alias "$A" --user '后台账号'
+  unset P
+done
+bun tools/console-secret.ts list            # 只看「已配置/未配置」与打码长度
+bun tools/console-secret.ts verify --alias gaoh   # 打印打码后的邮件正文预览
+```
+
+`verify` 会真正走一遍 `decryptWechatLogin` + `buildTunnelMail`，能直接看出邮件里
+长什么样（密码永远打码）。写入后想立刻收到新邮件：控制台「运维 → 重发邮件」。
+Web 端改密码不影响该凭据；换主密钥必须重新录入。
 
 ---
 
