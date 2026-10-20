@@ -1,0 +1,39 @@
+[Unit]
+Description=WeChat Flow — virtual X display for Chrome (Xvfb :99)
+Documentation=file:///root/wechat-flow/deploy/console-deploy.md
+# The display is a shared resource: both accounts' Chromes render into :99, and
+# Chrome only allows a page to open pop-ups/new tabs when it is the visible tab
+# (see .trellis/spec/engine/verification.md「tab 必须可见」). So it must NOT be
+# owned by wechat-console.service — restarting the console would take the display
+# away from every browser.
+After=network.target
+Before=wechat-browser@.service
+
+# A display that cannot bind (e.g. a bare `Xvfb :99` still running) would
+# otherwise restart every 5s forever; stop retrying after 10 tries in 5 minutes
+# so the failure is visible in `systemctl --failed` and in the deploy check.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# Identical to the command line that was running unmanaged before C1 (2026-10-20):
+#   Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+# Xvfb staying up is the precondition for every browser unit (Requires= below).
+# `Restart=always` (not RemainAfterExit) keeps the invariant that matters for
+# ops: `is-active` ⇒ the X server is actually running. A crashed display must
+# never look "active" — deploy/session-check.sh relies on this.
+# `systemctl stop` is still a real stop (systemd never restarts on stop intent);
+# a migration-time stop of the bare `Xvfb :99` + start of this unit is the one
+# sequence that can hit the start limit (display busy) → fix the order, then
+# `systemctl reset-failed wechat-xvfb` and start again.
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wechat-xvfb
+
+[Install]
+WantedBy=multi-user.target

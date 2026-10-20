@@ -1,6 +1,6 @@
 # Ops & Deploy（控制台部署与加固）—— C6
 
-> **状态：v1（C6 实现后校准，2026-10-14）**。
+> **状态：v1.1（2026-10-20 增补「浏览器 unit 契约」；C1 Step5 实现后校准）**。
 > 契约与代码冲突时：**先改本文件，再改代码**。
 > 关联：`ops-tunnel.md`（隧道监督）、`security.md`（K1 限流/暴露面）、`api.md`（429/`/health`）。
 
@@ -25,6 +25,29 @@
 - 环境：`EnvironmentFile=-/etc/default/wechat-console`（`wechat-console.env.example` 为模板）；**环境文件不含明文密钥**（master key 走 0600 文件）。
 - 沙箱：**保守**（`NoNewPrivileges=true` + 必要 `ReadWritePaths`）；**禁用会阻断 Chrome/CDP 的指令**（如 `ProtectSystem=strict`）。
 - 旧 systemd timer（`wechat-plan.timer`/`wechat-publish.timer`）**保留不删**，由 `disable-timer.sh` 停用以便回退。
+
+### 二·补 浏览器 unit 契约（C1 Step5 / R3-R4）
+
+> 目的：**重启/部署 console 不得影响公众号登录态**。E1/E2 已证明重启 console 不会杀 Chrome，
+> 但 Chrome 的 renderer 当时寄生在 SSH 会话 cgroup（E4），且没有任何机制阻止同 profile 双开。
+
+| unit | 拥有什么 | 契约 |
+|---|---|---|
+| `wechat-xvfb.service` | `Xvfb :99`（共享显示） | `Restart=always` + `StartLimitBurst=10/300s`（**不用** `RemainAfterExit`：`is-active` 必须等价于“X server 真的在跑”，部署自检依赖这一条）；显示是共享资源（两个 Chrome 都要可见性），**不得**放进 console 的 cgroup |
+| `wechat-browser@<alias>.service` | 一个 Chrome（每 alias 一个） | 模板 unit，`%i`=alias；`Requires=wechat-xvfb.service`、`KillMode=mixed`、`TimeoutStopSec=20`、`Restart=always`、`RestartPreventExitStatus=0`、`StartLimitBurst=10/300s` |
+| `wechat-console.service` | **只是 CDP 客户端** | 不再 spawn Chrome（`WFC_BROWSER_MODE=external` 时）；重启它是登录态的 no-op |
+
+**契约条款**
+
+1. **单实例是硬约束**：unit 名就是锁。inline 模式 spawn 前必须检查 `systemctl is-active wechat-browser@<alias>`，active 则**报错拒绝**（不降级、不强起）。同 profile 双开＝微信判定异常登录＝踢线 + 强扫码。
+2. **Chrome 参数单一真相源**：只在 `src/browser.ts#buildChromeArgs`；unit 的 `ExecStart` 只调 `src/browser-agent.ts --account %i`，agent 用 `execve` 把自己换成 Chrome（systemd `MainPID` 即 Chrome）。**禁止**把 flags 复制进 unit 文件（指纹漂移 = 风控）。
+3. **停止语义**：`KillMode=mixed` 先给主进程 SIGTERM（Chrome 有窗口 flush Cookies SQLite），`TimeoutStopSec=20` 之后才 SIGKILL 残留。**禁止** cgroup 级硬杀（`KillMode=control-group` / `systemctl kill -s SIGKILL`）—— 那是 `session restore` 需要的“干净文件”前提。
+4. **external 模式绝不回退 spawn**：unit 不存在 / `systemctl start` 失败 → 抛明确错误（带 `systemctl status` 摘要与 `inline` 回滚提示），**不得**静默 spawn 第二个 Chrome。
+5. **托管方式判定**：`WFC_BROWSER_MODE=external|inline` 优先；未设置时按 unit 是否存在自动判定（250=external、开发机=inline）。非法值在 `ensureBrowser` 抛错、在 `doctor` 显形（`browser 托管方式` 行）。
+6. **部署后自检**：`deploy/deploy.sh` 跑完 rsync 后调用 `deploy/session-check.sh`，① `wechat-xvfb.service` active ② 每 alias 的浏览器 unit active **且 MainPID 是 chrome** ③ `session probe --no-persist` 逐账号无 `invalid`（`unknown` 不算失败）。任一失败 → **非零退出**并打印证据；`WFC_DEPLOY_SKIP_CHECKS=1`（只跳过自检，不修任何东西）。
+   两个豁免，避免把迁移中间态/部署自身判成故障：**(a)** unit 装了但从未 enable（`systemctl is-enabled` = `disabled`）→ 黄字提示「迁移未完成」而非失败；**(b)** 探针必须带 `--no-persist`，部署不得推高 `consecutiveFailures` 而间接触发扫码。
+7. **迁移顺序**（一次性，不需要扫码）：`install.sh` → 停 console → 停裸 Chrome（SIGTERM）→ 停裸 Xvfb → `start wechat-xvfb` → `enable --now wechat-browser@<alias>` ×N → `restart wechat-console` → `session-check.sh`。顺序反了会出现“unit active 但 MainPID 不是 chrome”（裸 Chrome 占着 CDP 端口），`session-check.sh` 会当场报出来。
+8. **回滚**：`WFC_BROWSER_MODE=inline` + `systemctl disable --now wechat-browser@<alias>` + `restart wechat-console`（先 disable 再 restart，否则 inline 守卫会拒绝 spawn）。
 
 ---
 
@@ -79,6 +102,10 @@
 | 失败作业无退避地每分钟重试 | 重试风暴（D31 修复对象） |
 | `/health` 暴露账号/队列细节 | 信息泄露 |
 | 启用会阻断 Chrome 的强沙箱 | 浏览器发布失败 |
+| 把 Chrome 参数抄进 unit 文件 | 两份真相漂移 → 指纹变化 → 微信风控/扫码 |
+| external 模式下失败后“自动回退 spawn” | 同 profile 双实例 → 账号被踢线 |
+| 同 alias 开两个浏览器（inline + unit） | 同上 |
+| 部署后不做会话自检就宣布完成 | “部署成功但已掉线”，等当天发布才暴雷 |
 
 ---
 
@@ -99,3 +126,6 @@
 | systemd | `wechat-console.service` + `cloudflared.service` | ✅ 同左；`systemd-analyze verify` 仅报开发机无 bun 路径 | 保守沙箱（不 `ProtectSystem=strict`） |
 | SSE 修复 | N1/N2/N3 | ✅ `chat-sse.ts` cleanup 前置 + 已 abort 立即清理；`events.ts close()` 先广播 `chat.closed` 再清理；`ui/chat.js` 收到 `chat.closed`/`chat.lost` 关闭 ES | `close(sessionId, payload={status:"closed"})` |
 | 非阻塞观察 | — | `ChatBus.close` 可能与应用层 `emit` 重复投递 `chat.closed`（客户端幂等）；限流 key 在未登录时对直连 loopback 可能回落 `local`（受 `CONSOLE_TRUST_CF` 控制） | 仅登记 |
+| 浏览器托管（C1 Step5） | （新增） | ✅ `deploy/systemd/wechat-xvfb.service` + `wechat-browser@.service` + `src/browser-agent.ts`（execve 换进程，MainPID=chrome）+ `browser.ts` 模式分派；`deploy/session-check.sh` 作为部署后自检 | `systemd-analyze verify` 仅报开发机无 `/root/.nvm/.../bun` 路径 |
+| 单实例约束 | （新增） | ✅ external 由 unit 名互斥；inline 前置 `systemctl is-active` 守卫（active 即报错拒绝 spawn） | 与 `session-snapshot.restore` 的 stop/start 语义一致 |
+| 部署后自检 | （新增） | ✅ `deploy.sh` → `session-check.sh`：xvfb + 每 alias unit（MainPID 必须是 chrome）+ `session probe` 无 `invalid`；`WFC_DEPLOY_SKIP_CHECKS=1` 应急跳过 | 失败非零退出且打印证据，不自动“修复” |

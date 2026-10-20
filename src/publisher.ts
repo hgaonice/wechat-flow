@@ -304,6 +304,7 @@ export async function runPublish(
       account: cfg.account,
       email: cfg.notify.email,
       qrOutPath: path.join(cfg.paths.state, "wechat-login-qr.png"),
+      stateDir: cfg.paths.state,
       env: proxyEnv(cfg),
       waitSec: cfg.browser.loginWaitSec ?? 900,
     });

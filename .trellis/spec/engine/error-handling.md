@@ -143,3 +143,18 @@ all 3 models failed (5 attempts): justwoker/claude-opus-4-8[no channel] → agen
 - [ ] 新加的“可选增强”：坏了会不会误伤主流程？
 - [ ] 新加的降级：成功后能否从日志看出“曾降级”？
 - [ ] 重跑是否安全（幂等）？`--force` 是否只影响目标日期？
+
+---
+
+## E8：登录态「误判」比「失效」更贵（C1，2026-10-20）
+
+- **现象**：日志 `WeChat session expired (url: https://mp.weixin.qq.com/) — requesting a new login`，随后二维码邮件 ×3、900s 超时、失败邮件；同账号 15 分钟后 `session valid` 并发布成功。
+- **根因**：判定只有 DOM 一条证据、二值输出；MP 的缓存 `page_timeout` 壳页会把有效会话伪装成退登，reload 时序抖动也会读到旧 DOM。
+- **处置（已实现）**：
+  - 三态判定 + 证据分层（cookie → 鉴权请求 → DOM），壳页/读不到一律 `unknown`；
+  - `unknown` 不打扰人，连续 3 次或 cookie 过期才发码；
+  - 失败邮件必须带证据摘要，让人一眼区分「探测不确定」与「服务端确认失效」。
+- **反面模式（禁止）**：
+  - ❌ 单次探测失败就发二维码/失败邮件；
+  - ❌ 用 URL 或「页面出现登录菜单」当唯一证据（缓存页会撒谎）；
+  - ❌ 把 `unknown` 当 `invalid`（会让一次网络抖动变成一次人工扫码）。

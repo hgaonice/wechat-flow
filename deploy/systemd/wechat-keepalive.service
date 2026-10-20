@@ -6,8 +6,10 @@ Wants=network-online.target
 
 # The MP web ticket (slave_sid & friends) expires 4 days after issue, but MP
 # re-issues it on authenticated activity. This unit makes one authenticated
-# request per account every 12h, so the session never lapses and no QR rescan
+# request per account every 5h, so the session never lapses and no QR rescan
 # is needed. If the session IS gone, it exits non-zero and emails a fresh QR.
+# A successful run also refreshes the cookie snapshot (rollback point) and may
+# send the "ticket expires in <24h" advisory mail — neither can fail the run.
 
 [Service]
 Type=oneshot

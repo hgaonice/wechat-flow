@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-16 23:43:46
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-20 04:18:40
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -22,6 +22,7 @@ wechat-flow/
   tools
 
 [src/ 模块]
+src/browser-agent.ts
 src/browser.ts
 src/cli.ts
 src/config.ts
@@ -67,6 +68,7 @@ src/console/server.ts
 src/console/tunnel/cloudflared.ts
 src/console/types.ts
 src/console/verify-ac3.ts
+src/cover-ai.ts
 src/cover.ts
 src/cta.ts
 src/date.ts
@@ -79,26 +81,35 @@ src/pi.ts
 src/planner.ts
 src/prompts.ts
 src/publisher.ts
+src/session-probe.ts
+src/session-snapshot.ts
+src/session-state.ts
 src/session.ts
+src/session-warn.ts
 src/state.ts
 src/wechat.ts
 ```
 
 ## src/ 模块与导出符号
 
-### `src/browser.ts`  (170 行)
+### `src/browser-agent.ts`  (117 行)
+> Chrome front-end for `wechat-browser@<alias>.service` (C1 / design.md §C-2).
+
+导出：（无，或为可执行入口）
+
+### `src/browser.ts`  (412 行)
 > Browser (Chrome CDP) publishing support.
 
-导出：`BrowserConfig, defaultBrowserConfig, resolveProfileDir, displayUp, cdpVersion, ensureDisplay, ensureChrome, ensureBrowser, checkBrowser`
+导出：`BrowserConfig, defaultBrowserConfig, resolveProfileDir, BrowserMode, browserUnit, SystemctlOutcome, unitInstalled, unitActive, BrowserModeInfo, describeBrowserMode, resolveBrowserMode, buildChromeArgs, displayUp, cdpVersion, ensureDisplay, ensureChrome, EnsureBrowserOptions, ensureBrowser, checkBrowser`
 
-### `src/cli.ts`  (517 行)
+### `src/cli.ts`  (930 行)
 >  Command-line entry: parse argv, resolve target accounts (-a/--all), dispatch to modules.
 
 导出：（无，或为可执行入口）
 
-### `src/config.ts`  (359 行)
+### `src/config.ts`  (429 行)
 
-导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
+导出：`SRC_DIR, APP_DIR, CONFIG_PATH, ModelCfg, CoverAiCfg, CoverCfg, AccountCfg, AppConfig, defaultAlias, AccountInfo, listAccounts, resolveConfig, loadConfig, ensureDirs`
 
 ### `src/console/agent/events.ts`  (110 行)
 > In-process chat event bus (C4, I4-5 / design.md D5).
@@ -265,7 +276,7 @@ src/wechat.ts
 
 导出：`EnqueueOptions, enqueue, getJob, ListJobsOptions, listJobsForAccount, listJobLogs, appendLog, setProgress, claimNext, finish, cancel, reapStartup, hasPublishJobForDate, hasActivePlanJob, countFailed, lastFailureAt`
 
-### `src/console/jobs/scheduler.ts`  (219 行)
+### `src/console/jobs/scheduler.ts`  (235 行)
 > Scheduler: scan due plans on a timer and enqueue jobs (idempotently).
 
 导出：`TZ, ScheduleConfig, readSchedule, ScheduleAction, schedulerTick, SchedulerHandle, SchedulerOptions, startScheduler`
@@ -290,7 +301,7 @@ src/wechat.ts
 
 导出：`SendFn, NotifyOpts, NotifyResult, internalIpv4, consolePort, WechatLogin, decryptWechatLogin, formatStamp, TunnelMailBody, buildTunnelMail, notifyTunnelChange`
 
-### `src/console/server.ts`  (1411 行)
+### `src/console/server.ts`  (1460 行)
 > Console HTTP app: routing, session middleware, CSRF, RBAC, and the C1 API.
 
 导出：`AppState, OpsDeps, Ctx, App, createApp`
@@ -310,10 +321,15 @@ src/wechat.ts
 
 导出：`AccountDiff, Ac3Report, verifyAc3, formatAc3`
 
-### `src/cover.ts`  (153 行)
->  Generate a deterministic 900x500 cover via ImageMagick (`convert`).
+### `src/cover-ai.ts`  (455 行)
+> AI cover: article → structured visual brief → image model → exact-size PNG.
 
-导出：`generateFfmpegCover, detectCjkFont, CoverInput, generateTemplateCover`
+导出：`CoverBrief, AiCoverSettings, SummaryInput, AiCoverInput, AiCoverResult, ImageGateway, normalizeImageModelId, resolveImageGateway, parseCoverBrief, fallbackBrief, buildImagePrompt, summarizeCoverBrief, listImageModels, generateAiCover, defaultAiSettings, defaultCoverPrompt, HOME_DIR`
+
+### `src/cover.ts`  (315 行)
+> Deterministic covers. Two renderers (ffmpeg / ImageMagick) plus a
+
+导出：`DEFAULT_COVER_SIZE, parseSize, fitImageTo, imageSize, averageColor, luminance, generateFfmpegCover, detectCjkFont, CoverInput, generateTemplateCover`
 
 ### `src/cta.ts`  (167 行)
 > 文章末尾互动引导语（CTA）——确定性后处理。
@@ -348,12 +364,12 @@ src/wechat.ts
 
 导出：`NotifyMessage, notify`
 
-### `src/pi.ts`  (216 行)
+### `src/pi.ts`  (533 行)
 > Thin, version-independent integration with the pi CLI.
 
-导出：`PiRunOptions, PiRunResult, runPi, resolvePiBin`
+导出：`PiRunOptions, PiAttempt, PiRunResult, PiFailureClass, classifyPiFailure, shortReason, formatChainError, parseModelList, listAvailableModels, missingModels, backoffMs, runPiWith, runPi, resolvePiBin`
 
-### `src/planner.ts`  (161 行)
+### `src/planner.ts`  (173 行)
 
 导出：`PlanDay, Plan, planPath, loadPlan, findEntryForDate, runPlan, proxyEnv`
 
@@ -361,14 +377,34 @@ src/wechat.ts
 
 导出：`renderTemplate`
 
-### `src/publisher.ts`  (417 行)
+### `src/publisher.ts`  (484 行)
 
 导出：`PublishRunResult, parseFrontmatter, ArticleGenResult, buildArticlePrompt, runArticleGeneration, runPublish`
 
-### `src/session.ts`  (504 行)
+### `src/session-probe.ts`  (420 行)
+> Three-state MP session verdict + anti-flapping state machine (C1, design §C-1).
+
+导出：`SessionVerdict, HttpEvidence, DomEvidence, PageEvidence, SessionFacts, detectPageTimeoutShell, decideVerdict, ResourceThresholds, resolveProbeSettings, ProbeState, EMPTY_PROBE_STATE, readProbeState, writeProbeState, nextProbeState, shouldRequestScan, describeHttp, describeDom, RawAuthResponse, classifyAuthResponse, evidenceLine, verdictReason, evidenceSummary, ProbeOptions, ProbeResult, probeSession, LoginAction, planLoginAction, markKeepalive, resetFailureCount, hoursSince`
+
+### `src/session-snapshot.ts`  (703 行)
+> Cookie snapshot / restore (C1, design §C-3).
+
+导出：`SNAPSHOT_DIR_NAME, DEFAULT_KEEP, SnapshotFileFact, SnapshotManifest, snapshotsDir, snapshotIdOf, sha256File, verifyCookiesDb, SnapshotOptions, SnapshotResult, snapshot, SnapshotInfo, listSnapshots, PruneResult, pruneSnapshots, SystemctlResult, RestoreOptions, RestoreResult, restore`
+
+### `src/session-state.ts`  (127 行)
+> Local, zero-request session evidence: read the MP login cookies straight out
+
+导出：`SESSION_COOKIE_NAMES, chromeTimeToUnix, CookieFacts, cookiesDbPath, readCookieFacts, describeCookieFacts`
+
+### `src/session.ts`  (742 行)
 > WeChat MP login-session helpers (browser/CDP method).
 
-导出：`EmailCfg, LoginProbe, emailQrImage, focusMpTab, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
+导出：`EmailCfg, LoginProbe, CollectPageOptions, collectPageEvidence, ProbeAccountOptions, probeAccountSession, emailQrImage, focusMpTab, EnsureLoginOptions, EnsureLoginResult, ensureLoggedIn`
+
+### `src/session-warn.ts`  (147 行)
+> Advisory "ticket is about to expire" warning (C1, design §C-4 / R6).
+
+导出：`WARN_THRESHOLD_HOURS, WARN_INTERVAL_HOURS, WarnState, warnStateFile, readWarnState, WarnOptions, WarnOutcome, maybeWarnExpiringSession`
 
 ### `src/state.ts`  (56 行)
 
@@ -389,8 +425,14 @@ src/wechat.ts
 
 ## tools/ 脚本
 
+- `tools/browser-selftest.ts` — —
+- `tools/cover-selftest.ts` — —
 - `tools/cta-selftest.ts` — —
 - `tools/draft-probe.ts` — —
 - `tools/gen-grade9-plans.ts` — —
+- `tools/pi-retry-selftest.ts` — —
 - `tools/repomap.sh` — repomap.sh —— 生成/刷新 TREE.md（文件 + 符号索引，Aider repomap 的轻量等价物）
+- `tools/session-selftest.ts` — —
+- `tools/session-snapshot-selftest.ts` — —
+- `tools/session-warn-selftest.ts` — —
 - `tools/upload-plans-250.py` — —

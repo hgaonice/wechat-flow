@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/engine/index.md", "reason": "引擎层入口与铁律：改 src/ 前必读"}
+{"file": ".trellis/spec/engine/verification.md", "reason": "唯一真相源与校验契约：会话/发布校验不得放宽"}
+{"file": ".trellis/spec/engine/error-handling.md", "reason": "E1/E2 类错误模式与失败显形要求"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "零依赖/确定性/不引入新运行时依赖"}

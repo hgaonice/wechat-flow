@@ -9,13 +9,26 @@ import { runPlan, findEntryForDate, proxyEnv } from "./planner.ts";
 import { runPublish, parseFrontmatter } from "./publisher.ts";
 import { loadState } from "./state.ts";
 import { checkEmail } from "./mailer.ts";
-import { checkBrowser } from "./browser.ts";
+import { checkBrowser, describeBrowserMode, resolveProfileDir } from "./browser.ts";
 import { listDrafts, listDraftTitles, verifyDraftPublished, verifyDraftBody, setDraftCover, probeDraftCover } from "./wechat.ts";
-import { ensureLoggedIn } from "./session.ts";
+import { ensureLoggedIn, probeAccountSession } from "./session.ts";
+import {
+  hoursSince,
+  markKeepalive,
+  readProbeState,
+  resetFailureCount,
+  type ProbeResult,
+} from "./session-probe.ts";
+import { describeCookieFacts, readCookieFacts } from "./session-state.ts";
+import { listSnapshots, restore, snapshot } from "./session-snapshot.ts";
+import { maybeWarnExpiringSession } from "./session-warn.ts";
 import { listAvailableModels, missingModels } from "./pi.ts";
 import { generateAiCover, listImageModels, normalizeImageModelId, resolveImageGateway } from "./cover-ai.ts";
 import { notify } from "./notify.ts";
 import { todayInTz, isoWeek } from "./date.ts";
+
+/** Recognised `session` subcommands (matched by name, not by argv position). */
+const SESSION_SUBS = new Set(["probe", "snapshot", "restore", "list"]);
 
 const USAGE = `usage: wechat-flow <command> [options]
 
@@ -24,9 +37,16 @@ commands:
   run       plan 或 publish 自动判断  status    已发布清单
   accounts  列出所有公众号          doctor    环境自检
   login     建立/续期登录会话        drafts    查看草稿箱
-  keepalive 会话保活（4 天票据续期）
+  keepalive 会话保活（4 天票据续期；成功后自动做 cookie 快照 + 到期预警）
+  session   会话诊断与回滚（见下）
   cover     给草稿自动设封面（--ai 只重画 AI 封面，--upload 同时设到草稿）
   mail-test 发送测试邮件
+
+session 子命令:
+  probe                      三层证据判定 valid|invalid|unknown（只读）
+  snapshot [--reason <r>]    原子快照 Cookies + Local State（保留 10 份）
+  restore --id <id>          校验 → 停浏览器 → 替换 → 启浏览器 → 复验
+  list                       列出快照（时间倒序）
 
 options:
   -a, --account <alias>   指定公众号（省略则用默认号）
@@ -36,15 +56,21 @@ options:
       --reuse             复用已生成的文章
       --force             忽略已发布记录，重新发布（修复历史草稿用）
   -t, --to <a@b,c@d>      邮件收件人（mail-test）
-      --wait <sec>        登录等待秒数（login/drafts）
+      --wait <sec>        登录等待秒数（login/drafts/keepalive --wait 可阻塞等待扫码）
       --qr                二维码同时发邮件（keepalive 默认开启）
       --no-qr             不发送登录二维码邮件（keepalive）
+      --reason <r>        session snapshot：快照原因（默认 manual；同分钟同 reason 只留一份）
+      --keep <n>          session snapshot：保留份数（默认 10）
+      --id <snapshot>     session restore：快照 id（可用前缀；先 session list）
       --title <t>         cover：直接指定草稿标题
       --cover <png>       cover：封面文件（默认 imgs/<date>/cover.png）
       --ai                cover：用 AI 重画封面（不重跑文章）
       --upload            cover：配合 --ai，重画后设到草稿
       --probe             cover：只读探测封面弹窗 DOM
-      --explore           cover：逐步点击封面弹窗并快照（诊断）`;
+      --explore           cover：逐步点击封面弹窗并快照（诊断）
+      --reload            session probe：先禁缓存重载再读 DOM（会扰动当前 tab）
+      --no-persist        session probe：只读，不改写 state（部署自检用）
+      --json              session probe：输出 JSON`;
 
 function parseFlags(argv: string[]): Record<string, string | boolean> {
   const short: Record<string, string> = { a: "account", t: "to", d: "date", w: "wait" };
@@ -156,6 +182,17 @@ async function main(): Promise<void> {
         }
         console.log(`account   : ${cfg.accountName} (${cfg.account})${cfg.accountAlias === cfg.defaultAccount ? "  [默认]" : ""}`);
         console.log(`dataDir   : ${cfg.paths.data}`);
+        // C1 Step 6.2: remaining session time is part of "status" — it is the
+        // first thing to look at when a run mysteriously fails.
+        if (cfg.publishMethod === "browser") {
+          const cookie = readCookieFacts(resolveProfileDir(cfg.browser, cfg.account));
+          const probeState = readProbeState(path.join(cfg.paths.state, "session-probe.json"));
+          console.log(
+            `session   : ${describeCookieFacts(cookie)} · last keepalive ${keepText(probeState.lastKeepaliveAt)} · snapshots ${listSnapshots(cfg.account, { dataDir: cfg.paths.data }).length}`,
+          );
+        } else {
+          console.log(`session   : n/a（publishMethod=${cfg.publishMethod}）`);
+        }
         console.log(`published : ${rows.length} total`);
         for (const r of rows.slice(0, 14)) {
           console.log(`  ${r.date}  ${r.ok ? "✅" : "❌"}  ${r.title}  ${r.mediaId ?? ""}`);
@@ -213,6 +250,16 @@ async function main(): Promise<void> {
       }
       break;
     }
+    case "session": {
+      // Pick the subcommand by name so `session restore --id <id>` is not mistaken
+      // for the flag's value.
+      const sub = rest.find((a) => SESSION_SUBS.has(a)) ?? "";
+      for (const alias of targets) {
+        banner(alias);
+        await sessionCmd(cfgFor(alias, cmd), flags, sub);
+      }
+      break;
+    }
     case "cover": {
       for (const alias of targets) {
         banner(alias);
@@ -249,24 +296,251 @@ async function keepalive(cfg: AppConfig, flags: Record<string, string | boolean>
     account: cfg.account,
     email: cfg.notify.email,
     qrOutPath: path.join(cfg.paths.state, "wechat-login-qr.png"),
+    stateDir: cfg.paths.state,
     env: proxyEnv(cfg),
     waitSec: flags.wait ? Number(flags.wait) : 0,
     notifyQr: flags["no-qr"] !== true,
   });
   if (!lg.ok) {
-    console.error(`❌ 会话已失效：${lg.detail}${lg.emailed ? "（二维码已发邮件，扫码后下次保活即恢复）" : ""}`);
+    // `lg.detail` carries the evidence summary, so a QR timeout is no longer
+    // indistinguishable from a confirmed server-side logout.
+    console.error(
+      `❌ 会话需要重新登录（判定=${lg.verdict}${lg.emailed ? "，二维码已发邮件" : ""}）：${lg.detail}`,
+    );
     process.exitCode = 1;
     return;
   }
   // The probe only proves the page rendered; an authenticated request is what
-  // actually slides the ticket, so make one and require it to succeed.
-  const titles = await listDraftTitles(cfg.browser, cfg.skillDir);
+  // actually slides the ticket, so make one and require it to succeed. A single
+  // null is retried once: R2 forbids paging a human on one flaky probe.
+  let titles = await listDraftTitles(cfg.browser, cfg.skillDir);
   if (titles === null) {
-    console.error("❌ 鉴权请求失败（票据可能刚失效），请扫码重新登录。");
+    log.warn("[session] 鉴权请求失败一次，5s 后重试（单次失败不告警）");
+    await new Promise((r) => setTimeout(r, 5000));
+    titles = await listDraftTitles(cfg.browser, cfg.skillDir);
+  }
+  if (titles === null) {
+    console.error(
+      `❌ 鉴权请求连续失败（判定=${lg.verdict}，未确认失效；证据=${lg.evidence ?? "?"}）——若 cookie 未过期请先重跑 keepalive，仍失败再扫码。`,
+    );
     process.exitCode = 1;
     return;
   }
-  console.log(`✅ 会话保活成功（票据已顺延）：草稿箱 ${titles.length} 条`);
+  markKeepalive(path.join(cfg.paths.state, "session-probe.json"));
+  // A proven-authenticated call is the strongest live evidence we have: clear the
+  // failure counter, otherwise 2 old `unknown` probes + one CDP hiccup would still
+  // request a QR *after* we just proved the session works (2026-10-20 复核 N1).
+  resetFailureCount(path.join(cfg.paths.state, "session-probe.json"), "keepalive-auth-ok");
+  const profileDir = resolveProfileDir(cfg.browser, cfg.account);
+
+  // C1 Step 3.2: refresh the rollback point right after a proven-authenticated
+  // run (the ticket was just slid, so this snapshot is the freshest one).
+  // A snapshot failure must NEVER fail the keepalive: the ticket already slid.
+  const snap = snapshot(cfg.account, profileDir, { dataDir: cfg.paths.data, reason: "keepalive" });
+  if (snap.ok) {
+    log.info(`[session] snapshot ${snap.id}${snap.skipped ? ` (${snap.reason})` : ""}`);
+  } else {
+    log.warn(`[session] 快照失败（不影响保活）：${snap.reason}`);
+  }
+
+  // C1 Step 3.3: advisory "ticket expires in <24h" mail (≤1 per 24h, never
+  // blocking, deliberately worded as a warning rather than a failure).
+  const cookie = readCookieFacts(profileDir);
+  const warn = await maybeWarnExpiringSession({
+    dataDir: cfg.paths.data,
+    alias: cfg.account,
+    accountName: cfg.accountName,
+    ...(cookie.slaveSidExpiresAt !== undefined ? { slaveSidExpiresAt: cookie.slaveSidExpiresAt } : {}),
+    email: cfg.notify.email,
+  });
+  log.info(`[session] expiry-warn=${warn.sent ? "sent" : "no"} — ${warn.reason}`);
+
+  console.log(
+    `✅ 会话保活成功（票据已顺延）：草稿箱 ${titles.length} 条 · 判定=${lg.verdict} · ${lg.evidence ?? ""}`,
+  );
+  console.log(
+    `   快照：${snap.ok ? `${snap.id}${snap.skipped ? "（已存在）" : ""}` : `失败（${snap.reason}）`}`,
+  );
+  console.log(`   到期预警：${warn.sent ? "已发邮件" : "未发"}（${warn.reason}）`);
+}
+
+/** `session <sub>`：probe（只读三态判定）| snapshot | restore | list. */
+async function sessionCmd(
+  cfg: AppConfig,
+  flags: Record<string, string | boolean>,
+  sub: string,
+): Promise<void> {
+  switch (sub) {
+    case "probe":
+      await sessionProbe(cfg, flags);
+      return;
+    case "snapshot":
+      sessionSnapshot(cfg, flags);
+      return;
+    case "restore":
+      await sessionRestore(cfg, flags);
+      return;
+    case "list":
+      sessionList(cfg);
+      return;
+    default:
+      console.error(
+        "usage: wechat-flow session <probe|snapshot|restore|list> [-a <alias>|--all] [--json] [--reload] [--reason <r>] [--keep N] [--id <snapshot-id>]",
+      );
+      process.exitCode = 1;
+  }
+}
+
+function keepText(iso: string | undefined): string {
+  const h = hoursSince(iso);
+  return h === null ? "(无记录)" : `${h.toFixed(1)}h ago`;
+}
+
+/** `session probe`：read-only, idempotent three-layer verdict for one account. */
+async function sessionProbe(cfg: AppConfig, flags: Record<string, string | boolean>): Promise<void> {
+  if (cfg.publishMethod !== "browser") {
+    console.log(`publishMethod=${cfg.publishMethod}：API 方式没有浏览器会话，无需探测。`);
+    return;
+  }
+  // Read-only: no reload, no navigation, no Chrome spawn (a down CDP port is
+  // simply "http/dom unknown" — cookie evidence is still local and free).
+  const r: ProbeResult = await probeAccountSession({
+    browser: cfg.browser,
+    skillDir: cfg.skillDir,
+    account: cfg.account,
+    stateDir: cfg.paths.state,
+    env: proxyEnv(cfg),
+    revalidate: flags.reload === true,
+    // --no-persist keeps `deploy/session-check.sh` free of side effects: a deploy
+    // must never push `consecutiveFailures` towards the QR threshold by itself.
+    ...(flags["no-persist"] === true ? { persist: false } : {}),
+  });
+  if (flags.json === true) {
+    console.log(
+      JSON.stringify(
+        {
+          account: cfg.account,
+          verdict: r.verdict,
+          evidence: r.evidence,
+          consecutiveFailures: r.consecutiveFailures,
+          threshold: r.threshold,
+          needsScan: r.needsScan,
+          detail: r.detail,
+          facts: r.facts,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  const cookie = r.facts.cookie;
+  const remain =
+    cookie.ok && cookie.slaveSidExpiresAt !== undefined
+      ? `${((cookie.slaveSidExpiresAt - Date.now() / 1000) / 3600).toFixed(1)}h`
+      : "未知";
+  console.log(`verdict           : ${r.verdict}${r.needsScan ? "（达到扫码条件）" : ""}`);
+  console.log(`判定来源          : ${r.detail}`);
+  console.log(`evidence          : ${r.evidence}`);
+  console.log(`slave_sid 剩余    : ${remain}${cookie.cookiesFile ? `  (${cookie.cookiesFile})` : ""}`);
+  console.log(`连续失败          : ${r.consecutiveFailures}/${r.threshold}`);
+  console.log(`最近保活          : ${keepText(r.state.lastKeepaliveAt)}`);
+  console.log(`快照              : ${listSnapshots(cfg.account, { dataDir: cfg.paths.data }).length} 份`);
+}
+
+/** `session snapshot`：atomic Cookies + Local State copy (rollback point). */
+function sessionSnapshot(cfg: AppConfig, flags: Record<string, string | boolean>): void {
+  if (cfg.publishMethod !== "browser") {
+    console.log(`publishMethod=${cfg.publishMethod}：API 方式没有浏览器会话，快照无意义。`);
+    return;
+  }
+  const rawKeep = flags.keep === undefined ? NaN : Number(flags.keep);
+  const r = snapshot(cfg.account, resolveProfileDir(cfg.browser, cfg.account), {
+    dataDir: cfg.paths.data,
+    reason: typeof flags.reason === "string" ? flags.reason : "manual",
+    ...(Number.isFinite(rawKeep) && rawKeep >= 1 ? { keep: Math.floor(rawKeep) } : {}),
+  });
+  if (!r.ok) {
+    console.error(`❌ 快照失败：${r.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  const expires = r.slaveSidExpiresAt ? new Date(r.slaveSidExpiresAt * 1000).toISOString() : "未知";
+  const count = listSnapshots(cfg.account, { dataDir: cfg.paths.data }).length;
+  console.log(`✅ 快照 ${r.id}${r.skipped ? `（${r.reason}）` : ""}`);
+  console.log(`   目录        : ${r.dir}`);
+  console.log(`   slave_sid   : ${expires}`);
+  console.log(`   大小/份数   : ${((r.sizeBytes ?? 0) / 1024).toFixed(1)}KB · 共 ${count} 份`);
+}
+
+/** `session restore --id <id>`：verify → stop browser → swap → start → re-probe. */
+async function sessionRestore(cfg: AppConfig, flags: Record<string, string | boolean>): Promise<void> {
+  const id = typeof flags.id === "string" ? flags.id.trim() : "";
+  if (!id) {
+    console.error("❌ 缺少 --id <snapshot-id>（先 bun src/cli.ts session list）");
+    process.exitCode = 1;
+    return;
+  }
+  if (cfg.publishMethod !== "browser") {
+    console.log(`publishMethod=${cfg.publishMethod}：API 方式没有浏览器会话，无法回滚。`);
+    return;
+  }
+  const r = restore(cfg.account, id, {
+    dataDir: cfg.paths.data,
+    profileDir: resolveProfileDir(cfg.browser, cfg.account),
+  });
+  for (const step of r.steps) console.log(`  · ${step}`);
+  for (const w of r.warnings) console.log(`  ⚠️  ${w}`);
+  if (!r.ok) {
+    console.error(`❌ restore 失败：${r.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`✅ restore ${r.id} 完成（现网文件已备份为 *.pre-restore，可手工回退）`);
+
+  // Files restored ≠ session alive: the caller MUST re-verify. Read-only probe
+  // (no reload/navigation) so we do not fight the tab the browser just restored.
+  const probe = await probeAccountSession({
+    browser: cfg.browser,
+    skillDir: cfg.skillDir,
+    account: cfg.account,
+    stateDir: cfg.paths.state,
+    env: proxyEnv(cfg),
+    revalidate: false,
+  });
+  console.log(`复验：verdict=${probe.verdict} · ${probe.evidence}`);
+  if (probe.verdict === "invalid") {
+    // `unknown` is NOT failure: it usually means the browser just started / DOM
+    // not ready yet. Only positive evidence of a dead session fails the command.
+    console.warn(
+      `⚠️  复验判定 invalid。若证据是「服务端跳登录」，说明快照回滚无效＝MP 侧真实失效，需要重新扫码：bun src/cli.ts login -a ${cfg.account} --qr --wait 900`,
+    );
+    process.exitCode = 1;
+  } else if (probe.verdict === "unknown") {
+    console.warn(
+      `⏳ 无法复验（${probe.evidence}）：文件已恢复，请稍后跑 bun src/cli.ts session probe -a ${cfg.account} 确认`,
+    );
+  }
+}
+
+/** `session list`：snapshots newest-first (id / time / reason / remaining ticket). */
+function sessionList(cfg: AppConfig): void {
+  const rows = listSnapshots(cfg.account, { dataDir: cfg.paths.data });
+  if (!rows.length) {
+    console.log(`(无快照) ${cfg.paths.data}/session-snapshots`);
+    return;
+  }
+  const nowSec = Date.now() / 1000;
+  console.log(`快照 ${rows.length} 份（新→旧）：`);
+  for (const s of rows) {
+    const sid =
+      s.slaveSidExpiresAt === undefined
+        ? "slave_sid 未知"
+        : `slave_sid in ${((s.slaveSidExpiresAt - nowSec) / 3600).toFixed(1)}h`;
+    console.log(
+      `  ${s.id}  ${s.createdAt}  ${(s.reason || "?").padEnd(9, " ")}  ${(s.sizeBytes / 1024).toFixed(1)}KB  ${sid}`,
+    );
+  }
 }
 
 /** List 草稿箱 titles; with --date also checks that day's article is present. */
@@ -282,6 +556,7 @@ async function drafts(cfg: AppConfig, flags: Record<string, string | boolean>): 
     account: cfg.account,
     email: cfg.notify.email,
     qrOutPath: path.join(cfg.paths.state, "wechat-login-qr.png"),
+    stateDir: cfg.paths.state,
     env: proxyEnv(cfg),
     waitSec: flags.wait ? Number(flags.wait) : 60,
     notifyQr: flags.qr === true,
@@ -414,6 +689,7 @@ async function cover(cfg: AppConfig, flags: Record<string, string | boolean>): P
     account: cfg.account,
     email: cfg.notify.email,
     qrOutPath: path.join(cfg.paths.state, "wechat-login-qr.png"),
+    stateDir: cfg.paths.state,
     env: proxyEnv(cfg),
     waitSec: flags.wait ? Number(flags.wait) : 60,
     notifyQr: flags.qr === true,
@@ -450,6 +726,7 @@ async function login(cfg: AppConfig, flags: Record<string, string | boolean>): P
     account: cfg.account,
     email: cfg.notify.email,
     qrOutPath,
+    stateDir: cfg.paths.state,
     env: proxyEnv(cfg),
     waitSec,
   });
@@ -586,6 +863,48 @@ async function doctor(cfg: AppConfig): Promise<void> {
 
   const bchk = checkBrowser(cfg.browser);
   checks.push(["browser (Chrome CDP)", bchk.ok, bchk.detail]);
+
+  // 谁拥有 Chrome（C1 Step5）：external = systemd unit 托管（重启 console 不影响登录态），
+  // inline = console 自己 spawn（回滚态）。auto 判定见 browser.ts#describeBrowserMode。
+  {
+    const info = describeBrowserMode(cfg.account);
+    // Only "declared external but the unit is missing" is a failure; inline
+    // (explicit rollback, or auto on a host without units) is a normal state.
+    const ok = !info.invalid && !(info.mode === "external" && info.unitPresent === false);
+    checks.push(["browser 托管方式", ok, info.detail]);
+  }
+
+  // 会话三态 + 证据（C1 / R7）：doctor 必须能一眼看出“还剩多少小时 / 凭什么判定”。
+  // 只读探测（不重载页面、不写计数器）— doctor 必须是幂等的。
+  if (cfg.publishMethod === "browser") {
+    const probe = await probeAccountSession({
+      browser: cfg.browser,
+      skillDir: cfg.skillDir,
+      account: cfg.account,
+      stateDir: cfg.paths.state,
+      env: proxyEnv(cfg),
+      revalidate: false,
+      persist: false,
+    });
+    const cookie = probe.facts.cookie;
+    const remain =
+      cookie.ok && cookie.slaveSidExpiresAt !== undefined
+        ? `${((cookie.slaveSidExpiresAt - Date.now() / 1000) / 3600).toFixed(1)}h`
+        : cookie.ok
+          ? cookie.slaveSidPresent === false
+            ? "缺失"
+            : "未知(会话cookie)"
+          : "未知(读不到)";
+    const keep = hoursSince(readProbeState(path.join(cfg.paths.state, "session-probe.json")).lastKeepaliveAt);
+    const snaps = listSnapshots(cfg.account, { dataDir: cfg.paths.data }).length;
+    checks.push([
+      "mp-session",
+      probe.verdict !== "invalid",
+      `${probe.verdict} · slave_sid ${remain} · last keepalive ${keep === null ? "(无记录)" : `${keep.toFixed(1)}h ago`} · snapshots ${snaps} · evidence=${probe.evidence}`,
+    ]);
+  } else {
+    checks.push(["mp-session", true, `n/a（publishMethod=${cfg.publishMethod}，无浏览器会话）`]);
+  }
 
   // Per-account CDP ports must be unique, otherwise two accounts share one Chrome.
   const dupes = listAccounts()

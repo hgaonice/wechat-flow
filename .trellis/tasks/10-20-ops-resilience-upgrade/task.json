@@ -1,0 +1,30 @@
+{
+  "id": "ops-resilience-upgrade",
+  "name": "ops-resilience-upgrade",
+  "title": "运营韧性升级：登录态滚动更新 + 图像模型普查 + 控制台前端重构",
+  "description": "父任务：一次用户请求中的三个可独立验收的交付物。①公众号登录态长期保存与滚动更新（重启/部署不再需要频繁扫码）；②互联网免费或可用的图像模型普查（gpt-image-2.5 及更强）并接入每日图文封面链；③控制台前端设计系统重构（参考 linux-do/cdk 的设计语言，保持零运行时依赖），分 4 步增量。执行顺序 #1→#3→#2。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "gaoh",
+  "assignee": "gaoh",
+  "createdAt": "2026-10-20",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-20-image-model-scout",
+    "10-20-console-ui-redesign",
+    "10-20-wechat-session-rolling"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

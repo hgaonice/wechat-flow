@@ -19,8 +19,13 @@ wechat-flow/
 │   ├── math.ts              # LaTeX $…$ → 内联 <svg>
 │   ├── cover.ts             # ImageMagick 模板封面
 │   ├── wechat.ts            # 调用 baoyu skill + 草稿箱查询 + verifyDraftBody
-│   ├── browser.ts           # Xvfb + Chrome CDP 生命周期
+│   ├── browser.ts           # 浏览器归属（external/inline）+ Xvfb/CDP 就绪
+│   ├── browser-agent.ts     # unit 入口：execve 换成 Chrome（Chrome 参数的唯一使用者）
 │   ├── session.ts           # 登录态自愈（二维码邮件 + 轮询扫码）
+│   ├── session-probe.ts     # 会话三态判定（valid/invalid/unknown）与抗抖动状态机
+│   ├── session-state.ts     # cookie 证据（Chrome Cookies SQLite 只读）与证据文案
+│   ├── session-snapshot.ts  # 登录态快照/恢复（unit 名可注入）
+│   ├── session-warn.ts      # 会话告警（限频）
 │   ├── pi.ts                # pi CLI 集成（JSON 事件流 + 重试/降级）
 │   ├── state.ts             # published.json 幂等状态（原子写）
 │   ├── notify.ts            # 通知分发
@@ -31,7 +36,7 @@ wechat-flow/
 ├── bin/                     # 独立脚本（非 bun）：manim-gif.sh / tex2svg.py / send-image.py
 ├── content/                 # 选题大纲（真源；可被单账号覆盖）
 ├── prompts/                 # 提示词 plan/article/editor（真源；可被单账号覆盖）
-├── deploy/                  # systemd unit + deploy.sh + install.sh + patch-baoyu-skill.sh
+├── deploy/                  # systemd unit（含 wechat-xvfb / wechat-browser@）+ deploy.sh + install.sh + session-check.sh
 ├── tools/                   # 仓库内开发工具（repomap.sh / draft-probe.ts）
 └── data/<alias>/            # 每账号运行时数据：plans articles imgs state logs sessions
 ```

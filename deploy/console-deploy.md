@@ -72,6 +72,16 @@ systemctl status wechat-console --no-pager
 
 > 迁移期 DB 为真源；`fillMissingPlansFromFiles` 会把仅存在于文件的历史计划补进 DB。
 
+### 3.5 浏览器独立托管（C1 Step5）
+
+`install-console.sh` 会顺带调用 `deploy/systemd/install-browser-units.sh`：安装
+`wechat-xvfb.service` + `wechat-browser@.service`（模板）并 **只 enable Xvfb**。
+具体 alias 实例必须人工 `enable --now`（同 profile 双开＝微信踢线）。
+
+- 完整迁移顺序 / 回滚 / 排障：`docs/操作手册.md` §2.5「浏览器独立托管」。
+- 契约（谁拥有 Chrome、停止语义、部署后自检）：`.trellis/spec/console/ops-deploy.md`「二·补 浏览器 unit 契约」。
+- **每次部署后**都会自动跑 `deploy/session-check.sh`；失败即 `deploy.sh` 非零退出。
+
 ---
 
 ## 4. 回滚

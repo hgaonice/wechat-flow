@@ -68,6 +68,24 @@
 | GET | `/api/settings` | 全局默认（`settings` 表） |
 | PUT | `/api/settings` | 更新全局默认 → 触发受影响账号的原子回渲染 `config.json` |
 
+**`session`（C1 只读派生字段，`GET /api/accounts` 与 `GET /api/accounts/:id` 都带）**
+
+```jsonc
+"session": {
+  "ok": true,                        // 仅代表「本机读得到」，不代表会话有效
+  "verdict": "valid" | "invalid" | "unknown" | null,   // 最近一次 probe 的判定
+  "slaveSidExpiresAt": "2026-10-24T03:53:14.000Z",     // null = 未知（session cookie / 读失败）
+  "hoursLeft": 95.9,                 // null 同上；可为负（已过期）
+  "lastKeepaliveAt": "2026-10-20T03:53:14.000Z",        // null = 从未成功保活
+  "cookieReason": "..."              // 仅当 Cookie 库读不到时出现
+}
+```
+
+- **不建库列**：数据来自本机 Chrome 的 `Default/Cookies` 与 `data/<alias>/state/session-probe.json`，每次请求现算；
+- 失败必须显形：非 browser 账号 / config 加载失败 → `{"ok":false,"reason":"..."}`，**绝不**伪造成 `ok:true`；
+- 只读：不打开浏览器、不发网络请求、不写任何文件；
+- 不含任何 cookie 值（只有到期时间）。
+
 ### 2.3 计划 / 任务
 
 **已落地（C2）**

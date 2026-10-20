@@ -39,6 +39,8 @@ CONSOLE_DB="$DB" "$BUN" "$APP_DIR/src/console/main.ts" --backup "$WORK/console.d
 if [ -d "$APP_DIR/data" ]; then
   echo "==> 打包 data/"
   cp -a "$APP_DIR/data" "$WORK/data"
+  # 快照目录含 Cookies + Local State（登录凭证），与 design C-3/操作手册口径一致：不进备份包。
+  rm -rf "$WORK"/data/*/session-snapshots 2>/dev/null || true
 else
   echo "==> 无 data/，跳过"
 fi

@@ -50,6 +50,9 @@ import type { TunnelSupervisor } from "./tunnel/cloudflared.ts";
 import { effectiveAccount, keySource, overrideKeys, removeOverride } from "./config/resolve.ts";
 import { renderConfig } from "./db/render-config.ts";
 import { loadConfig } from "../config.ts";
+import { resolveProfileDir } from "../browser.ts";
+import { readCookieFacts } from "../session-state.ts";
+import { readProbeState } from "../session-probe.ts";
 import * as plans from "./jobs/plans.ts";
 import * as queue from "./jobs/queue.ts";
 import { EXECUTABLE_KINDS, isJobKind, parseItems, parseJobPayload, type JobRow, type PlanRow } from "./jobs/types.ts";
@@ -223,6 +226,52 @@ function accountView(row: AccountRow, withDetail = false): JsonObject {
 /** Operator-only top-level keys hidden from non-admin viewers. */
 const SECRET_KEYS = ["notify", "proxy", "piBin", "bunBin", "skillDir"];
 
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * C1 Step 6.3 — derived, READ-ONLY session summary for an account row.
+ *
+ * Deliberately not a DB column: the truth lives on this host (Chrome's Cookies
+ * DB + `state/session-probe.json`), so caching it in SQLite would only add a
+ * second, stale copy of login state. Nothing here can throw — a failure is
+ * reported as `{ok:false, reason}` (never as “session fine”).
+ */
+function sessionSummary(row: AccountRow): JsonObject {
+  let cfg: ReturnType<typeof loadConfig>;
+  try {
+    cfg = loadConfig(row.alias);
+  } catch (err) {
+    return { ok: false, reason: `config 加载失败：${errText(err)}` };
+  }
+  if (cfg.publishMethod !== "browser") {
+    return { ok: false, reason: `publishMethod=${cfg.publishMethod}，API 方式没有浏览器会话` };
+  }
+  const facts = readCookieFacts(resolveProfileDir(cfg.browser, cfg.account));
+  const probe = readProbeState(path.join(cfg.paths.state, "session-probe.json"));
+  const expires = facts.slaveSidExpiresAt;
+  const out: JsonObject = {
+    ok: true,
+    verdict: probe.lastVerdict,
+    lastKeepaliveAt: probe.lastKeepaliveAt ?? null,
+  };
+  if (expires !== undefined) {
+    out.slaveSidExpiresAt = new Date(expires * 1000).toISOString();
+    out.hoursLeft = Math.round(((expires - Date.now() / 1000) / 3600) * 10) / 10;
+  } else {
+    out.slaveSidExpiresAt = null;
+    out.hoursLeft = null;
+  }
+  if (!facts.ok) {
+    // Cookie DB unreadable is not an error for the whole list, but it IS the
+    // reason the two fields above are null — say so instead of implying “unknown
+    // ticket = fine”.
+    out.cookieReason = facts.reason ?? "unknown";
+  }
+  return out;
+}
+
 function accountDetail(db: Database, row: AccountRow, asAdmin: boolean): JsonObject {
   const global = getGlobalRaw(db);
   const entry = parseOverrides(row);
@@ -238,7 +287,7 @@ function accountDetail(db: Database, row: AccountRow, asAdmin: boolean): JsonObj
       if (overrides) delete overrides[k];
     }
   }
-  return { ...view, effective, sources, ...(asAdmin ? { global } : {}) };
+  return { ...view, effective, sources, session: sessionSummary(row), ...(asAdmin ? { global } : {}) };
 }
 
 function visibleRows(db: Database, auth: AuthContext | null): AccountRow[] {
@@ -501,7 +550,7 @@ export function createApp(state: AppState, chat?: ChatManager, ops?: OpsDeps): A
 
   router.add("GET", "/api/accounts", (ctx) => {
     const rows = visibleRows(db, ctx.auth);
-    return ok({ accounts: rows.map((r) => accountView(r)) });
+    return ok({ accounts: rows.map((r) => ({ ...accountView(r), session: sessionSummary(r) })) });
   });
 
   router.add("POST", "/api/accounts", async (ctx) => {

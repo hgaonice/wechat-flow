@@ -2,6 +2,8 @@ node_modules/
 # console runtime (SQLite DB + generated config backups)
 /console/
 # per-account runtime data (data/<alias>/{plans,articles,imgs,state,logs,sessions})
+# NOTE: data/<alias>/session-snapshots/ holds Cookies + Local State = live login
+# material (0700/0600). Never commit, deploy, or back it up off-box.
 data/
 # legacy flat layout (auto-migrated into data/<alias>/)
 sessions/

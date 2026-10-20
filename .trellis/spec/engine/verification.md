@@ -146,3 +146,20 @@ journalctl -u wechat-publish.service -n 120 --no-pager
 - [ ] 引擎改动后已 `systemctl restart wechat-console`（worker 常驻）。
 - [ ] 浏览器发布方式下 `wechat-keepalive.timer` 已 enabled（否则 4 天后必过期）。
 - [ ] `CONSOLE_MAX_CONCURRENCY=1`（两个 Chrome 共用一个 X 显示，不能并发发布）。
+
+---
+
+## 登录态判定契约（C1 / S21，2026-10-20）
+
+**背景**：2026-10-20 07:02 一次「登录失效」误判，触发了 3 封二维码邮件 + 1 封失败邮件 + 15 分钟停摆；同一账号 07:18 被判 valid 并成功推送。单证据（DOM）二值判定不可信。
+
+**铁律**：
+
+1. **三态，不二值**：`valid | invalid | unknown`（`src/session-probe.ts#decideVerdict`）。日报/邮件/自检只能把 `invalid` 当故障。
+2. **只有强证据能判 `invalid`**：① 本地 `Default/Cookies` 的 `slave_sid` 缺失/已过期；② 服务端明确要求重新登录（`ret=200003` 或跳登录页）。
+3. **`page_timeout` / 「登录超时，请重新登录」壳页 = `unknown`**，不是退登证据。读不到 DOM、CDP 不通、Cookies 被锁（`SQLITE_BUSY`）同样是 `unknown`。
+4. **`unknown` 不得打扰人**：不发二维码、不发失败邮件、不阻塞发布；只累加持久化计数（`data/<alias>/state/session-probe.json`）。
+5. **进入扫码流程的条件**：`invalid`，或连续失败 ≥ `WFC_SESSION_FAIL_THRESHOLD`（默认 3，两次间隔 ≥60s）。`=1` 可回退到旧行为。
+6. **判定必须留证据**：日志/邮件统一带 `verdict=… consecutive=n/m evidence=cookie:…,http:…,dom:…`；禁止只记 `url:`。
+7. **浏览器归属**：Chrome/Xvfb 由 `wechat-browser@<alias>.service` / `wechat-xvfb.service` 托管，`MainPID` 必须是 chrome；重启 console **不得**影响登录态。`WFC_BROWSER_MODE=inline` 是唯一回滚开关。
+8. **恢复优先于重登**：会话异常先 `session list/restore`（快照在 `data/<alias>/session-snapshots/`，含 Cookies + Local State），只有在服务端真失效时才请人扫码。

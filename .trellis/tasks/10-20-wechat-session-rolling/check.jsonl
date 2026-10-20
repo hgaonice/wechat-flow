@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/engine/verification.md", "reason": "验收必须引用真实命令输出"}
+{"file": ".trellis/spec/console/ops-deploy.md", "reason": "部署/运维契约（systemd 单元、Mode A/B、回滚）"}

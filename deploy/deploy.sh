@@ -49,7 +49,7 @@ done
 # 运行时目录：这些是目标机上产生的数据，永远不能被本地覆盖
 EXCLUDES=(
   --exclude config.json
-  --exclude 'data/'
+  --exclude 'data/'         # 含 session-snapshots/（Cookies + Local State = 登录凭证，绝不出机器）
   --exclude 'plans/'
   --exclude 'articles/'
   --exclude 'state/'
@@ -122,13 +122,35 @@ if [[ $dry -eq 1 ]]; then
 fi
 
 ssh -o BatchMode=yes "$HOST" "chmod +x '$REMOTE_DIR'/deploy/*.sh '$REMOTE_DIR'/bin/*.sh '$REMOTE_DIR'/bin/*.py 2>/dev/null; true" >/dev/null
-
 # 部署成功后刷新清单（keep-remote-content 时不动清单，因为内容没同步）
 if [[ $keep_remote -eq 0 ]]; then
   new_fp="$(remote_fingerprint)"
   if [[ -n "$new_fp" ]]; then
     ssh -o BatchMode=yes "$HOST" "mkdir -p '$(dirname "$MANIFEST")' && cat > '$MANIFEST'" <<<"$new_fp"
     echo "· 已刷新 250 内容指纹清单（下次部署据此判断 250 是否被改动）"
+  fi
+fi
+
+echo
+echo "· 部署后自检（浏览器托管 + 会话三态，C1 Step5 / AC4）"
+if [[ "${WFC_DEPLOY_SKIP_CHECKS:-0}" == "1" ]]; then
+  echo "  （已跳过：WFC_DEPLOY_SKIP_CHECKS=1）"
+else
+  # 只转发合法值，避免把任意字符串拼进远端命令行。
+  REMOTE_ENV=""
+  case "${WFC_BROWSER_MODE:-}" in
+    external | inline) REMOTE_ENV="WFC_BROWSER_MODE=$WFC_BROWSER_MODE" ;;
+  esac
+  # deploy/session-check.sh（随本次 rsync 已在 250 上）：
+  #  ① Xvfb/浏览器 unit 是否真的在跑（且 MainPID 是 chrome，不是“unit 活着但没人管”）
+  #  ② session probe 逐账号：只有 invalid 算失败（unknown = 证据不足，不算）
+  if ! ssh -o BatchMode=yes "$HOST" "cd '$REMOTE_DIR' && $REMOTE_ENV bash deploy/session-check.sh"; then
+    echo
+    echo "✖ 部署后自检失败（文件已同步，但运行态不对）。不要盲目重启/重登，按下面取证：" >&2
+    echo "    浏览器：ssh $HOST 'systemctl status wechat-browser@<alias> --no-pager; journalctl -u wechat-browser@<alias> -n 50 --no-pager'" >&2
+    echo "    会话  ：ssh $HOST 'cd $REMOTE_DIR && bun src/cli.ts session probe --all'" >&2
+    echo "    应急  ：WFC_DEPLOY_SKIP_CHECKS=1 ./deploy/deploy.sh（跳过本自检，不修任何东西）" >&2
+    exit 1
   fi
 fi
 

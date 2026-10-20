@@ -1,0 +1,68 @@
+[Unit]
+Description=WeChat Flow — Chrome for WeChat MP publishing (%i)
+Documentation=file:///root/wechat-flow/deploy/console-deploy.md
+# One instance per account alias: `wechat-browser@second`, `wechat-browser@gaoh`.
+# The unit name IS the single-instance lock — two Chromes on one profile are an
+# "abnormal login" for WeChat MP (session kicked, QR required).
+#
+# Chrome is owned HERE, not by wechat-console.service: that is what makes
+# "restart/redeploy the console" a no-op for the login session (AC4), and what
+# stops the renderers from being reaped together with an SSH login scope (E4).
+After=network-online.target wechat-xvfb.service
+Wants=network-online.target
+Requires=wechat-xvfb.service
+
+# Crash loop guard: a Chrome that cannot start (locked profile, broken display)
+# would otherwise restart every 5s forever and stay "active" from a distance.
+# After 10 failed starts in 5 minutes the unit goes failed — visible in
+# `systemctl --failed`, in deploy's post-check, and in `doctor`.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/wechat-flow
+
+# ---- runtime env (mirrors wechat-console.service so Chrome sees the same env) ----
+Environment=HOME=/root
+Environment=PATH=/root/.nvm/versions/node/v24.14.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=http_proxy=http://127.0.0.1:7890
+Environment=https_proxy=http://127.0.0.1:7890
+Environment=no_proxy=127.0.0.1,localhost,192.168.0.0/16,10.0.0.0/8,::1,192.168.0.251
+Environment=DISPLAY=:99
+Environment=XDG_RUNTIME_DIR=/tmp/runtime-root
+EnvironmentFile=-/root/wechat-flow/.env
+
+# Chrome flags are NOT here on purpose — they live in src/browser.ts#buildChromeArgs
+# (single source of truth). The agent exec()s Chrome so systemd's MainPID is
+# Chrome itself; duplicating flags here would drift the browser fingerprint.
+ExecStart=/root/.nvm/versions/node/v24.14.1/bin/bun /root/wechat-flow/src/browser-agent.ts --account %i
+
+# Stop semantics (design §C-2 / R4): SIGTERM goes to the MAIN process (Chrome) and
+# only after TimeoutStopSec are the remaining cgroup members SIGKILLed. Chrome
+# needs that SIGTERM window to flush its Cookies SQLite — never replace this with
+# `systemctl kill -s SIGKILL` / KillMode=control-group, which skips the flush and
+# can leave a half-written cookie DB (a restore-from-snapshot situation).
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Restart=always self-heals a crashed Chrome. RestartPreventExitStatus=0 makes the
+# agent's "CDP port already in use → exit 0, do not start a second instance" path
+# a clean no-op instead of a 5-second restart loop.
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=0
+
+# Conservative sandbox, same stance as the console unit: do NOT add
+# ProtectSystem=strict / ProtectHome / PrivateDevices — Chrome needs a writable
+# HOME (profile) and /tmp.
+NoNewPrivileges=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wechat-browser-%i
+
+[Install]
+WantedBy=multi-user.target

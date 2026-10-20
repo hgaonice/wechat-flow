@@ -65,6 +65,10 @@ fi
 echo "==> systemd daemon-reload"
 systemctl daemon-reload
 
+# C1 Step5：浏览器托管 unit（Xvfb + wechat-browser@ 模板）。
+# 只 enable Xvfb、不 enable 任何 alias 实例；迁移顺序由该脚本打印。
+bash "$HERE/systemd/install-browser-units.sh"
+
 if [ "$START" -eq 1 ]; then
   echo "==> 启用并启动 wechat-console.service"
   systemctl enable --now wechat-console.service

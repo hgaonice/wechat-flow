@@ -1,13 +1,19 @@
 [Unit]
-Description=WeChat Flow — run MP session keep-alive every 12h
+Description=WeChat Flow — run MP session keep-alive every 5h
 Documentation=file:///root/wechat-flow/.trellis/spec/engine/verification.md
 
 [Timer]
-# Two runs a day = a 12h margin against the 4-day ticket expiry, so the session
-# survives even if a run or two is missed.
+# C1 (2026-10-20): 12h → 5h. The MP ticket is a HARD 96h expiry that WeChat only
+# slides on authenticated activity, so a shorter cycle buys margin: four missed
+# runs still leave ~76h, and a probe that is misjudged has 19 more chances before
+# the ticket can actually lapse.
+# Interval is overridable without editing this file: run
+#   WFC_KEEPALIVE_HOURS=4 bash deploy/install.sh
+# which renders /etc/systemd/system/wechat-keepalive.timer.d/interval.conf.
 OnBootSec=10min
-OnUnitActiveSec=12h
-AccuracySec=1min
+OnUnitActiveSec=5h
+AccuracySec=5m
+RandomizedDelaySec=0
 Persistent=true
 Unit=wechat-keepalive.service
 
