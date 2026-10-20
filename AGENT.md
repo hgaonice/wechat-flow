@@ -56,6 +56,7 @@
 | **S18** | **内容互动引导语（CTA）**：文末点赞/转发/收藏/评论引导（AI 写文风 + 代码断言必有） | ✅ 完成（本地 + 250 真机） | G2 | `src/cta.ts`、`prompts/cta/{second,gaoh}.md`、`tools/cta-selftest.ts`、`.trellis/tasks/10-16-article-engagement-cta/` |
 | **S22** | **图像模型普查与封面链接入**（网关 5 个图像模型真实出图矩阵 + 兜底尺寸放大修复 + 成本护栏 + doctor `cover-candidates`） | ✅ 完成（250 真机；AC5 人工目视待用户复核） | G2 | `tools/image-model-probe.ts`、`tools/image-model-probe-selftest.ts`、`src/cover-ai.ts`（`isSizeRejection`/`SIZE_ESCALATION`/stats/`dailyBudget`/`describeCoverCandidates`）、`docs/research/image-models.md` |
 | **S21** | **登录态滚动更新 + 浏览器生命周期解耦**（三态判定/抗抖动/快照回滚/独立 systemd unit） | ✅ 完成（本地 + 250 真机；AC3 真实扫码、AC6b 预警邮件待用户在场） | G2 | `src/{session-probe,session-state,session-snapshot,session-warn,browser-agent}.ts`、`deploy/systemd/{wechat-xvfb.service,wechat-browser@.service}`、`deploy/session-check.sh`、`tools/session*-selftest.ts` |
+| **S23** | **控制台前端重做（设计系统）**：`--ds-*` 令牌 + sidebar/顶栏 shell + 30+ 组件 + 暗/亮主题 + 7 页迁移 + 旧 CSS 清零 | C3 | — | ✅ 完成（本地 + 250 真机 15/15） | — | `src/console/ui/ds.css`/`ds.js`、`tools/{ui-gates.sh,ui-visual.py,ui-accept.py,ui-dev-console.sh,ui-baselines/}`、`.trellis/tasks/10-20-console-ui-redesign/`、spec §五之二 |
 
 图例：⚪ 未开始 ／ 🟡 进行中 ／ ✅ 完成 ／ 🔴 阻塞
 
@@ -117,6 +118,7 @@
 | `archive/2026-10/10-13-console-ops-tunnel/` | S16 | C5 运维与公网（邮箱/隧道地址下发/凭据/管理员视图） | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-deploy-hardening/` | S17 | C6 部署与加固（systemd/限流/备份/回归 + 文档/spec/AGENT） | ✅ 已归档（2026-10-14） |
 | `10-16-article-engagement-cta/` | S18 | 文末互动引导语 CTA（prompts/cta + 确定性补齐） | ✅ 已交付（2026-10-16，本地+250） |
+| `10-20-console-ui-redesign/` | S23 | 控制台前端重做（设计系统 ds.css/ds.js + 7 页迁移 + 闸门/基线/验收脚本） | ✅ 完成（2026-10-20，250 真机 15/15） |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
@@ -144,7 +146,28 @@
 
 ## 5. 当前任务 + Checkpoint
 
-**当前任务**：① **登录态滚动更新 + 浏览器托管解耦（`10-20-wechat-session-rolling`，S21）——已归档**；② **图像模型普查（`10-20-image-model-scout`，S22）——已交付 + 250 真机（人工目视待复核）**；③ **前端设计系统重构（`10-20-console-ui-redesign`，C3）——待启动**；④ **控制台 250 真机验收（`10-15-console-acceptance-250`）——G6/G7 待用户人工确认。**
+**当前任务**：① **登录态滚动更新（`10-20-wechat-session-rolling`，S21）——已归档**；② **图像模型普查（`10-20-image-model-scout`，S22）——已交付 + 250 真机（人工目视待复核）**；③ **前端设计系统重构（`10-20-console-ui-redesign`，S23）——已交付 + 250 真机 15/15**；④ **控制台 250 真机验收（`10-15-console-acceptance-250`）——G6/G7 待用户人工确认**；运营韧性父任务 **3/3 子任务完成**。
+
+### 当前（控制台）· 前端重做 / 设计系统（2026-10-20，S23）—— ✅ 已交付（本地 + 250 真机 15/15）
+
+**目标**：借 `linux-do/cdk` 的设计语言（侧栏 + 卡片 + 暗色 + 徽章），**不借技术栈**（红线 H3：运行时不新增 npm 依赖 → 纯手写 CSS，零构建）。
+
+**交付**：`ds.css`（≈1500 行：`--ds-*` 令牌暗/亮双套、shell、30+ 组件）+ `ds.js`（`DS.mount/setTheme/icon/toast/confirm/prompt`）；7 页迁移（login/index/account/settings/admin/workbench/chat）；
+旧 `app.css`/`chat.css`/`workbench.css` 删除；`/_ds` 组件样板页由 `WFC_DS_PREVIEW=1` 门禁（生产 404）。
+**"运行时搬移"策略**：`DS.mount()` 把既有 `<header>` 导航搬进侧栏，`id` 全保留 → 页面 JS 零改动、回滚只需删两行 `<link>/<script>`。
+
+**闸门**（`tools/`，全部可复跑）：`ui-gates.sh`（G1 零内联 style / G2 ds.css 顺序 / G3 令牌引用 60/63=95% / G4 旧类残留 token 感知 / G5 零依赖+tsc+build）、
+`ui-visual.py`（16 张终版基线，7 页 × 暗/亮 + `_ds` × 2，差异 >0.5% 退出 2）、`ui-accept.py`（V1–V15：V13 复跑 250 的 V1–V13 + V14 四档宽度 0 横向溢出 + V15 主题持久化）、
+`ui-dev-console.sh`（`/tmp/wfc-dev` 隔离实例，端口 8799，2 个假账号）。
+
+**250 真机**：`bash deploy/deploy.sh --keep-remote-content` → `ui-accept.py --base-url <ssh 隧道>` **15/15 PASS**（真实数据：20 条隧道历史、49 个计划单元格、4 个会话、7 个隧道指标、登录态 `valid · 95.9h`）。
+
+**顺手挖出并修掉的 3 个真缺陷**：① `deploy.sh` 的 `--exclude 'console/'` **未锚定根**，rsync 把 `src/console/` 一起排除 → **控制台源码自 2026-10-15 起从未部署**（250 上 `/ds.css` 404、跑着 5 天前的旧前端）；改为 `/console/` 等全部锚定 + 加 `src/console` sha1 与 `console/console.db` 存在性双重校验。② `deploy.sh` 不重启 `wechat-console` → `.ts` 改动不生效；已加「restart + 20s 内 /health 必须恢复，否则部署失败」。③ 删旧 CSS 后 `app.css` 的 `*{box-sizing:border-box}` 兜底消失 → 全站横向溢出 40px（`scrollWidth 1320 > 1280`）；`ds.css` 补作用域化 `body.ds-mounted *`。
+另修：`chat.js` 一直在 `$("#tools")` 写工具行但页面从未提供该容器（`renderTools()` 每轮抛 null 并中断 `openChat`）；`window.confirm/prompt` 清零（CSP 可静默抑制）→ `DS.confirm` / 新增 `DS.prompt`。
+
+**偏差（已记录理由）**：工作台没有做「三栏」（计划表 8 列可编辑会压到每格 <80px），改纵向工作流 + 详情内 `.ds-split`；版本链用 `.ds-chips` 而非 `.ds-timeline`；对比单列 `.ds-diff-box`。
+
+**回滚**：`git revert` 对应 commit（`4e14e0c → 20c159a → f1aaf3a → 715a08e → 748cf42 → 9ce8f81`）；无 DB 迁移、无配置项变更，回滚不需要重启浏览器/不动登录态（实测 3 轮 restart console 两账号全程 valid）。
 
 ### 当前（引擎）· 登录态滚动更新 + 浏览器生命周期解耦（2026-10-20，S21）—— ✅ 已交付（本地 + 250 真机）
 
@@ -494,7 +517,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 ## 10. 下一步（Next Actions）
 
-1. **当前主线（运营韧性，`10-20-ops-resilience-upgrade`）**：#1 登录态滚动更新 ✅（S21，已归档）；#3 图像模型普查 ✅（S22，已真机，矩阵在 `docs/research/image-models.md`）；**下一步 = #2 前端设计系统重构（`10-20-console-ui-redesign`，4 步增量）**。控制台 S11–S17（C1–C6）已交付并归档，真机按 `deploy/console-acceptance.md` 跑 AC-1…AC-11，随后 G6/G7 请用户确认。见 §5。
+1. **当前主线（运营韧性，`10-20-ops-resilience-upgrade`）—— 3/3 子任务全部交付**：#1 登录态滚动更新 ✅（S21）、#3 图像模型普查 ✅（S22）、#2 控制台前端重做 ✅（S23，250 真机 15/15）。**剩余 = 用户在场项**：C1 AC3 真实扫码 / AC6b 到期前 24h 预警邮件；C2 AC5 封面人工目视；**G6/G7 放行**（控制台公网 + 凭据/隧道），随后按 `deploy/console-acceptance.md` 跑 AC-1…AC-11。见 §5。
 2. **真机待验（G2，需 250）**：C3 —— 真 `pi` 生成、真实微信草稿推送（`✅ 正文校验`）、封面/manim、浏览器手工加载 workbench；C4 —— 真实 `pi` 流式、`pi --extension` 加载、浏览器 `/chat`（流式 + 决策卡片）。
 3. **引擎侧已完成**：S0–S10 全部交付并归档（S10 见 §5「上一阶段」）。
 4. **可选增强（非阻塞）**：repomap 升级为 AST 级符号图；`cover` 支持 `--all` 回填历史草稿；清理 250 上重复草稿（反复 `--force` 遗留）；**发布链路加固（待评审 + G2）：`cleanupAppmsgTabs()` 扩展为「保留带 `token=` 的 home tab，关掉其余重复/桩 tab」以消除 `New tab not found`（见 `.trellis/spec/engine/error-handling.md` §E1）**；CTA 文案抽样人工对齐（D1）。
@@ -506,6 +529,7 @@ bun src/cli.ts drafts --date 2026-10-12                  # 草稿箱 + 正文校
 
 | 维度 | 现状（本方案） | 下一档（按需升级） |
 |---|---|---|
+| 2026-10-20 | **控制台前端重做 / 设计系统（`10-20-console-ui-redesign`，S23）——顺带挖出「控制台源码 5 天没部署」**：`ds.css`(≈1500 行 `--ds-*` 令牌暗/亮 + shell + 30+ 组件) + `ds.js`(`DS.mount/setTheme/toast/confirm/prompt`)；7 页迁移（login/index/account/settings/admin/workbench/chat），旧 `app.css`/`chat.css`/`workbench.css` 删除；`/_ds` 样板页 `WFC_DS_PREVIEW=1` 门禁（生产 404 实测）。**`deploy.sh` 两个真缺陷**：① `--exclude 'console/'` 未锚定根 → rsync 连 `src/console/` 一起排除，**控制台源码自 2026-10-15 从未部署**（250 上 `/ds.css` 404，跑着 5 天前前端）；改全部锚定 `/console/` + 部署后校验 `src/console` sha1 与 `console/console.db` 存在性。② 部署不重启 `wechat-console` → `.ts` 改动不生效；已加 restart + 20s 内 `/health` 恢复否则失败。③ 删旧 CSS 后 `*{box-sizing:border-box}` 兜底消失 → 全站横向溢出 40px（`1320>1280`），`ds.css` 补作用域化 `body.ds-mounted *`。验收：`ui-gates.sh --strict` 7/0（G3 令牌 60/63=95%、G4 旧类 0 残留含 JS）、`ui-visual.py` 16 张终版基线 0 差异、`ui-accept.py` 本地 15/15 + **250 真机 15/15**（真实数据 20 隧道行/49 计划格/4 会话/7 指标）。契约沉淀 `spec/console/index.md` §五之二（8 条硬规则 + 3 条反模式：禁内联 style、禁 `window.confirm/prompt`、禁旧类名） | pi |
 | Token 消耗 | 极低（`AGENT.md` + `TREE.md` + `src/README.md` 分层按需） | 更低（AST repomap / 向量索引） |
 | 维护成本 | 人工维护 `AGENT.md` + spec（脚本生成 `TREE.md`） | 自动生成符号图（`repomap.sh` 升级） |
 | 控制力/精度 | 极强（硬约束 + 证据打勾 + GATE） | 极强 + 子代理 spec 注入（已具备 jsonl） |

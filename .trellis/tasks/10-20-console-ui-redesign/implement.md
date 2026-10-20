@@ -118,7 +118,15 @@ rerun 无差异；过程基线 `-before/-step1/-step3/-step4/-step5` 全部保�
 - [x] 7.4 文档：`.trellis/spec/console/index.md` 新增 §五之二「前端设计系统」（令牌/组件/JS API/8 条硬规则/闸门命令 + 3 条反模式）；
 `src/README.md` ui 目录职责改写；`AGENT.md` S23 + 进度 + 变更日志；`TREE.md` 用 `bash tools/repomap.sh` 刷新
 - [x] 7.5 最终闸门：`bash tools/ui-gates.sh --strict` **7 passed / 0 failed**（含 tsc --noEmit + bun build）
-- [ ] 7.6 `deploy/deploy.sh --keep-remote-content` → 250 真机逐页点一遍（含 390px 窄屏）；commit + `task.py archive`
+- [x] 7.6 `deploy/deploy.sh --keep-remote-content` → 250 真机：`ui-accept.py` **15/15 PASS**（真实 20 隧道行/49 计划格/4 会话/7 指标，
+1440/1024/768/390 四档 0 横向溢出，`/_ds` 生产 404）；目视后把隧道指标改 4+4 布局；临时管理员已删。
+
+**7.6 挖出 2 个部署级缺陷（已修 + 已复验）**：
+① `deploy.sh` 的 `--exclude 'console/'` 未锚定根 → rsync 连 `src/console/` 一起排除，**控制台源码自 2026-10-15 起从未部署**（250 `/ds.css` 404）；
+改全部锚定 `/console/` 等 + 部署后校验 `src/console/http/static.ts` sha1 与 `console/console.db` 存在性。
+② 部署不重启 `wechat-console` → `.ts` 改动不生效；加 restart + 20s 内 `/health` 恢复否则失败。
+
+- [ ] commit + `task.py archive`
 
 **Step 7 新发现并修复的缺陷**：删 `app.css` 后全站横向溢出 40px —— 其 `* { box-sizing: border-box }` 是全局兜底，
 `main.ds-content` 的 `width:100% + padding:24px 20px` 依赖它。实测 `scrollWidth 1320 > clientWidth 1280`。

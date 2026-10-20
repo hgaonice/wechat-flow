@@ -705,6 +705,32 @@ html.ds-no-anim *::after {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+/* tunnel overview: 7 stats fit as 4+4 (address spans 2) instead of 6+1 */
+.ds-stats--tunnel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ds-stats--tunnel .ds-stat--wide {
+  grid-column: span 2;
+}
+.ds-stat__value--url {
+  font-size: var(--ds-fs-sm);
+  line-height: var(--ds-lh-tight);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1023px) {
+  .ds-stats--tunnel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 559px) {
+  .ds-stats--tunnel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ds-stats--tunnel .ds-stat--wide {
+    grid-column: auto;
+  }
+}
+
 .ds-stat--ok .ds-stat__value {
   color: var(--ds-ok);
 }

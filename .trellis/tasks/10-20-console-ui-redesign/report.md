@@ -74,7 +74,45 @@ ACCEPT: 15/15 passed
 `workbench` 20.4%/31.7%（dark/light），来源是删 `app.css` 后 `ds` 侧间距令牌（card 20px vs 旧 18px）与
 `--ds-fs-*` 生效，属**设计意图内的观感变化**，不是回归；`admin` 0.13%、`chat` 0.87% 说明未受影响页几乎不变。
 
-## 5. 未在本次闭环的项
+## 5. 250 真机（7.6）
 
-- **7.6 250 真机逐页**：需要 `deploy.sh` 部署后用真实数据跑（含真实 SSE 进度数字、真实隧道状态、390px 手测）。
+`bash deploy/deploy.sh --keep-remote-content` → 建临时管理员 `uat-c3` → SSH 隧道 `-L 8788:127.0.0.1:8787` → 跑 `ui-accept.py`：
+
+```
+V1..V15  ACCEPT: 15/15 passed
+V4  2 account row(s): ['second', 'gaoh']          # 真实数据，登录态列 valid · 95.9h
+V7  49 editable cells in #plan-days               # 真实 7 天 × 7 列
+V8  #chat-list present, composer=True, chats=4
+V9  7 tunnel stat(s) in #tunnel-stats
+V10 2 table(s), largest tbody=20 row(s)           # 20 条真实隧道历史
+V14 horizontal overflow: none                     # 1440/1024/768/390
+V13 0 console error(s), 0 CSP violation(s)
+```
+
+生产门禁实测：`/_ds` → **404**，`/ds.css` `/ds.js` → 200。
+真机截图（不入库，临时目录）：`/tmp/real250/*.png`；人工目视发现隧道 7 个指标排成 6+1（URL 那格被撑高），
+已改 `.ds-stats--tunnel` 为 **4+4（地址跨 2 列）** + `.ds-stat__value--url` 单行显示，改后真机截图确认。
+验收用临时管理员**已删除**（`users` 剩 1 条 admin；顺手清了 7 条孤立 `login_sessions`）。
+
+## 6. 真机暴露的 2 个部署缺陷（已修，重要）
+
+### 6.1 `deploy.sh` 的 `--exclude 'console/'` 未锚定根 → 控制台源码从未部署
+
+`rsync` 的目录模式**不分层**：`--exclude 'console/'` 同时排除了 `/console/`（运行时 DB，本意）和 **`/src/console/`（控制台源码）**。
+后果：自 **2026-10-15**（`0385b83` 加这条排除）起，`src/console/**` 再没同步过；250 上 `/ds.css` 404、控制台停留在 5 天前的旧前端
+（期间漏掉的提交：`64b47ce` workbench 自动载入、`b6b3a39` chat 错误气泡、`dcb7cd9` 登录态列、C3 全部 6 个 commit）。
+
+修复：所有运行时排除项锚定到仓库根（`/console/`、`/data/`、`/backups/`、`/.venv/`…），并加两道部署后校验：
+`src/console/http/static.ts` 的 sha1 本地/远端必须一致；250 上 `console/console.db` 必须仍存在。
+实测：修复前 dry-run `src/console` 变更 0 条；修复后 19 条。
+
+### 6.2 `deploy.sh` 不重启 `wechat-console` → `.ts` 改动不生效
+
+控制台直接跑 `.ts`（无构建），同步源码后不重启就仍是旧进程。已加：检测 unit active → `systemctl restart` → 轮询 `/health` 20s，
+超时即**部署失败**并打印取证命令（静态页按请求读盘，不需要重启）。
+
+## 7. 未在本次闭环的项
+
 - C1 **AC3**（真实扫码）/ **AC6b**（到期前 24h 预警邮件）、C2 **AC5**（封面人工目视）仍待用户在场。
+- 真实 SSE 进度数字与真实生成/推送（会消耗 pi 额度 + 改写草稿）：本次只验页面结构与交互，未触发真实生成。
+- 每次 `systemctl restart wechat-console` 会让 CF Quick Tunnel 换地址（`0716` → `0740` → `0744` 三段），G6/G7 放行后应改用命名隧道。

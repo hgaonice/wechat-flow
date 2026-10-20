@@ -47,20 +47,23 @@ for arg in "$@"; do
 done
 
 # 运行时目录：这些是目标机上产生的数据，永远不能被本地覆盖
+# 注意：每条模式都以 `/` 开头锚定到仓库根。不锚定的 `console/` 会匹配到
+# `src/console/`（rsync 的目录模式不分层），曾导致控制台源码从 2026-10-15 起
+# 一直没被部署、250 跑着旧前端（C3 Step 7 真机验收时发现：/ds.css 404）。
 EXCLUDES=(
-  --exclude config.json
-  --exclude 'data/'         # 含 session-snapshots/（Cookies + Local State = 登录凭证，绝不出机器）
-  --exclude 'plans/'
-  --exclude 'articles/'
-  --exclude 'state/'
-  --exclude 'imgs/'
-  --exclude 'sessions/'
-  --exclude 'logs/'
-  --exclude '.env'
-  --exclude 'console/'      # 控制台运行时 DB（C1+；--delete 会删库，血训 2026-10-15）
-  --exclude 'backups/'      # console-backup.sh 产物（含 master.key）
-  --exclude '.wechat-console/'  # 主密钥（若仓内同层部署）
-  --exclude '.venv/'        # manim 虚拟环境（250 本地安装；--delete 会连 python/manim 一起删，血训 2026-10-19）
+  --exclude /config.json
+  --exclude '/data/'        # 含 session-snapshots/（Cookies + Local State = 登录凭证，绝不出机器）
+  --exclude '/plans/'
+  --exclude '/articles/'
+  --exclude '/state/'
+  --exclude '/imgs/'
+  --exclude '/sessions/'
+  --exclude '/logs/'
+  --exclude '/.env'
+  --exclude '/console/'     # 控制台运行时 DB（C1+；--delete 会删库，血训 2026-10-15）
+  --exclude '/backups/'     # console-backup.sh 产物（含 master.key）
+  --exclude '/.wechat-console/'  # 主密钥（若仓内同层部署）
+  --exclude '/.venv/'       # manim 虚拟环境（250 本地安装；--delete 会连 python/manim 一起删，血训 2026-10-19）
 )
 
 echo "· 源：$SRC/"
@@ -75,7 +78,7 @@ remote_fingerprint() {
 
 if [[ $keep_remote -eq 1 ]]; then
   echo "· content/ 与 prompts/：以 250 为真源（本次不同步）"
-  EXCLUDES+=(--exclude 'content/' --exclude 'prompts/')
+  EXCLUDES+=(--exclude '/content/' --exclude '/prompts/')
 else
   now_fp="$(remote_fingerprint)"
   old_fp="$(ssh -o BatchMode=yes "$HOST" "cat '$MANIFEST' 2>/dev/null || true" 2>/dev/null || true)"
@@ -122,6 +125,41 @@ if [[ $dry -eq 1 ]]; then
 fi
 
 ssh -o BatchMode=yes "$HOST" "chmod +x '$REMOTE_DIR'/deploy/*.sh '$REMOTE_DIR'/bin/*.sh '$REMOTE_DIR'/bin/*.py 2>/dev/null; true" >/dev/null
+
+# 同步后校验（两条都是真实踩过的坑，宁可部署失败也不要静默跑旧代码/删库）
+remote_sha=$(ssh -o BatchMode=yes "$HOST" "sha1sum '$REMOTE_DIR/src/console/http/static.ts' 2>/dev/null | cut -d' ' -f1")
+local_sha=$(sha1sum "$SRC/src/console/http/static.ts" | cut -d' ' -f1)
+if [[ "$remote_sha" != "$local_sha" ]]; then
+  echo "✖ src/console 未同步（本地 $local_sha ≠ 250 ${remote_sha:-缺失}）" >&2
+  echo "  多半是 EXCLUDES 里某条模式没锚定到根（如 'console/' 会连 src/console/ 一起排除）" >&2
+  exit 1
+fi
+echo "· src/console 校验一致（sha1 ${local_sha:0:12}）"
+
+if ! ssh -o BatchMode=yes "$HOST" "test -f '$REMOTE_DIR/console/console.db'"; then
+  echo "✖ 250 上的 console/console.db 不见了（--delete 误伤？）" >&2
+  echo "  立刻从 $REMOTE_DIR/backups/ 或 deploy/console-restore.sh 恢复，不要重启控制台" >&2
+  exit 1
+fi
+
+# 控制台进程直接执行 .ts（无构建步骤），源码同步后**必须重启**才生效；
+# 静态页（src/console/ui/*）是按请求读盘，不需要重启。
+# 之前缺这一步 → src/console 同步了但 250 仍跑旧代码（C3 Step 7 真机 404 /ds.css 时发现）。
+if ssh -o BatchMode=yes "$HOST" "systemctl is-active --quiet wechat-console.service" 2>/dev/null; then
+  echo "· 重启 wechat-console.service（源码已更新）"
+  ssh -o BatchMode=yes "$HOST" "systemctl restart wechat-console.service" >/dev/null
+  health_ok=0
+  for _ in $(seq 1 20); do
+    if ssh -o BatchMode=yes "$HOST" "curl -fsS -m 2 -o /dev/null http://127.0.0.1:8787/health" 2>/dev/null; then health_ok=1; break; fi
+    sleep 1
+  done
+  if [[ $health_ok -eq 1 ]]; then
+    echo "  ✅ /health 恢复"
+  else
+    echo "  ✖ 重启后 20s 内 /health 未恢复：ssh $HOST 'systemctl status wechat-console --no-pager; journalctl -u wechat-console -n 50 --no-pager'" >&2
+    exit 1
+  fi
+fi
 # 部署成功后刷新清单（keep-remote-content 时不动清单，因为内容没同步）
 if [[ $keep_remote -eq 0 ]]; then
   new_fp="$(remote_fingerprint)"

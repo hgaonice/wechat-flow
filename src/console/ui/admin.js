@@ -31,10 +31,13 @@
     if (b) b.hidden = true;
   };
 
-  function stat(label, value, kind) {
-    return el("div", { class: "ds-stat" + (kind ? ` ds-stat--${kind}` : "") }, [
+  function stat(label, value, kind, extra) {
+    return el("div", { class: "ds-stat" + (kind ? ` ds-stat--${kind}` : "") + (extra ? ` ds-stat--${extra}` : "") }, [
       el("div", { class: "ds-stat__label", text: label }),
-      el("div", { class: "ds-stat__value", text: value === null || value === undefined || value === "" ? "—" : String(value) }),
+      el("div", {
+        class: "ds-stat__value" + (extra === "wide" ? " ds-stat__value--url" : ""),
+        text: value === null || value === undefined || value === "" ? "—" : String(value),
+      }),
     ]);
   }
 
@@ -50,7 +53,7 @@
         el("div", { class: "ds-stat__value" }, [badge]),
       ]),
       stat("进程", t.running ? `运行中 (pid ${t.pid ?? "?"})` : "未运行"),
-      stat("地址", t.url),
+      stat("地址", t.url, null, "wide"),
       stat("起始", shortTime(t.since)),
       stat("最近检查", shortTime(t.lastCheckedAt)),
       stat("通知尝试", t.notifyAttempts ?? 0),
