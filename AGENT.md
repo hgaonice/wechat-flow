@@ -118,7 +118,7 @@
 | `archive/2026-10/10-13-console-ops-tunnel/` | S16 | C5 运维与公网（邮箱/隧道地址下发/凭据/管理员视图） | ✅ 已归档（2026-10-14） |
 | `archive/2026-10/10-13-console-deploy-hardening/` | S17 | C6 部署与加固（systemd/限流/备份/回归 + 文档/spec/AGENT） | ✅ 已归档（2026-10-14） |
 | `10-16-article-engagement-cta/` | S18 | 文末互动引导语 CTA（prompts/cta + 确定性补齐） | ✅ 已交付（2026-10-16，本地+250） |
-| `10-20-console-ui-redesign/` | S23 | 控制台前端重做（设计系统 ds.css/ds.js + 7 页迁移 + 闸门/基线/验收脚本） | ✅ 完成（2026-10-20，250 真机 15/15） |
+| `archive/2026-10/10-20-console-ui-redesign/` | S23 | 控制台前端重做（设计系统 ds.css/ds.js + 7 页迁移 + 闸门/基线/验收脚本） | ✅ 完成（2026-10-20，250 真机 15/15） |
 
 > 实时状态：`python3 .trellis/scripts/task.py list`；归档：`python3 .trellis/scripts/task.py list-archive`。
 
