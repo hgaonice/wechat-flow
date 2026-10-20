@@ -12,71 +12,116 @@
 </head>
 <body data-page="account">
 <header>
-  <a href="/app">← 返回</a>
   <span id="alias" class="brand"></span>
   <span class="spacer"></span>
   <span id="who" class="muted"></span>
 </header>
 <main>
-  <div class="card">
-    <h2>有效配置（继承 / 覆盖 / 显式）</h2>
-    <table>
-      <thead><tr><th>键</th><th>来源</th><th>有效值</th><th></th></tr></thead>
-      <tbody id="effective"></tbody>
-    </table>
-  </div>
-
-  <div class="card">
-    <h2>该账号的覆盖项（overrides，写回 config.json 的 accounts[alias]）</h2>
-    <p class="muted">引擎按“顶层键”回退：某个键在账号里存在即整块生效，不做嵌套深合并。
-      删除某键即恢复继承（重置按钮）。</p>
-    <textarea id="overrides" spellcheck="false"></textarea>
-    <div class="row mt">
-      <button id="save" class="primary">保存覆盖项</button>
-      <button id="reload" class="ghost">放弃修改</button>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">有效配置</h2>
+        <p class="ds-card__desc">每项配置的真实来源：继承全局 / 账号覆盖 / 显式写入。</p>
+      </div>
     </div>
-    <div id="msg" class="msg"></div>
-  </div>
-
-  <div class="card">
-    <h2>邮箱配置（隧道地址变更时下发到此账号邮箱）</h2>
-    <p class="muted">多个地址用逗号或空格分隔；留空表示未配置。管理员副本由全局 notify 列表决定。</p>
-    <label for="email-to">收件人 to</label>
-    <input id="email-to" placeholder="owner@example.com, backup@example.com">
-    <label for="email-cc">抄送 cc</label>
-    <input id="email-cc" placeholder="cc@example.com">
-    <label for="email-prefix">主题前缀 subjectPrefix</label>
-    <input id="email-prefix" placeholder="例如 [公众号A] ">
-    <div class="row mt">
-      <button id="email-save" class="primary">保存邮箱</button>
-      <button id="email-delete" class="danger">删除配置</button>
+    <div class="ds-table-wrap">
+      <table class="ds-table">
+        <thead><tr><th>键</th><th>来源</th><th>有效值</th><th></th></tr></thead>
+        <tbody id="effective"></tbody>
+      </table>
     </div>
-    <div id="email-msg" class="msg"></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>凭据（AES-256-GCM 加密存储，保存后不可回显）</h2>
-    <p class="muted">只写不读：保存后仅显示「已配置」与版本/时间，明文永不落库也不回显。</p>
-    <table>
-      <thead><tr><th>kind</th><th>状态</th><th>keyVersion</th><th>更新时间</th><th></th></tr></thead>
-      <tbody id="secrets-list"></tbody>
-    </table>
-    <div class="row mt">
-      <select id="secret-kind">
-        <option value="wechat_login">wechat_login（公众号后台账密）</option>
-        <option value="cf_token">cf_token（Cloudflare，预留）</option>
-        <option value="smtp">smtp（保留，暂不参与发信）</option>
-      </select>
-      <input id="secret-value" type="password" autocomplete="new-password" placeholder="明文（仅此刻传输，落库前加密）">
-      <button id="secret-save" class="primary">保存凭据</button>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">覆盖项 overrides</h2>
+        <p class="ds-card__desc">写回 config.json 的 accounts[alias]。引擎按“顶层键”回退：某个键在账号里存在即整块生效，不做嵌套深合并；删除某键即恢复继承。</p>
+      </div>
     </div>
-    <div id="secret-msg" class="msg"></div>
-  </div>
+    <div class="ds-field">
+      <label class="ds-field__label" for="overrides">JSON</label>
+      <textarea class="ds-textarea" id="overrides" spellcheck="false"></textarea>
+      <span class="ds-field__hint">必须是 JSON 对象；解析失败不会提交。</span>
+    </div>
+    <div class="ds-row">
+      <button id="save" class="ds-btn ds-btn--primary" type="button">保存覆盖项</button>
+      <button id="reload" class="ds-btn ds-btn--ghost" type="button">放弃修改</button>
+    </div>
+    <div id="msg" class="ds-flash" role="status" hidden></div>
+  </section>
 
-  <div class="card">
-    <h2>全局默认（只读，管理员在“全局设置”改）</h2>
-    <pre id="global" class="mono muted"></pre>
-  </div>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">邮箱配置</h2>
+        <p class="ds-card__desc">隧道地址变更时下发到此账号邮箱。多个地址用逗号或空格分隔；留空表示未配置。管理员副本由全局 notify 列表决定。</p>
+      </div>
+    </div>
+    <div class="ds-grid ds-grid--3">
+      <div class="ds-field">
+        <label class="ds-field__label" for="email-to">收件人 to</label>
+        <input class="ds-input" id="email-to" placeholder="owner@example.com, backup@example.com">
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="email-cc">抄送 cc</label>
+        <input class="ds-input" id="email-cc" placeholder="cc@example.com">
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="email-prefix">主题前缀 subjectPrefix</label>
+        <input class="ds-input" id="email-prefix" placeholder="例如 [公众号A] ">
+      </div>
+    </div>
+    <div class="ds-row">
+      <button id="email-save" class="ds-btn ds-btn--primary" type="button">保存邮箱</button>
+      <button id="email-delete" class="ds-btn ds-btn--danger-quiet" type="button">删除配置</button>
+    </div>
+    <div id="email-msg" class="ds-flash" role="status" hidden></div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">凭据</h2>
+        <p class="ds-card__desc">AES-256-GCM 加密存储，只写不读：保存后仅显示「已配置」与版本/时间，明文永不落库也不回显。</p>
+      </div>
+    </div>
+    <div class="ds-table-wrap">
+      <table class="ds-table">
+        <thead><tr><th>kind</th><th>状态</th><th>keyVersion</th><th>更新时间</th><th></th></tr></thead>
+        <tbody id="secrets-list"></tbody>
+      </table>
+    </div>
+    <div class="ds-grid ds-grid--3 ds-secret-form">
+      <div class="ds-field">
+        <label class="ds-field__label" for="secret-kind">类型</label>
+        <select class="ds-select" id="secret-kind">
+          <option value="wechat_login">wechat_login（公众号后台账密）</option>
+          <option value="cf_token">cf_token（Cloudflare，预留）</option>
+          <option value="smtp">smtp（保留，暂不参与发信）</option>
+        </select>
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="secret-value">明文</label>
+        <input class="ds-input" id="secret-value" type="password" autocomplete="new-password" placeholder="仅此刻传输，落库前加密">
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="secret-save">&nbsp;</label>
+        <button id="secret-save" class="ds-btn ds-btn--primary" type="button">保存凭据</button>
+      </div>
+    </div>
+    <div id="secret-msg" class="ds-flash" role="status" hidden></div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">全局默认（只读）</h2>
+        <p class="ds-card__desc">在「全局设置」页修改。</p>
+      </div>
+    </div>
+    <pre id="global" class="ds-mono ds-muted ds-pre"></pre>
+  </section>
 </main>
 </body>
 </html>

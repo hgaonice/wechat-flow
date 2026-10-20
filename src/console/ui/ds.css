@@ -161,6 +161,10 @@ body.ds-mounted :focus-visible {
   border-radius: var(--ds-r-sm);
 }
 
+body.ds-mounted [hidden] {
+  display: none !important;
+}
+
 body.ds-mounted a {
   color: var(--ds-accent);
   text-decoration: none;
@@ -509,6 +513,27 @@ body.ds-anon main.ds-content {
   }
 }
 
+/* inline form/message feedback (app.js `flash()` is the only writer) */
+.ds-flash {
+  margin-top: var(--ds-s-3);
+  padding: var(--ds-s-2) var(--ds-s-3);
+  border-radius: var(--ds-r-sm);
+  font-size: var(--ds-fs-sm);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-panel-2);
+  color: var(--ds-muted);
+}
+.ds-flash--ok {
+  border-color: color-mix(in srgb, var(--ds-ok) 45%, transparent);
+  background: var(--ds-ok-weak);
+  color: var(--ds-ok);
+}
+.ds-flash--error {
+  border-color: color-mix(in srgb, var(--ds-danger) 45%, transparent);
+  background: var(--ds-danger-weak);
+  color: var(--ds-danger);
+}
+
 /* ── 5. utilities ──────────────────────────────────────────────────────── */
 .ds-sr-only {
   position: absolute;
@@ -677,6 +702,11 @@ html.ds-no-anim *::after {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.ds-table td.ds-num,
+.ds-table th.ds-num {
+  text-align: right;
+  white-space: nowrap;
+}
 .ds-table--compact th,
 .ds-table--compact td {
   padding: var(--ds-s-2) var(--ds-s-3);
@@ -781,6 +811,14 @@ html.ds-no-anim *::after {
 .ds-btn--ghost:hover:not(:disabled) {
   background: var(--ds-panel-3);
   border-color: var(--ds-border-strong);
+}
+.ds-btn--danger-quiet {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
+  color: var(--ds-danger);
+}
+.ds-btn--danger-quiet:hover:not(:disabled) {
+  background: var(--ds-danger-weak);
 }
 .ds-btn--quiet {
   background: transparent;
@@ -1221,6 +1259,20 @@ html.ds-no-anim *::after {
 .ds-grow {
   flex: 1 1 auto;
   min-width: 0;
+}
+.ds-pre {
+  margin: 0;
+  padding: var(--ds-s-3);
+  background: var(--ds-panel-2);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-r-sm);
+  font-size: var(--ds-fs-sm);
+  line-height: 1.6;
+  overflow: auto;
+  max-height: 420px;
+}
+.ds-secret-form {
+  margin-top: var(--ds-s-4);
 }
 .ds-hr {
   border: 0;

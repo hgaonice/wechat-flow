@@ -154,7 +154,7 @@
       if (/wechat-flow/i.test(t)) {
         brandText.textContent = t || "wechat-flow console";
         legacyBrand.remove();
-      } else if (t) {
+      } else {
         var sub = el("div", "ds-sidebar__sub");
         legacyBrand.classList.remove("brand");
         sub.appendChild(legacyBrand); // moves the node, keeps its id/behaviour

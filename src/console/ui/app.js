@@ -45,12 +45,40 @@ function el(tag, props = {}, children = []) {
 function flash(node, text, kind = "") {
   if (!node) return;
   node.textContent = text;
-  node.className = `msg ${kind}`;
+  node.className = `ds-flash${kind ? ` ds-flash--${kind}` : ""}`;
+  node.setAttribute("role", kind === "error" ? "alert" : "status");
+  node.hidden = !text;
+}
+
+/** 登录态徽章：无数据不猜，明确显示「未知」并给出原始原因。 */
+function sessionBadge(session) {
+  if (!session || session.ok === false) {
+    const why = session && session.reason ? session.reason : "无会话数据";
+    const b = el("span", { class: "ds-badge", text: "未知" });
+    b.title = why;
+    return b;
+  }
+  const h = typeof session.hoursLeft === "number" ? session.hoursLeft : null;
+  const verdict = session.verdict || "unknown";
+  let kind = "ds-badge--warn";
+  if (verdict === "invalid") kind = "ds-badge--danger";
+  else if (h !== null && h <= 12) kind = "ds-badge--danger";
+  else if (h !== null && h <= 36) kind = "ds-badge--warn";
+  else if (verdict === "valid") kind = "ds-badge--ok";
+  const label = h === null ? verdict : `${verdict} · ${h}h`;
+  const b = el("span", { class: `ds-badge ${kind}` }, [el("span", { class: "ds-badge__dot" }), document.createTextNode(label)]);
+  const bits = [];
+  if (session.lastKeepaliveAt) bits.push(`上次保活 ${session.lastKeepaliveAt}`);
+  if (session.slaveSidExpiresAt) bits.push(`cookie 到期 ${session.slaveSidExpiresAt}`);
+  if (session.reason) bits.push(session.reason);
+  if (bits.length) b.title = bits.join("\n");
+  return b;
 }
 
 function sourceBadge(source) {
   const label = { inherited: "继承", explicit: "显式", overridden: "覆盖" }[source] || source;
-  return el("span", { class: `badge ${source}`, text: label });
+  const kind = { inherited: "", explicit: "ds-badge--accent", overridden: "ds-badge--warn" }[source] || "";
+  return el("span", { class: `ds-badge ${kind}`.trim(), text: label });
 }
 
 // ── login ───────────────────────────────────────────────────────────────────
@@ -89,21 +117,38 @@ async function initIndex() {
   const tbody = $("#accounts");
 
   const render = async () => {
-    const { accounts } = await api("/api/accounts");
+    let accounts;
+    try {
+      ({ accounts } = await api("/api/accounts"));
+    } catch (err) {
+      tbody.innerHTML = "";
+      $("#empty").hidden = false;
+      $("#empty").textContent = `账号列表加载失败：${err.message}`;
+      throw err;
+    }
     tbody.innerHTML = "";
     $("#empty").hidden = accounts.length > 0;
     for (const a of accounts) {
-      const enabled = a.enabled === null ? "—" : a.enabled ? el("span", { class: "badge on", text: "启用" }) : el("span", { class: "badge off", text: "停用" });
+      const enabled = a.enabled === null
+        ? el("span", { class: "ds-badge", text: "—" })
+        : a.enabled
+          ? el("span", { class: "ds-badge ds-badge--ok", text: "启用" })
+          : el("span", { class: "ds-badge ds-badge--danger", text: "停用" });
       tbody.append(
         el("tr", {}, [
           el("td", {}, [el("a", { href: `/account?id=${a.id}`, text: a.alias })]),
           el("td", { text: a.displayName || "—" }),
-          el("td", { class: "mono", text: a.cdpPort ?? "—" }),
+          el("td", { class: "ds-mono is-num", text: a.cdpPort ?? "—" }),
           el("td", { text: a.publishMethod || "—" }),
           el("td", {}, [enabled]),
-          el("td", { class: "mono", text: a.overrideKeys.length ? a.overrideKeys.join(", ") : "—" }),
-          el("td", {}, [
-            el("button", { class: "danger", text: "删除", onclick: () => removeAccount(a) }),
+          el("td", {}, [sessionBadge(a.session)]),
+          el("td", { class: "ds-mono", text: a.overrideKeys.length ? a.overrideKeys.join(", ") : "—" }),
+          el("td", { class: "ds-num" }, [
+            el("button", {
+              class: "ds-btn ds-btn--danger-quiet ds-btn--sm",
+              text: "删除",
+              onclick: () => removeAccount(a),
+            }),
           ]),
         ]),
       );
@@ -111,7 +156,13 @@ async function initIndex() {
   };
 
   const removeAccount = async (a) => {
-    if (!confirm(`删除账号 ${a.alias}？仅注销，data/${a.alias}/ 不会被删除。`)) return;
+    const okDelete = await window.DS.confirm({
+      title: `删除账号 ${a.alias}`,
+      body: `仅从控制台注销该账号，data/${a.alias}/ 目录与已发布内容不会被删除。确认继续？`,
+      okText: "删除",
+      danger: true,
+    });
+    if (!okDelete) return;
     try {
       await api(`/api/accounts/${a.id}`, { method: "DELETE" });
       flash(msg, `已删除 ${a.alias}`, "ok");
@@ -120,6 +171,12 @@ async function initIndex() {
       flash(msg, err.message, "error");
     }
   };
+
+  if ($("#refresh-accounts")) {
+    $("#refresh-accounts").addEventListener("click", async () => {
+      try { await render(); flash(msg, "已刷新"); } catch (err) { flash(msg, err.message, "error"); }
+    });
+  }
 
   if ($("#create")) {
     $("#create").addEventListener("click", async () => {
@@ -180,22 +237,46 @@ async function initAccount() {
     $("#alias").textContent = detail.alias;
     const tbody = $("#effective");
     tbody.innerHTML = "";
-    for (const key of Object.keys(detail.effective).sort()) {
+    const keys = Object.keys(detail.effective || {}).sort();
+    if (!keys.length) {
+      tbody.append(
+        el("tr", {}, [
+          el("td", { class: "ds-muted", colspan: "4", text: "该账号没有可展示的有效配置（config 未加载或为空）" }),
+        ]),
+      );
+    }
+    for (const key of keys) {
       const source = detail.sources[key] || "inherited";
       const value = detail.effective[key];
-      const cell = el("td", { class: "mono" });
+      const cell = el("td", { class: "ds-mono" });
       cell.textContent = typeof value === "string" ? value : JSON.stringify(value);
       const resetBtn = source !== "inherited"
-        ? el("button", { class: "ghost", text: "重置为继承", onclick: () => resetOverride(key) })
+        ? el("button", {
+            class: "ds-btn ds-btn--ghost ds-btn--sm",
+            text: "重置为继承",
+            onclick: () => resetOverride(key),
+          })
         : null;
-      tbody.append(el("tr", {}, [el("td", { class: "mono", text: key }), el("td", {}, [sourceBadge(source)]), cell, el("td", {}, [resetBtn])]));
+      tbody.append(
+        el("tr", {}, [
+          el("td", { class: "ds-mono", text: key }),
+          el("td", {}, [sourceBadge(source)]),
+          cell,
+          el("td", { class: "ds-num" }, [resetBtn]),
+        ]),
+      );
     }
     $("#overrides").value = JSON.stringify(detail.overrides, null, 2);
     $("#global").textContent = JSON.stringify(detail.global, null, 2);
   };
 
   const resetOverride = async (key) => {
-    if (!confirm(`移除覆盖项「${key}」，恢复继承全局默认？`)) return;
+    const okReset = await window.DS.confirm({
+      title: `重置覆盖项 ${key}`,
+      body: "移除该键后，账号将恢复继承全局默认值。",
+      okText: "重置",
+    });
+    if (!okReset) return;
     try {
       detail = await api(`/api/accounts/${id}/reset-override`, { method: "POST", body: { key } });
       flash(msg, `已重置 ${key}`, "ok");
@@ -225,18 +306,22 @@ async function initAccount() {
     tbody.innerHTML = "";
     for (const s of secrets) {
       const badge = s.configured
-        ? el("span", { class: "badge on", text: "已配置" })
-        : el("span", { class: "badge off", text: "未配置" });
+        ? el("span", { class: "ds-badge ds-badge--ok", text: "已配置" })
+        : el("span", { class: "ds-badge", text: "未配置" });
       const del = s.configured
-        ? el("button", { class: "danger", text: "删除", onclick: () => removeSecret(s.kind) })
+        ? el("button", {
+            class: "ds-btn ds-btn--danger-quiet ds-btn--sm",
+            text: "删除",
+            onclick: () => removeSecret(s.kind),
+          })
         : null;
       tbody.append(
         el("tr", {}, [
-          el("td", { class: "mono", text: s.kind }),
+          el("td", { class: "ds-mono", text: s.kind }),
           el("td", {}, [badge]),
-          el("td", { class: "mono", text: s.keyVersion ?? "—" }),
-          el("td", { class: "mono", text: s.updatedAt ?? "—" }),
-          el("td", {}, [del]),
+          el("td", { class: "ds-mono", text: s.keyVersion ?? "—" }),
+          el("td", { class: "ds-mono", text: s.updatedAt ?? "—" }),
+          el("td", { class: "ds-num" }, [del]),
         ]),
       );
     }
@@ -248,7 +333,13 @@ async function initAccount() {
   };
 
   const removeSecret = async (kind) => {
-    if (!confirm(`删除凭据「${kind}」？删除后该凭据立即失效。`)) return;
+    const okDel = await window.DS.confirm({
+      title: `删除凭据 ${kind}`,
+      body: "删除后该凭据立即失效，相关自动登录/发信会失败，需要重新录入。",
+      okText: "删除",
+      danger: true,
+    });
+    if (!okDel) return;
     try {
       await api(`/api/accounts/${id}/secrets/${kind}`, { method: "DELETE" });
       await loadSecrets();
@@ -277,7 +368,13 @@ async function initAccount() {
   });
 
   $("#email-delete").addEventListener("click", async () => {
-    if (!confirm("删除该账号的邮箱配置？删除后隧道变更邮件将不再下发到此账号。")) return;
+    const okDel = await window.DS.confirm({
+      title: "删除邮箱配置",
+      body: "删除后隧道变更邮件不再下发到此账号（管理员副本不受影响）。",
+      okText: "删除",
+      danger: true,
+    });
+    if (!okDel) return;
     try {
       await api(`/api/accounts/${id}/email`, { method: "DELETE" });
       renderEmail(null);

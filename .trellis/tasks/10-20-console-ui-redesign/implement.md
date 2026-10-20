@@ -54,12 +54,12 @@
 
 ## Step 3 · 迁移 `index`（账号表）+ `account`（详情/表单）
 
-- [ ] 3.1 `index.html` + `app.js` 渲染层：`.card`→`.ds-card`、`table`→`.ds-table`（包 `.ds-table-wrap`）、空态→`.ds-empty`、状态→`.ds-badge`、按钮→`.ds-btn--*`、表单→`.ds-field`
-- [ ] 3.2 表格首列显示**会话剩余时长**（C1 的只读 `session` 字段）用 `.ds-badge--ok/warn/danger`；无字段时显示 `.ds-badge--neutral 未知`
-- [ ] 3.3 `account.html` 同族迁移（表单 error 态用 `.is-invalid` + `aria-invalid`）
-- [ ] 3.4 新账号创建/改密码流程手工冒烟 + `ui-visual.py --page index,account --theme both`
+- [x] 3.1 `index.html` + `app.js` 渲染层：`.card`→`.ds-card`、`table`→`.ds-table`（包 `.ds-table-wrap`）、空态→`.ds-empty`、状态→`.ds-badge`、按钮→`.ds-btn--*`、表单→`.ds-field`
+- [x] 3.2 表格首列显示**会话剩余时长**（C1 的只读 `session` 字段）用 `.ds-badge--ok/warn/danger`；无字段时显示 `.ds-badge--neutral 未知`
+- [x] 3.3 `account.html` 同族迁移（表单 error 态用 `.is-invalid` + `aria-invalid`）
+- [x] 3.4 新账号创建/改密码流程手工冒烟 + `ui-visual.py --page index,account --theme both`
 
-**Gate 3**：账号 CRUD 全通；表格窄屏可横滚不破版；`/api/accounts` 失败时显示 `.ds-empty` 而非空白区。
+**Gate 3** ✅ 2026-10-20：账号 CRUD 全通；表格窄屏可横滚不破版；`/api/accounts` 失败时显示 `.ds-empty` 而非空白区。
 
 ---
 
