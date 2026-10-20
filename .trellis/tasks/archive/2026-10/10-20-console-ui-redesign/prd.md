@@ -33,12 +33,19 @@
 
 ## 验收标准（分 4 步，每步独立可验收）
 
-- [ ] **DS-1 令牌 + 布局骨架**：`ds.css` 落地并被所有页面引用；sidebar + 顶栏 + 内容区在 7 个页面统一；无内联 style。
-- [ ] **DS-2 组件类**：R1 列出的组件全部有可复用类与 1 个 `/_ds` 演示页（仅开发用，生产不暴露或明确标注）；每个组件在暗/亮主题下正确。
-- [ ] **DS-3 逐页迁移**：7 页全部迁移完成；功能零回退（登录/账号 CRUD/工作台生成推送/会话决策/管理员视图全部可操作）。
-- [ ] **AC-V 视觉回归**：7 页 × 2 主题截图基线入库；`playwright` 跑通且 0 差异（或差异经人工确认后更新基线）；CSP 违规 0；无 JS 错误。
-- [ ] **AC-X 零依赖**：`dependencies` 仍为空；`bun build` / `tsc --noEmit` 通过；`grep -c 'style='` 在 `ui/*.html` 为 0。
-- [ ] **AC-F 功能等价**：既有 `10-15-console-acceptance-250/report.md` 的 V1–V13 浏览器用例全部重跑通过。
+- [x] **DS-1 令牌 + 布局骨架**：`ds.css` 落地并被所有页面引用；sidebar + 顶栏 + 内容区在 7 个页面统一；无内联 style。
+- [x] **DS-2 组件类**：R1 列出的组件全部有可复用类与 1 个 `/_ds` 演示页（仅开发用，生产不暴露或明确标注）；每个组件在暗/亮主题下正确。
+- [x] **DS-3 逐页迁移**：7 页全部迁移完成；功能零回退（登录/账号 CRUD/工作台生成推送/会话决策/管理员视图全部可操作）。
+- [x] **AC-V 视觉回归**：7 页 × 2 主题截图基线入库；`playwright` 跑通且 0 差异（或差异经人工确认后更新基线）；CSP 违规 0；无 JS 错误。
+- [x] **AC-X 零依赖**：`dependencies` 仍为空；`bun build` / `tsc --noEmit` 通过；`grep -c 'style='` 在 `ui/*.html` 为 0。
+- [x] **AC-F 功能等价**：既有 `10-15-console-acceptance-250/report.md` 的 V1–V13 浏览器用例全部重跑通过。
+
+## 验收结论（2026-10-20，证据见 `report.md`）
+
+- DS-1/DS-2/DS-3：`ds.css`（≈1500 行）+ `ds.js` 被 7 页引用；`/_ds` 生产 404（`WFC_DS_PREVIEW` 门禁）；`ui-gates.sh --strict` G1–G5 全绿。
+- AC-V：`tools/ui-baselines/` **16 张终版基线**（7 页 × 暗/亮 + `_ds` × 2），`ui-visual.py` 0 差异 / 0 JS 错误 / 0 CSP 违规。
+- AC-X：`dependencies` 空、`tsc --noEmit` 0 错、`bun build` 通过、`ui/*.html` 内联 `style=` 计数 0（G1）。
+- AC-F：`tools/ui-accept.py` V1–V15 **本地 15/15 + 250 真机 15/15**；真机额外暴露并修复 2 个部署缺陷（见 `report.md` §6）。
 
 ## 开放决策
 
