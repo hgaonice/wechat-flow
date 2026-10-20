@@ -50,6 +50,17 @@ PAGES: dict[str, tuple[str, str, list[str]]] = {
     "chat": ("/chat", "#chat-list", []),
 }
 
+# ids the page JS binds to; the shell must never lose them (design S-1 invariant 1)
+DOM = {
+    "login": ["#login-form", "#username", "#password"],
+    "index": ["#accounts", "#who", "#logout", "#nav-admin"],
+    "account": ["#alias", "#who", "#effective"],
+    "settings": ["#who", "#global-json"],
+    "admin": ["#who", "#tunnel-stats"],
+    "workbench": ["#account", "#who", "#logout"],
+    "chat": ["#chat-list", "#who", "#logout"],
+}
+
 DIFF_THRESHOLD = 0.005  # 0.5% of pixels
 
 
@@ -105,6 +116,9 @@ def capture(page, base: str, name: str, theme: str, out_dir: Path, hide: list[st
     target = out_dir / f"{name}-{theme}.png"
     page.screenshot(path=str(target))
 
+    missing = [sel for sel in DOM.get(name, []) if page.query_selector(sel) is None]
+    if missing:
+        problems.append(f"{name}: missing DOM node(s) {missing} — shell ate a page id")
     recorded_csp = page.evaluate("window.__csp || []")
     if recorded_csp:
         csp.extend(str(x) for x in recorded_csp)

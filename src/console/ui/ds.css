@@ -1,0 +1,546 @@
+/* ==========================================================================
+   wechat-flow console · design system (C3)
+   --------------------------------------------------------------------------
+   Zero dependencies, zero build step. Loaded BEFORE the legacy page CSS so
+   that unmigrated pages keep their current look (legacy .card/.primary/.row
+   are intentionally NOT styled here — see design.md S-4 / R2).
+
+   All tokens are `--ds-*` namespaced on purpose: the legacy files own
+   --bg/--panel/--accent, and we must not repaint an unmigrated page by
+   accident. Once the legacy CSS is deleted (Step 7) these are the only ones.
+
+   Sections
+     1 tokens (dark default / light override)
+     2 base (scoped to body.ds-mounted)
+     3 shell: sidebar + topbar + content
+     4 responsive (rail / drawer)
+     5 utilities
+   ========================================================================== */
+
+/* ── 1. tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* neutral ladder (dark → light) */
+  --ds-n-0: #0b0d12;
+  --ds-n-1: #0f1115;
+  --ds-n-2: #151922;
+  --ds-n-3: #1b2029;
+  --ds-n-4: #222834;
+  --ds-n-5: #2a3140;
+  --ds-n-6: #374052;
+  --ds-n-7: #525c70;
+  --ds-n-8: #8b97ab;
+  --ds-n-9: #e6e9ef;
+
+  /* surfaces */
+  --ds-bg: var(--ds-n-1);
+  --ds-panel: var(--ds-n-2);
+  --ds-panel-2: var(--ds-n-3);
+  --ds-panel-3: var(--ds-n-4);
+  --ds-border: var(--ds-n-5);
+  --ds-border-strong: var(--ds-n-6);
+  --ds-text: var(--ds-n-9);
+  --ds-muted: var(--ds-n-8);
+
+  /* brand + status */
+  --ds-accent: #4f8cff;
+  --ds-accent-hover: #6ea0ff;
+  --ds-accent-weak: rgba(79, 140, 255, 0.14);
+  --ds-ok: #3ddc97;
+  --ds-ok-weak: rgba(61, 220, 151, 0.12);
+  --ds-warn: #f5a623;
+  --ds-warn-weak: rgba(245, 166, 35, 0.12);
+  --ds-danger: #ff5f6d;
+  --ds-danger-weak: rgba(255, 95, 109, 0.12);
+  --ds-info: #4cc9f0;
+  --ds-info-weak: rgba(76, 201, 240, 0.12);
+
+  /* spacing (4px base) */
+  --ds-s-1: 4px;
+  --ds-s-2: 8px;
+  --ds-s-3: 12px;
+  --ds-s-4: 16px;
+  --ds-s-5: 20px;
+  --ds-s-6: 24px;
+  --ds-s-7: 32px;
+  --ds-s-8: 40px;
+
+  /* radius */
+  --ds-r-sm: 6px;
+  --ds-r-md: 10px;
+  --ds-r-lg: 14px;
+  --ds-r-full: 999px;
+
+  /* elevation — dark UI leans on borders, not shadows */
+  --ds-sh-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --ds-sh-2: 0 6px 20px rgba(0, 0, 0, 0.34);
+  --ds-sh-3: 0 16px 48px rgba(0, 0, 0, 0.46);
+
+  /* type */
+  --ds-fs-xs: 11px;
+  --ds-fs-sm: 12px;
+  --ds-fs-md: 14px;
+  --ds-fs-lg: 16px;
+  --ds-fs-xl: 20px;
+  --ds-fs-2xl: 24px;
+  --ds-lh-tight: 1.25;
+  --ds-lh-normal: 1.5;
+  --ds-font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --ds-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* layout */
+  --ds-sidebar-w: 236px;
+  --ds-sidebar-rail-w: 60px;
+  --ds-topbar-h: 56px;
+  --ds-content-max: 1240px;
+
+  /* motion */
+  --ds-t-fast: 120ms;
+  --ds-t-med: 200ms;
+  --ds-ring: 0 0 0 2px var(--ds-bg), 0 0 0 4px var(--ds-accent);
+}
+
+/* Light theme. Only --ds-* are remapped, so switching cannot half-restyle a
+   legacy page — that is why light mode reaches parity only after Step 7. */
+html[data-theme="light"] {
+  --ds-n-0: #ffffff;
+  --ds-n-1: #f6f7f9;
+  --ds-n-2: #ffffff;
+  --ds-n-3: #f2f4f7;
+  --ds-n-4: #e9ecf1;
+  --ds-n-5: #dfe3ea;
+  --ds-n-6: #c8cfda;
+  --ds-n-7: #9aa3b2;
+  --ds-n-8: #5d6779;
+  --ds-n-9: #171a21;
+
+  --ds-bg: #f6f7f9;
+  --ds-panel: #ffffff;
+  --ds-panel-2: #f2f4f7;
+  --ds-panel-3: #e9ecf1;
+  --ds-border: #dfe3ea;
+  --ds-border-strong: #c8cfda;
+  --ds-text: #171a21;
+  --ds-muted: #5d6779;
+
+  --ds-accent: #2563eb;
+  --ds-accent-hover: #1d4ed8;
+  --ds-accent-weak: rgba(37, 99, 235, 0.1);
+  --ds-ok: #0f9d63;
+  --ds-ok-weak: rgba(15, 157, 99, 0.1);
+  --ds-warn: #b45309;
+  --ds-warn-weak: rgba(180, 83, 9, 0.1);
+  --ds-danger: #d93a48;
+  --ds-danger-weak: rgba(217, 58, 72, 0.1);
+  --ds-info: #0e7490;
+
+  --ds-sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ds-sh-2: 0 6px 20px rgba(16, 24, 40, 0.08);
+  --ds-sh-3: 0 16px 48px rgba(16, 24, 40, 0.14);
+}
+
+/* ── 2. base (only after mounting, so unmigrated pages are untouched) ───── */
+body.ds-mounted {
+  margin: 0;
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--ds-font);
+  font-size: var(--ds-fs-md);
+  line-height: var(--ds-lh-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+body.ds-mounted :focus-visible {
+  outline: none;
+  box-shadow: var(--ds-ring);
+  border-radius: var(--ds-r-sm);
+}
+
+body.ds-mounted a {
+  color: var(--ds-accent);
+  text-decoration: none;
+}
+body.ds-mounted a:hover {
+  color: var(--ds-accent-hover);
+  text-decoration: none;
+}
+
+/* ── 3. shell ──────────────────────────────────────────────────────────── */
+.ds-shell {
+  display: grid;
+  grid-template-columns: var(--ds-sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* sidebar */
+.ds-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-s-4);
+  padding: var(--ds-s-4) var(--ds-s-3);
+  background: var(--ds-panel);
+  border-right: 1px solid var(--ds-border);
+  overflow: hidden;
+}
+
+.ds-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-s-2);
+  padding: 0 var(--ds-s-2) var(--ds-s-3);
+  border-bottom: 1px solid var(--ds-border);
+  font-size: var(--ds-fs-md);
+  font-weight: 600;
+  line-height: var(--ds-lh-tight);
+  white-space: nowrap;
+}
+.ds-sidebar__brand-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--ds-r-sm);
+  background: linear-gradient(140deg, var(--ds-accent), #7b8cff);
+  box-shadow: var(--ds-sh-1);
+}
+/* page-specific brand node (e.g. account alias) rides along as a subtitle */
+.ds-sidebar__sub {
+  padding: 0 var(--ds-s-2);
+  color: var(--ds-muted);
+  font-size: var(--ds-fs-sm);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-s-5);
+  overflow-y: auto;
+  min-height: 0;
+}
+.ds-nav__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ds-nav__label {
+  padding: 0 var(--ds-s-2) var(--ds-s-1);
+  color: var(--ds-muted);
+  font-size: var(--ds-fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ds-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-s-2);
+  padding: 7px var(--ds-s-2);
+  border-radius: var(--ds-r-sm);
+  color: var(--ds-text);
+  font-size: var(--ds-fs-md);
+  white-space: nowrap;
+  transition: background var(--ds-t-fast) ease, color var(--ds-t-fast) ease;
+}
+.ds-nav__item:hover {
+  background: var(--ds-panel-3);
+  color: var(--ds-text);
+}
+.ds-nav__item.is-active {
+  background: var(--ds-accent-weak);
+  color: var(--ds-accent);
+  font-weight: 500;
+}
+.ds-nav__item svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  opacity: 0.9;
+}
+.ds-nav__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-sidebar__foot {
+  margin-top: auto;
+  padding-top: var(--ds-s-3);
+  border-top: 1px solid var(--ds-border);
+  color: var(--ds-muted);
+  font-size: var(--ds-fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* main column */
+.ds-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+/* the legacy <header> gets this class; specificity beats legacy `header` */
+header.ds-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-s-3);
+  height: var(--ds-topbar-h);
+  padding: 0 var(--ds-s-5);
+  background: color-mix(in srgb, var(--ds-panel) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--ds-border);
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.ds-topbar__left,
+.ds-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-s-3);
+  min-width: 0;
+}
+.ds-topbar__right {
+  margin-left: auto;
+}
+.ds-topbar__title {
+  font-size: var(--ds-fs-md);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ds-topbar__crumb {
+  color: var(--ds-muted);
+  font-size: var(--ds-fs-sm);
+  white-space: nowrap;
+}
+/* legacy flex spacer inside header is not needed once topbar is a flex row */
+header.ds-topbar > .spacer,
+header.ds-topbar .spacer {
+  display: none;
+}
+header.ds-topbar > a:not(.ds-nav__item) {
+  color: var(--ds-text);
+  padding: 5px var(--ds-s-2);
+  border-radius: var(--ds-r-sm);
+  font-size: var(--ds-fs-md);
+  white-space: nowrap;
+}
+header.ds-topbar > a:not(.ds-nav__item):hover {
+  background: var(--ds-panel-3);
+}
+/* legacy buttons in the topbar adopt the ghost look */
+header.ds-topbar > button,
+header.ds-topbar .ds-topbar__right > button {
+  background: transparent;
+  border: 1px solid var(--ds-border);
+  color: var(--ds-text);
+  border-radius: var(--ds-r-sm);
+  padding: 5px var(--ds-s-3);
+  font-size: var(--ds-fs-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+header.ds-topbar > button:hover,
+header.ds-topbar .ds-topbar__right > button:hover {
+  border-color: var(--ds-border-strong);
+  background: var(--ds-panel-3);
+}
+
+.ds-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-r-sm);
+  color: var(--ds-muted);
+  cursor: pointer;
+}
+.ds-theme-toggle:hover {
+  color: var(--ds-text);
+  border-color: var(--ds-border-strong);
+}
+.ds-theme-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ds-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-r-sm);
+  color: var(--ds-text);
+  cursor: pointer;
+}
+.ds-menu-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* content area — the legacy <main> gets .ds-content appended, so page-level
+   classes such as `chat-main` keep working (S-1 invariant 2). */
+main.ds-content {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--ds-content-max);
+  margin: 0 auto;
+  padding: var(--ds-s-6) var(--ds-s-5);
+  min-width: 0;
+}
+
+/* login: no sidebar, center the card */
+body.ds-anon .ds-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+body.ds-anon .login-wrap {
+  width: 380px;
+  max-width: 100%;
+  margin: 0;
+}
+body.ds-anon main.ds-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: none;
+  padding: var(--ds-s-6);
+}
+
+.ds-scrim {
+  display: none;
+}
+
+/* ── 4. responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 1279px) {
+  .ds-shell {
+    grid-template-columns: var(--ds-sidebar-rail-w) minmax(0, 1fr);
+  }
+  .ds-sidebar {
+    padding: var(--ds-s-3) var(--ds-s-2);
+    align-items: stretch;
+  }
+  .ds-sidebar__brand {
+    justify-content: center;
+    padding: 0 0 var(--ds-s-3);
+    font-size: 0;
+  }
+  .ds-sidebar__sub,
+  .ds-nav__label,
+  .ds-nav__text,
+  .ds-sidebar__foot {
+    display: none;
+  }
+  .ds-nav__item {
+    justify-content: center;
+    padding: 9px 0;
+  }
+}
+@media (max-width: 767px) {
+  .ds-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ds-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: var(--ds-sidebar-w);
+    transform: translateX(-100%);
+    transition: transform var(--ds-t-med) ease;
+    box-shadow: var(--ds-sh-3);
+  }
+  .ds-sidebar__brand {
+    justify-content: flex-start;
+    font-size: var(--ds-fs-md);
+  }
+  .ds-sidebar__sub,
+  .ds-nav__label,
+  .ds-nav__text,
+  .ds-sidebar__foot {
+    display: block;
+  }
+  .ds-nav__item {
+    justify-content: flex-start;
+    padding: 8px var(--ds-s-2);
+  }
+  body.ds-nav-open .ds-sidebar {
+    transform: none;
+  }
+  body.ds-nav-open .ds-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .ds-menu-btn {
+    display: inline-flex;
+  }
+  header.ds-topbar {
+    padding: 0 var(--ds-s-3);
+    gap: var(--ds-s-2);
+  }
+  main.ds-content {
+    padding: var(--ds-s-4) var(--ds-s-3);
+  }
+}
+
+/* ── 5. utilities ──────────────────────────────────────────────────────── */
+.ds-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.ds-skip-link {
+  position: absolute;
+  left: var(--ds-s-3);
+  top: -40px;
+  z-index: 60;
+  padding: var(--ds-s-2) var(--ds-s-3);
+  background: var(--ds-accent);
+  color: #fff;
+  border-radius: var(--ds-r-sm);
+  transition: top var(--ds-t-fast) ease;
+}
+.ds-skip-link:focus {
+  top: var(--ds-s-2);
+}
+
+/* deterministic screenshots / reduced motion */
+html.ds-no-anim *,
+html.ds-no-anim *::before,
+html.ds-no-anim *::after {
+  transition: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.ds-mounted *,
+  body.ds-mounted *::before,
+  body.ds-mounted *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
