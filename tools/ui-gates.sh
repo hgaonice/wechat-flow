@@ -59,8 +59,37 @@ else
 fi
 
 echo "G4 · 旧类残留（.card/.primary/.ghost/.row/.mt 等）"
-legacy=$(grep -nE 'class="[^"]*\b(card|primary|ghost|danger|muted|spacer|msg)\b' "$UI"/*.html | grep -v '_ds.html' || true)
-if [ -z "$legacy" ]; then ok "no legacy classes in html"
+# Token-aware: `ds-btn--ghost` must NOT count as `ghost`, so split class
+# attributes into tokens and compare whole tokens against the legacy set.
+legacy=$(python3 - "$UI" <<'PYEOF'
+import glob, os, re, sys
+
+LEGACY = {
+    "card", "primary", "ghost", "danger", "muted", "spacer", "msg", "row", "mt",
+    "badge", "fail", "chip", "chips", "stat", "stat-grid", "stat-label", "stat-value",
+    "diff", "del", "add", "ctx", "log", "md", "cover", "days", "progress", "progress-bar",
+    "detail-grid", "chat-main", "chat-side", "chat-list", "chat-item", "chat-item-title",
+    "chat-item-meta", "chat-pane", "chat-bar", "messages", "bubble", "role", "body",
+    "tools", "tool-row", "tool-name", "decision", "decision-head", "title", "message",
+    "actions", "state", "composer", "login-wrap", "mono", "tip", "table-wrap", "empty",
+}
+PAT = re.compile(r'class(?:Name)?\s*[=:]\s*["\']([^"\']*)["\']')
+root = sys.argv[1]
+for path in sorted(glob.glob(os.path.join(root, "*.html")) + glob.glob(os.path.join(root, "*.js"))):
+    base = os.path.basename(path)
+    if base.startswith("_ds"):
+        continue
+    with open(path, encoding="utf-8") as fh:
+        for lineno, line in enumerate(fh, 1):
+            for m in PAT.finditer(line):
+                for token in m.group(1).split():
+                    if token.startswith("ds-") or token.startswith("is-"):
+                        continue
+                    if token in LEGACY:
+                        print(f"{base}:{lineno}: {token}")
+PYEOF
+)
+if [ -z "$legacy" ]; then ok "no legacy classes in ui/*.html or ui/*.js"
 elif [ "$STRICT" -eq 1 ]; then bad "legacy classes remain (strict mode):"; echo "$legacy" | sed 's/^/      /'
 else note "$(echo "$legacy" | wc -l) legacy class usage(s) still present (allowed until Step 7)"; fi
 

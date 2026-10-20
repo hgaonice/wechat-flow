@@ -1,6 +1,6 @@
 # TREE.md · 文件与符号索引（自动生成，勿手改）
 
-> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-20 05:53:44
+> 生成命令：`bash tools/repomap.sh`　更新时间：2026-10-20 07:35:34
 > 用途：规划时先读本文件替代 `ls` 与整读源码；改动代码后请重跑本脚本。
 > 相关：[ARCHITECTURE.md](./ARCHITECTURE.md) · [src/README.md](./src/README.md) · [AGENT.md](./AGENT.md)
 
@@ -21,6 +21,7 @@ wechat-flow/
   src
   src/console
   tools
+  tools/ui-baselines
 
 [src/ 模块]
 src/browser-agent.ts
@@ -262,7 +263,7 @@ src/wechat.ts
 
 导出：`StreamOptions, streamJobEvents`
 
-### `src/console/http/static.ts`  (45 行)
+### `src/console/http/static.ts`  (66 行)
 >  Static UI serving from `src/console/ui` (no bundler, no dependencies).
 
 导出：`serveUi`
@@ -322,7 +323,7 @@ src/wechat.ts
 
 导出：`AccountDiff, Ac3Report, verifyAc3, formatAc3`
 
-### `src/cover-ai.ts`  (775 行)
+### `src/cover-ai.ts`  (811 行)
 > AI cover: article → structured visual brief → image model → exact-size PNG.
 
 导出：`CoverBrief, AiCoverSettings, SummaryInput, AiCoverInput, AiCoverResult, ImageGateway, normalizeImageModelId, resolveImageGateway, parseCoverBrief, fallbackBrief, buildImagePrompt, summarizeCoverBrief, SIZE_ESCALATION, isSizeRejection, listImageModels, CoverModelStat, CoverModelStats, COVER_STATS_FILE, COVER_BUDGET_FILE, coverStatsPath, coverBudgetPath, localDateStr, redactCoverReason, readCoverModelStats, recordCoverModelStat, CoverBudget, readCoverBudget, consumeCoverBudget, describeCoverCandidates, generateAiCover, defaultAiSettings, defaultCoverPrompt, HOME_DIR`
@@ -438,4 +439,8 @@ src/wechat.ts
 - `tools/session-selftest.ts` — —
 - `tools/session-snapshot-selftest.ts` — —
 - `tools/session-warn-selftest.ts` — —
+- `tools/ui-accept.py` — —
+- `tools/ui-dev-console.sh` — Dev-only console harness for UI work (C3). Boots an ISOLATED console instance:
+- `tools/ui-gates.sh` — Static gates for the console design system (C3).
+- `tools/ui-visual.py` — name -> (path, ready selector, hide selectors)
 - `tools/upload-plans-250.py` — —

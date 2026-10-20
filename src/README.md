@@ -138,7 +138,9 @@
 - **jobs/{queue,scheduler}.ts 退避**（C6）：`countFailed`/`lastFailureAt`（按 `payload.date`\|`periodKey`）；调度器读 `CONSOLE_JOB_MAX_ATTEMPTS`(3)/`CONSOLE_JOB_RETRY_COOLDOWN_MIN`(30)，达上限/冷却内 skip 并记日志（I32）。
 - **deploy/**（C6）：`systemd/wechat-console.service`（Mode A）+ `cloudflared.service`（Mode B，互斥）+ `wechat-console.env.example`；`install-console.sh`/`console-backup.sh`/`console-restore.sh`；`nginx-console.conf.example`；手册 `console-deploy.md` + 验收 `console-acceptance.md`。参见 [`ops-deploy.md`](../.trellis/spec/console/ops-deploy.md)。
 - **db/dao/{emails,secrets,tunnels}.ts**（C5）：`account_email` CRUD；`secrets` 只存密文、读只回元数据（`smtp` 为保留 kind，`account_id IS NULL` 需显式判重）；`openTunnel` 单事务「插新 `up` + 旧 `up`/`down` → `expired`+`replaced_by=新 id`」（I24）。
-- **ui/**：静态页（`index`/`login`/`account`/`settings`/`workbench`/`chat`/**`admin`**）+ `app.css`/`app.js`/`workbench.*`/`chat.*`/**`admin.*`**。
+- **ui/ds.css + ds.js**（C3）：唯一全局底座。`ds.css` 提供 `--ds-*` 令牌（暗/亮两套）、shell（侧栏+顶栏+内容）、组件（card/stat/table/badge/btn/field/input/tabs/toast/dialog/empty/tip/chips/diff/log/md/chat/bubble/decision/progress）；`ds.js` 提供 `DS.mount()`（幂等搬移 `<header>` 导航进侧栏，**页面 id 全保留**）、`DS.setTheme/theme`、`DS.icon`、`DS.toast`、`DS.confirm`、`DS.prompt`。旧 `app.css`/`chat.css`/`workbench.css` **已删**。
+- **ui/*.html + 同名 .js**：`index`/`login`/`account`/`settings`/`workbench`/`chat`/`admin` 七页 + `app.js`（登录、账号 CRUD、设置）+ `workbench.js`/`chat.js`/`admin.js`；`_ds.html`/`_ds.js` 是组件样板页，仅 `WFC_DS_PREVIEW=1` 可访问。
+- **前端坑**：CSP `style-src 'self'` → 禁止内联 `style=`；禁止 `window.confirm/prompt`（会被静默抑制）→ 用 `DS.confirm/DS.prompt`；改了样式必须跑 `bash tools/ui-gates.sh --strict` + `python3 tools/ui-visual.py` + `python3 tools/ui-accept.py`（见 `.trellis/spec/console/index.md` §五之二）。
 - **坑**：`.gitignore` 必须写 `/console/`（否则吞掉 `src/console/`）；**推送铁律不变**——控制台只调 `runPublish`，成功与否只看 `verifyDraftBody`；`bun:sqlite` 无行时返回 `null`（非 `undefined`）。
 
 ## date.ts / log.ts / prompts.ts · 基础设施

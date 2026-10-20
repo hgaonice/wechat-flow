@@ -109,12 +109,20 @@
 
 ## Step 7 · 收尾：删旧 CSS、全量回归、文档
 
-- [ ] 7.1 删除 `app.css` / `chat.css` / `workbench.css`，把残留 `.card/.primary/.ghost/.row/.mt` 全量改名到 `ds-*`；`ui-gates.sh` 开 G4 严格模式
-- [ ] 7.2 全量 `python3 tools/ui-visual.py --page all --theme both --update` 生成 **14 张终版基线**，人工逐张确认
-- [ ] 7.3 重跑 `10-15` V1–V13（对表），补一份 `report.md` 到本任务目录
-- [ ] 7.4 文档：`.trellis/spec/console/index.md` 加"设计系统"节（令牌/组件/禁止事项）；`src/README.md` 更新 ui 目录职责；`AGENT.md` §1 加 S23 行 + §5 进度 + §9 变更日志；`TREE.md` 刷新
-- [ ] 7.5 最终闸门：`bash tools/ui-gates.sh` 全绿 + `bunx tsc --noEmit` + `bun build --target=bun src/cli.ts` + `bun run typecheck`
+- [x] 7.1 删除 `app.css` / `chat.css` / `workbench.css`；`#who` 的 `muted` → `ds-muted`、`#logout` 的 `ghost` → `ds-btn ds-btn--ghost ds-btn--sm`；
+`ui-gates.sh` 的 G4 改为 **token 感知**（`ds-btn--ghost` 不再被 `\bghost\b` 误判）并同时扫 `ui/*.js`，`--strict` 通过（0 残留）
+- [x] 7.2 `python3 tools/ui-visual.py --page all --theme both --update` 生成 **16 张终版基线**（7 页 × dark/light + `_ds` × 2），
+rerun 无差异；过程基线 `-before/-step1/-step3/-step4/-step5` 全部保留在 `tools/ui-baselines/`
+- [x] 7.3 新增 `tools/ui-accept.py` 复跑 V1–V13 + V14（1440/1024/768/390 四档横向溢出）/ V15（主题往返持久化）：**15/15 PASS**；
+证据写进 `report.md`
+- [x] 7.4 文档：`.trellis/spec/console/index.md` 新增 §五之二「前端设计系统」（令牌/组件/JS API/8 条硬规则/闸门命令 + 3 条反模式）；
+`src/README.md` ui 目录职责改写；`AGENT.md` S23 + 进度 + 变更日志；`TREE.md` 用 `bash tools/repomap.sh` 刷新
+- [x] 7.5 最终闸门：`bash tools/ui-gates.sh --strict` **7 passed / 0 failed**（含 tsc --noEmit + bun build）
 - [ ] 7.6 `deploy/deploy.sh --keep-remote-content` → 250 真机逐页点一遍（含 390px 窄屏）；commit + `task.py archive`
+
+**Step 7 新发现并修复的缺陷**：删 `app.css` 后全站横向溢出 40px —— 其 `* { box-sizing: border-box }` 是全局兜底，
+`main.ds-content` 的 `width:100% + padding:24px 20px` 依赖它。实测 `scrollWidth 1320 > clientWidth 1280`。
+修复：`ds.css §2` 加作用域化的 `body.ds-mounted *, ::before, ::after { box-sizing: border-box }` → `1280 == 1280`。
 
 ---
 
@@ -125,9 +133,9 @@
 | DS-1 令牌 + 布局 | Step 1 |
 | DS-2 组件 + `/_ds` | Step 2 |
 | DS-3 逐页迁移 | Step 3–6 |
-| AC-V 视觉回归 | Step 0/1/2/3–6 分页截图 + Step 7.2 终版 14 张 |
+| AC-V 视觉回归 | Step 0/1/2/3–6 分页截图 + Step 7.2 终版 16 张 |
 | AC-X 零依赖 | `ui-gates.sh` G5 + Step 7.5 |
-| AC-F 功能等价 | Step 7.3（V1–V13）+ 各步 Gate |
+| AC-F 功能等价 | Step 7.3（V1–V15，`tools/ui-accept.py`）+ 各步 Gate |
 
 ## 提交切分（一页一 commit）
 

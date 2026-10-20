@@ -145,6 +145,12 @@ html[data-theme="light"] {
 }
 
 /* ── 2. base (only after mounting, so unmigrated pages are untouched) ───── */
+body.ds-mounted *,
+body.ds-mounted *::before,
+body.ds-mounted *::after {
+  box-sizing: border-box;
+}
+
 body.ds-mounted {
   margin: 0;
   background: var(--ds-bg);
