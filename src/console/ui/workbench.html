@@ -18,124 +18,162 @@
   <a href="/app">账号</a>
   <a href="/chat">Agent 会话</a>
   <a id="nav-admin" href="/admin" hidden>运维</a>
-  <span class="spacer"></span>
+  <span class="ds-spacer"></span>
   <span id="who" class="muted"></span>
   <span id="account-name" class="muted"></span>
   <button id="logout" class="ghost">退出</button>
 </header>
 <main>
-  <div class="card">
-    <h2>选择账号</h2>
-    <div class="row">
-      <select id="account"></select>
-      <button id="reload" class="ghost">刷新</button>
+  <section class="ds-card">
+    <div class="ds-row">
+      <div class="ds-field ds-grow">
+        <label class="ds-field__label" for="account">账号</label>
+        <select class="ds-select" id="account"></select>
+      </div>
+      <button id="reload" class="ds-btn ds-btn--ghost" type="button">刷新</button>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>计划编辑</h2>
-    <div class="row">
-      <select id="period-type">
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">计划编辑</h2>
+        <p class="ds-card__desc">按周或按月维护选题；「选题」为必填项，保存后引擎按计划生成。</p>
+      </div>
+    </div>
+    <div class="ds-row">
+      <select class="ds-select" id="period-type">
         <option value="week">周计划</option>
         <option value="month">月计划</option>
       </select>
-      <input id="period-key" placeholder="2026-W42 或 2026-10">
-      <button id="plan-load" class="ghost">载入</button>
-      <input id="find-date" type="date">
-      <button id="plan-find" class="ghost">按日期定位</button>
+      <input class="ds-input" id="period-key" placeholder="2026-W42 或 2026-10">
+      <button id="plan-load" class="ds-btn ds-btn--ghost" type="button">载入</button>
+      <input class="ds-input" id="find-date" type="date">
+      <button id="plan-find" class="ds-btn ds-btn--ghost" type="button">按日期定位</button>
     </div>
-    <table class="days">
-      <thead>
-        <tr><th>日期</th><th>星期</th><th>模块</th><th>选题*</th><th>概要</th><th>要点（逗号分隔）</th><th>字数</th><th></th></tr>
-      </thead>
-      <tbody id="plan-days"></tbody>
-    </table>
-    <div class="row mt">
-      <button id="add-day" class="ghost">+ 添加一天</button>
-      <button id="save-plan" class="primary">保存计划</button>
+    <div class="ds-table-wrap">
+      <table class="ds-table ds-table--form">
+        <thead>
+          <tr><th>日期</th><th>星期</th><th>模块</th><th>选题*</th><th>概要</th><th>要点（逗号分隔）</th><th>字数</th><th></th></tr>
+        </thead>
+        <tbody id="plan-days"></tbody>
+      </table>
     </div>
-    <div id="plan-msg" class="msg"></div>
-  </div>
+    <div class="ds-row">
+      <button id="add-day" class="ds-btn ds-btn--ghost" type="button">+ 添加一天</button>
+      <button id="save-plan" class="ds-btn ds-btn--primary" type="button">保存计划</button>
+    </div>
+    <div id="plan-msg" class="ds-flash" role="status" hidden></div>
+  </section>
 
-  <div class="card">
-    <h2>生成 / 推送</h2>
-    <div class="row">
-      <input id="action-date" type="date">
-      <button id="gen">生成文章</button>
-      <button id="push" class="primary">生成并推送草稿箱</button>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">生成 / 推送</h2>
+        <p class="ds-card__desc">生成产出草稿文件；推送才会写入公众号草稿箱（推送前会校验草稿正文）。</p>
+      </div>
     </div>
-    <div class="progress"><div id="bar" class="progress-bar"></div></div>
-    <div id="job-status" class="muted"></div>
-    <pre id="job-log" class="log"></pre>
-    <div id="fail-panel" class="fail" hidden>
+    <div class="ds-row">
+      <input class="ds-input" id="action-date" type="date">
+      <button id="gen" class="ds-btn" type="button">生成文章</button>
+      <button id="push" class="ds-btn ds-btn--primary" type="button">生成并推送草稿箱</button>
+    </div>
+    <div class="ds-progress" role="progressbar" aria-label="任务进度">
+      <div id="bar" class="ds-progress__bar"></div>
+    </div>
+    <div id="job-status" class="ds-muted ds-status-line"></div>
+    <pre id="job-log" class="ds-log"></pre>
+    <div id="fail-panel" class="ds-tip ds-tip--danger ds-banner" role="alert" hidden>
       <div id="fail-msg"></div>
-      <div class="row">
-        <button id="retry-gen" class="ghost">重试生成</button>
-        <button id="retry-push" class="ghost">重试推送</button>
+      <div class="ds-row">
+        <button id="retry-gen" class="ds-btn ds-btn--ghost ds-btn--sm" type="button">重试生成</button>
+        <button id="retry-push" class="ds-btn ds-btn--ghost ds-btn--sm" type="button">重试推送</button>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>任务历史</h2>
-    <table>
-      <thead><tr><th>#</th><th>类型</th><th>状态</th><th>进度</th><th>入队/耗时</th><th>说明/错误</th><th></th></tr></thead>
-      <tbody id="jobs"></tbody>
-    </table>
-    <div id="jobs-empty" class="muted" hidden>该账号暂无任务记录。</div>
-  </div>
-
-  <div class="card">
-    <h2>文章版本</h2>
-    <table>
-      <thead><tr><th>版本</th><th>日期</th><th>标题</th><th>状态</th><th>校验</th><th>父版本</th><th></th></tr></thead>
-      <tbody id="articles"></tbody>
-    </table>
-    <div id="articles-empty" class="muted" hidden>该账号暂无文章版本。</div>
-  </div>
-
-  <div class="card" id="detail-card" hidden>
-    <h2>文章详情</h2>
-    <div id="detail-meta" class="muted"></div>
-    <div class="detail-grid">
+  <section class="ds-card">
+    <div class="ds-card__head">
       <div>
-        <h3>正文（当前版本快照）</h3>
-        <pre id="article-md" class="md"></pre>
+        <h2 class="ds-card__title">任务历史</h2>
+        <p class="ds-card__desc">失败原因直接显示在表格里，不会只留一行「失败」。</p>
+      </div>
+    </div>
+    <div class="ds-table-wrap">
+      <table class="ds-table ds-table--compact">
+        <thead><tr><th class="is-num">#</th><th>类型</th><th>状态</th><th class="is-num">进度</th><th>入队/耗时</th><th>说明/错误</th><th></th></tr></thead>
+        <tbody id="jobs"></tbody>
+      </table>
+    </div>
+    <div id="jobs-empty" class="ds-empty" hidden>该账号暂无任务记录。</div>
+  </section>
+
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">文章版本</h2>
+        <p class="ds-card__desc">每次重新生成都会产生新版本，父版本可追溯。</p>
+      </div>
+    </div>
+    <div class="ds-table-wrap">
+      <table class="ds-table ds-table--compact">
+        <thead><tr><th class="is-num">版本</th><th>日期</th><th>标题</th><th>状态</th><th>校验</th><th class="is-num">父版本</th><th></th></tr></thead>
+        <tbody id="articles"></tbody>
+      </table>
+    </div>
+    <div id="articles-empty" class="ds-empty" hidden>该账号暂无文章版本。</div>
+  </section>
+
+  <section class="ds-card" id="detail-card" hidden>
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">文章详情</h2>
+        <p class="ds-card__desc" id="detail-meta"></p>
+      </div>
+    </div>
+    <div class="ds-split">
+      <div>
+        <h3 class="ds-subtitle">正文（当前版本快照）</h3>
+        <pre id="article-md" class="ds-md"></pre>
       </div>
       <div>
-        <h3>封面</h3>
-        <img id="cover" class="cover" alt="封面" hidden>
-        <div id="cover-missing" class="muted">无封面。</div>
-        <h3>校验</h3>
-        <div id="verify" class="muted"></div>
-        <h3>推送记录</h3>
-        <table>
-          <thead><tr><th>时间</th><th>校验</th><th>详情</th></tr></thead>
-          <tbody id="drafts"></tbody>
-        </table>
+        <h3 class="ds-subtitle">封面</h3>
+        <img id="cover" class="ds-cover" alt="封面" hidden>
+        <div id="cover-missing" class="ds-muted">无封面。</div>
+        <h3 class="ds-subtitle">校验</h3>
+        <div id="verify" class="ds-muted"></div>
+        <h3 class="ds-subtitle">推送记录</h3>
+        <div class="ds-table-wrap">
+          <table class="ds-table ds-table--compact">
+            <thead><tr><th>时间</th><th>校验</th><th>详情</th></tr></thead>
+            <tbody id="drafts"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <h3>版本链</h3>
-    <div id="versions" class="chips"></div>
+    <h3 class="ds-subtitle">版本链</h3>
+    <div id="versions" class="ds-chips"></div>
 
-    <h3>版本对比</h3>
-    <div class="row">
-      <select id="diff-a"></select>
-      <select id="diff-b"></select>
-      <button id="diff-btn" class="ghost">对比</button>
+    <h3 class="ds-subtitle">版本对比</h3>
+    <div class="ds-row">
+      <select class="ds-select" id="diff-a"></select>
+      <select class="ds-select" id="diff-b"></select>
+      <button id="diff-btn" class="ds-btn ds-btn--ghost" type="button">对比</button>
     </div>
-    <div id="diff" class="diff"></div>
+    <div id="diff" class="ds-diff-box"></div>
 
-    <h3>修改反馈（重新生成 vN+1）</h3>
-    <textarea id="feedback" placeholder="描述希望如何修改，例如：第二段过于冗长请精简；补充一道例题；公式用 LaTeX。"></textarea>
-    <div class="row mt">
-      <button id="regen" class="primary">依据反馈重新生成</button>
+    <h3 class="ds-subtitle">修改反馈（重新生成 vN+1）</h3>
+    <div class="ds-field">
+      <textarea class="ds-textarea" id="feedback" placeholder="描述希望如何修改，例如：第二段过于冗长请精简；补充一道例题；公式用 LaTeX。"></textarea>
     </div>
-    <div id="detail-msg" class="msg"></div>
-  </div>
+    <div class="ds-row">
+      <button id="regen" class="ds-btn ds-btn--primary" type="button">依据反馈重新生成</button>
+    </div>
+    <div id="detail-msg" class="ds-flash" role="status" hidden></div>
+  </section>
 
-  <div id="msg" class="msg"></div>
+  <div id="msg" class="ds-flash" role="status" hidden></div>
 </main>
 </body>
 </html>

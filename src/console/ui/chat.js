@@ -31,7 +31,7 @@
     $("#chat-title").textContent = s ? s.title || `会话 #${s.id}` : "未选择会话";
     const badge = $("#chat-status");
     badge.textContent = s ? statusLabel(s.status) : "—";
-    badge.className = `badge ${s ? s.status : ""}`;
+    badge.className = `ds-badge${s ? " " + statusVariant(s.status) : ""}`;
     $("#chat-busy").hidden = !state.busy;
     $("#abort").hidden = !state.busy;
     $("#chat-model").textContent = s && s.piSessionId ? `pi:${s.piSessionId.slice(0, 8)}` : s && s.sessionFile ? "有历史会话" : "";
@@ -54,21 +54,37 @@
           : meta.stopReason === "error" && !m.content
             ? "（原因未记录，多为模型网关暂时不可用或限流）"
             : null;
-      const bubble = el("div", { class: `bubble ${m.role}${errMsg ? " error" : ""}` }, [
-        el("div", { class: "role", text: roleLabel(m.role) }),
+      const bubble = el("div", { class: `ds-bubble ${bubbleVariant(m.role)}${errMsg ? " is-error" : ""}` }, [
+        el("div", { class: "ds-bubble__role", text: roleLabel(m.role) }),
       ]);
       if (errMsg) {
         // 模型请求失败：显式报错，不渲染空正文（H5 失败显形）
-        bubble.append(el("div", { class: "body fail", text: `⚠ 模型请求失败：${errMsg}` }));
+        bubble.append(el("div", { class: "ds-bubble__error", text: `⚠ 模型请求失败：${errMsg}` }));
       } else {
-        bubble.append(el("div", { class: "body", text: m.content || "" }));
+        bubble.append(el("div", { class: "ds-bubble__body", text: m.content || "" }));
       }
       box.append(bubble);
     }
     renderStreamInto(box);
     renderDecisionsInto(box);
+    if (!box.childNodes.length) {
+      box.append(
+        el("div", { class: "ds-empty" }, [
+          el("div", { text: "暂无消息" }),
+          el("div", { class: "ds-muted", text: "在下方输入框发送第一条消息，或在左侧新建会话。" }),
+        ]),
+      );
+    }
     renderTools();
     scrollBottom();
+  }
+
+  function statusVariant(status) {
+    return { active: "ds-badge--ok", busy: "ds-badge--warn", lost: "ds-badge--danger" }[status] || "";
+  }
+
+  function bubbleVariant(role) {
+    return role === "user" ? "ds-bubble--user" : role === "assistant" ? "ds-bubble--agent" : "is-system";
   }
 
   function roleLabel(role) {
@@ -78,17 +94,17 @@
   function renderStreamInto(box) {
     if (state.stream.thinking) {
       box.append(
-        el("div", { class: "bubble thinking" }, [
-          el("div", { class: "role", text: "思考中" }),
-          el("div", { class: "body", text: state.stream.thinking }),
+        el("div", { class: "ds-bubble is-thinking" }, [
+          el("div", { class: "ds-bubble__role", text: "思考中" }),
+          el("div", { class: "ds-bubble__body", text: state.stream.thinking }),
         ]),
       );
     }
     if (state.stream.text) {
       box.append(
-        el("div", { class: "bubble assistant streaming" }, [
-          el("div", { class: "role", text: "agent" }),
-          el("div", { class: "body", text: state.stream.text }),
+        el("div", { class: "ds-bubble ds-bubble--agent is-streaming" }, [
+          el("div", { class: "ds-bubble__role", text: "agent" }),
+          el("div", { class: "ds-bubble__body", text: state.stream.text }),
         ]),
       );
     }
@@ -96,47 +112,49 @@
 
   function renderDecisionsInto(box) {
     if (!state.decisions.length) return;
-    box.append(el("div", { class: "decision-head muted", text: "决策" }));
+    box.append(el("div", { class: "ds-decision__head", text: "决策" }));
     for (const d of state.decisions) box.append(decisionCard(d));
   }
 
   function decisionCard(d) {
-    const card = el("div", { class: `decision ${d.status}` });
-    card.append(el("div", { class: "title", text: d.title || dialogTitle(d.method) }));
-    if (d.message) card.append(el("div", { class: "message", text: d.message }));
+    const card = el("div", { class: `ds-decision${d.status === "pending" ? "" : " is-done"}` });
+    card.append(el("div", { class: "ds-decision__title", text: d.title || dialogTitle(d.method) }));
+    if (d.message) card.append(el("div", { class: "ds-decision__msg", text: d.message }));
 
     if (d.status !== "pending") {
-      card.append(el("div", { class: "state", text: `${statusLabelDecision(d.status)}${d.answeredAt ? " · " + d.answeredAt : ""}` }));
+      card.append(
+        el("div", { class: "ds-decision__state", text: `${statusLabelDecision(d.status)}${d.answeredAt ? " · " + d.answeredAt : ""}` }),
+      );
       if (d.response !== null && d.response !== undefined) {
-        card.append(el("div", { class: "state mono", text: JSON.stringify(d.response) }));
+        card.append(el("div", { class: "ds-decision__state ds-mono", text: JSON.stringify(d.response) }));
       }
       return card;
     }
 
-    const actions = el("div", { class: "actions" });
+    const actions = el("div", { class: "ds-decision__actions" });
     const answer = (body) => submitDecision(d.id, body);
     if (d.method === "confirm") {
-      actions.append(el("button", { class: "primary", text: "确认", onclick: () => answer({ confirmed: true }) }));
-      actions.append(el("button", { class: "ghost", text: "拒绝", onclick: () => answer({ confirmed: false }) }));
+      actions.append(el("button", { class: "ds-btn ds-btn--primary ds-btn--sm", text: "确认", onclick: () => answer({ confirmed: true }) }));
+      actions.append(el("button", { class: "ds-btn ds-btn--ghost ds-btn--sm", text: "拒绝", onclick: () => answer({ confirmed: false }) }));
     } else if (d.method === "select") {
       const options = Array.isArray(d.options) ? d.options : [];
-      if (!options.length) actions.append(el("span", { class: "muted", text: "（无候选）" }));
+      if (!options.length) actions.append(el("span", { class: "ds-muted", text: "（无候选）" }));
       for (const opt of options) {
         const label = typeof opt === "string" ? opt : String(opt && (opt.label ?? opt.value ?? JSON.stringify(opt)));
         const value = typeof opt === "string" ? opt : String(opt && (opt.value ?? opt.label ?? ""));
-        actions.append(el("button", { class: "ghost", text: label, onclick: () => answer({ value }) }));
+        actions.append(el("button", { class: "ds-btn ds-btn--ghost ds-btn--sm", text: label, onclick: () => answer({ value }) }));
       }
     } else if (d.method === "editor") {
       const ta = el("textarea", { rows: "4" });
       actions.append(ta);
-      actions.append(el("button", { class: "primary", text: "提交", onclick: () => answer({ value: ta.value }) }));
+      actions.append(el("button", { class: "ds-btn ds-btn--primary ds-btn--sm", text: "提交", onclick: () => answer({ value: ta.value }) }));
     } else {
       const input = el("input", { type: "text", placeholder: "输入…" });
       actions.append(input);
-      actions.append(el("button", { class: "primary", text: "提交", onclick: () => answer({ value: input.value }) }));
+      actions.append(el("button", { class: "ds-btn ds-btn--primary ds-btn--sm", text: "提交", onclick: () => answer({ value: input.value }) }));
     }
-    actions.append(el("span", { class: "spacer" }));
-    actions.append(el("button", { class: "ghost", text: "取消此决策", onclick: () => answer({ cancelled: true }) }));
+    actions.append(el("span", { class: "ds-spacer" }));
+    actions.append(el("button", { class: "ds-btn ds-btn--ghost ds-btn--sm", text: "取消此决策", onclick: () => answer({ cancelled: true }) }));
     card.append(actions);
     return card;
   }
@@ -151,12 +169,14 @@
 
   function renderTools() {
     const box = $("#tools");
+    if (!box) return;
     box.innerHTML = "";
+    box.hidden = state.tools.length === 0;
     for (const t of state.tools.slice(-12)) {
       box.append(
-        el("div", { class: `tool-row${t.isError ? " error" : ""}` }, [
+        el("div", { class: `ds-tool-row${t.isError ? " is-error" : ""}` }, [
           el("span", { text: t.phase === "start" ? "▶ " : "✓ " }),
-          el("span", { class: "tool-name mono", text: t.name }),
+          el("span", { class: "ds-tool-row__name", text: t.name }),
           t.isError ? el("span", { text: " 失败" }) : null,
         ]),
       );
@@ -203,17 +223,17 @@
     const list = $("#chat-list");
     list.innerHTML = "";
     if (!chats.length) {
-      list.append(el("li", { class: "muted", text: "暂无会话，点击「新建会话」。" }));
+      list.append(el("li", { class: "ds-muted", text: "暂无会话，点击「新建会话」。" }));
       return;
     }
     for (const c of chats) {
       list.append(
-        el("li", { class: `chat-item${c.id === state.chatId ? " active" : ""}`, onclick: () => openChat(c.id) }, [
-          el("div", { class: "chat-item-title", text: c.title || `会话 #${c.id}` }),
-          el("div", { class: "chat-item-meta" }, [
-            el("span", { class: `badge ${c.status}`, text: statusLabel(c.status) }),
-            c.busy ? el("span", { class: "badge busy", text: "运行中" }) : null,
-            c.pendingDecisions ? el("span", { class: "badge warn", text: `待决策 ${c.pendingDecisions}` }) : null,
+        el("li", { class: `ds-chat-item${c.id === state.chatId ? " is-active" : ""}`, onclick: () => openChat(c.id) }, [
+          el("div", { class: "ds-chat-item__title", text: c.title || `会话 #${c.id}` }),
+          el("div", { class: "ds-chat-item__meta" }, [
+            el("span", { class: `ds-badge ${statusVariant(c.status)}`, text: statusLabel(c.status) }),
+            c.busy ? el("span", { class: "ds-badge ds-badge--warn", text: "运行中" }) : null,
+            c.pendingDecisions ? el("span", { class: "ds-badge ds-badge--warn", text: `待决策 ${c.pendingDecisions}` }) : null,
           ]),
         ]),
       );
@@ -405,7 +425,13 @@
 
   async function deleteChat() {
     if (!state.chatId) return;
-    if (!confirm(`删除会话 #${state.chatId}？将关闭进程并把未决决策标记为丢失。`)) return;
+    const okDel = await window.DS.confirm({
+      title: `删除会话 #${state.chatId}`,
+      body: "将关闭该会话的 agent 进程，并把未决决策标记为丢失。此操作不可撤销。",
+      okText: "删除",
+      danger: true,
+    });
+    if (!okDel) return;
     try {
       await api(`/api/chats/${state.chatId}`, { method: "DELETE" });
       if (state.es) {
@@ -439,9 +465,17 @@
 
   async function setModel() {
     if (!state.chatId) return;
-    const provider = prompt("provider（例如 anthropic / openai）");
+    const provider = await window.DS.prompt({
+      title: "切换模型 · provider",
+      label: "provider",
+      placeholder: "例如 anthropic / openai",
+    });
     if (!provider) return;
-    const modelId = prompt("modelId（例如 claude-sonnet-4-5）");
+    const modelId = await window.DS.prompt({
+      title: "切换模型 · modelId",
+      label: "modelId",
+      placeholder: "例如 claude-sonnet-4-5",
+    });
     if (!modelId) return;
     try {
       await api(`/api/chats/${state.chatId}/model`, { method: "POST", body: { provider, modelId } });
@@ -453,7 +487,12 @@
 
   async function fork() {
     if (!state.chatId) return;
-    const entryId = prompt("要从哪个 entryId 分叉？（可用 get_entries 获取，暂仅支持手动输入）");
+    const entryId = await window.DS.prompt({
+      title: "分叉会话",
+      body: "从指定 entryId 处开新分支（可用 get_entries 获取，暂仅支持手动输入）。",
+      label: "entryId",
+      placeholder: "例如 12",
+    });
     if (!entryId) return;
     try {
       const r = await api(`/api/chats/${state.chatId}/fork`, { method: "POST", body: { entryId } });
@@ -466,7 +505,12 @@
 
   async function clone() {
     if (!state.chatId) return;
-    if (!confirm("克隆当前会话（保留完整历史，复制为新分支）？")) return;
+    const okClone = await window.DS.confirm({
+      title: "克隆会话",
+      body: "保留完整历史并复制为新分支。",
+      okText: "克隆",
+    });
+    if (!okClone) return;
     try {
       const r = await api(`/api/chats/${state.chatId}/clone`, { method: "POST", body: {} });
       flash($msg(), r.cancelled ? "克隆已取消" : "已克隆", "ok");
@@ -526,6 +570,7 @@
     });
 
     renderHeader();
+    renderTranscript();
     if (!(await loadAccounts())) return;
     await loadSessions();
   }

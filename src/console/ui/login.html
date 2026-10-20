@@ -11,20 +11,26 @@
 <script src="/app.js" defer></script>
 </head>
 <body data-page="login">
-<div class="login-wrap">
-  <div class="card">
-    <h2>wechat-flow 控制台</h2>
-    <form id="login-form" autocomplete="on">
-      <label for="username">用户名</label>
-      <input id="username" name="username" autocomplete="username" required>
-      <label for="password">密码</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
-      <div class="row mt">
-        <button class="primary" type="submit">登录</button>
-      </div>
-    </form>
-    <div id="msg" class="msg error"></div>
+<div class="ds-login">
+  <div class="ds-login__brand">
+    <span class="ds-sidebar__brand-mark"></span>
+    <span>wechat-flow 控制台</span>
   </div>
+  <form class="ds-card ds-login__card" id="login-form" autocomplete="on">
+    <h2 class="ds-card__title ds-login__title">登录</h2>
+    <p class="ds-card__desc">使用管理员或负责人账号登录。连续失败会触发限流。</p>
+    <div class="ds-field">
+      <label class="ds-field__label" for="username">用户名</label>
+      <input class="ds-input" id="username" name="username" autocomplete="username" required>
+    </div>
+    <div class="ds-field">
+      <label class="ds-field__label" for="password">密码</label>
+      <input class="ds-input" id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="ds-btn ds-btn--primary ds-login__submit" type="submit">登录</button>
+    <div id="msg" class="ds-flash" role="status" hidden></div>
+  </form>
+  <p class="ds-login__foot">本控制台默认仅监听 127.0.0.1；对外访问请走隧道并开启鉴权。</p>
 </div>
 </body>
 </html>

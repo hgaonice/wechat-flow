@@ -102,22 +102,24 @@
   function addDayRow(day = {}) {
     const tbody = $("#plan-days");
     const tr = el("tr", {});
-    const dateI = el("input", { type: "date", value: day.date || $("#find-date").value || todayISO() });
-    const weekI = el("input", { value: day.weekday || weekdayCn(dateI.value), placeholder: "周二" });
-    const moduleI = el("input", { value: day.module || "", placeholder: "函数" });
-    const topicI = el("input", { value: day.topic || "", placeholder: "一次函数图象" });
-    const summaryI = el("input", { value: day.summary || "", placeholder: "概要" });
+    const cls = "ds-input ds-input--sm";
+    const dateI = el("input", { class: cls, type: "date", value: day.date || $("#find-date").value || todayISO() });
+    const weekI = el("input", { class: cls, value: day.weekday || weekdayCn(dateI.value), placeholder: "周二" });
+    const moduleI = el("input", { class: cls, value: day.module || "", placeholder: "函数" });
+    const topicI = el("input", { class: cls, value: day.topic || "", placeholder: "一次函数图象" });
+    const summaryI = el("input", { class: cls, value: day.summary || "", placeholder: "概要" });
     const outlineI = el("input", {
+      class: cls,
       value: Array.isArray(day.outline) ? day.outline.join(", ") : day.outline || "",
       placeholder: "引入, 讲解, 练习",
     });
-    const wordsI = el("input", { type: "number", value: day.targetWords || 1200, min: 300, max: 5000 });
+    const wordsI = el("input", { class: cls, type: "number", value: day.targetWords || 1200, min: 300, max: 5000 });
     dateI.addEventListener("change", () => {
       weekI.value = weekdayCn(dateI.value);
     });
     const entry = { tr, dateI, weekI, moduleI, topicI, summaryI, outlineI, wordsI };
     const removeBtn = el("button", {
-      class: "danger",
+      class: "ds-btn ds-btn--danger-quiet ds-btn--sm",
       text: "×",
       title: "删除该天",
       onclick: () => {
@@ -223,7 +225,7 @@
 
   function appendLog(level, text) {
     const box = logEl();
-    const line = el("div", { class: level || "info" });
+    const line = el("div", { class: `ds-log__${level || "info"}` });
     line.textContent = text;
     box.append(line);
     while (box.childNodes.length > 500) box.removeChild(box.firstChild);
@@ -336,12 +338,12 @@
       for (const j of jobs) {
         const badge =
           j.status === "succeeded"
-            ? el("span", { class: "badge on", text: "成功" })
+            ? el("span", { class: "ds-badge ds-badge--ok", text: "成功" })
             : j.status === "failed"
-              ? el("span", { class: "badge off", text: "失败" })
+              ? el("span", { class: "ds-badge ds-badge--danger", text: "失败" })
               : j.status === "canceled"
-                ? el("span", { class: "muted", text: "已取消" })
-                : el("span", { class: "badge", text: j.status === "running" ? "运行中" : "排队中" });
+                ? el("span", { class: "ds-muted", text: "已取消" })
+                : el("span", { class: "ds-badge ds-badge--warn", text: j.status === "running" ? "运行中" : "排队中" });
         const dur =
           j.startedAt && j.endedAt
             ? `${Math.max(1, Math.round((new Date(j.endedAt) - new Date(j.startedAt)) / 1000))}s`
@@ -354,7 +356,7 @@
         if (j.status === "queued") {
           actions.push(
             el("button", {
-              class: "ghost",
+              class: "ds-btn ds-btn--ghost ds-btn--sm",
               text: "取消",
               onclick: async () => {
                 try {
@@ -369,11 +371,11 @@
         }
         tbody.append(
           el("tr", {}, [
-            el("td", { class: "mono", text: `#${j.id}` }),
+            el("td", { class: "ds-mono ds-num", text: `#${j.id}` }),
             el("td", { text: JOB_KIND_CN[j.kind] || j.kind }),
             el("td", {}, [badge]),
-            el("td", { class: "mono", text: `${j.progress ?? 0}%` }),
-            el("td", { class: "mono", text: `${fmtTime(j.queuedAt)} · ${dur}` }),
+            el("td", { class: "ds-mono ds-num", text: `${j.progress ?? 0}%` }),
+            el("td", { class: "ds-mono", text: `${fmtTime(j.queuedAt)} · ${dur}` }),
             el("td", { class: note !== "—" && j.status === "failed" ? "fail" : "muted", text: note }),
             el("td", {}, actions),
           ]),
@@ -409,20 +411,20 @@
         });
         const verify =
           a.verified === null
-            ? el("span", { class: "muted", text: "—" })
+            ? el("span", { class: "ds-muted", text: "—" })
             : a.verified
-              ? el("span", { class: "badge on", text: "通过" })
-              : el("span", { class: "badge off", text: "未通过" });
+              ? el("span", { class: "ds-badge ds-badge--ok", text: "通过" })
+              : el("span", { class: "ds-badge ds-badge--danger", text: "未通过" });
         tbody.append(
           el("tr", {}, [
-            el("td", { class: "mono", text: `v${a.version}` }),
-            el("td", { class: "mono", text: a.date }),
+            el("td", { class: "ds-mono ds-num", text: `v${a.version}` }),
+            el("td", { class: "ds-mono", text: a.date }),
             el("td", { text: a.title || "—" }),
             el("td", {}, [status]),
             el("td", {}, [verify]),
-            el("td", { class: "mono", text: a.parentId ? `#${a.parentId}` : "—" }),
+            el("td", { class: "ds-mono ds-num", text: a.parentId ? `#${a.parentId}` : "—" }),
             el("td", {}, [
-              el("button", { class: "ghost", text: "查看", onclick: () => loadDetail(a.id) }),
+              el("button", { class: "ds-btn ds-btn--ghost ds-btn--sm", text: "查看", onclick: () => loadDetail(a.id) }),
             ]),
           ]),
         );
@@ -455,25 +457,25 @@
       verify.innerHTML = "";
       verify.append(
         a.verified === null
-          ? el("span", { class: "muted", text: "尚无推送记录" })
+          ? el("span", { class: "ds-muted", text: "尚无推送记录" })
           : a.verified
-            ? el("span", { class: "badge on", text: "草稿校验通过" })
-            : el("span", { class: "badge off", text: "草稿校验未通过" }),
+            ? el("span", { class: "ds-badge ds-badge--ok", text: "草稿校验通过" })
+            : el("span", { class: "ds-badge ds-badge--danger", text: "草稿校验未通过" }),
       );
-      if (a.verifyDetail) verify.append(el("div", { class: "muted", text: a.verifyDetail }));
+      if (a.verifyDetail) verify.append(el("div", { class: "ds-muted", text: a.verifyDetail }));
 
       const tb = $("#drafts");
       tb.innerHTML = "";
       for (const dr of d.drafts) {
         tb.append(
           el("tr", {}, [
-            el("td", { class: "mono", text: fmtTime(dr.pushAt) }),
+            el("td", { class: "ds-mono", text: fmtTime(dr.pushAt) }),
             el("td", {}, [
               dr.verified
-                ? el("span", { class: "badge on", text: "通过" })
-                : el("span", { class: "badge off", text: "未通过" }),
+                ? el("span", { class: "ds-badge ds-badge--ok", text: "通过" })
+                : el("span", { class: "ds-badge ds-badge--danger", text: "未通过" }),
             ]),
-            el("td", { class: "mono", text: dr.verifyDetail || "—" }),
+            el("td", { class: "ds-mono", text: dr.verifyDetail || "—" }),
           ]),
         );
       }
@@ -483,7 +485,7 @@
       for (const v of d.versions) {
         chips.append(
           el("button", {
-            class: `chip${v.id === a.id ? " active" : ""}`,
+            class: `ds-chip${v.id === a.id ? " is-active" : ""}`,
             text: `v${v.version}${v.parentId ? "" : "（初版）"}`,
             onclick: () => loadDetail(v.id),
           }),
@@ -547,7 +549,7 @@
       const box = $("#diff");
       box.innerHTML = "";
       for (const r of rows) {
-        const line = el("div", { class: r.t });
+        const line = el("div", { class: r.t === "add" ? "ds-diff__add" : r.t === "del" ? "ds-diff__del" : "ds-diff__ctx" });
         line.textContent = (r.t === "add" ? "+ " : r.t === "del" ? "- " : "  ") + r.l;
         box.append(line);
       }

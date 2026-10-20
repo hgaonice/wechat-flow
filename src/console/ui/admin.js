@@ -13,7 +13,12 @@
 (() => {
   const STATUS_LABEL = { up: "在线", down: "离线", error: "错误", expired: "已过期" };
   const statusLabel = (s) => STATUS_LABEL[s] || s || "—";
-  const statusClass = (s) => (s === "up" ? "on" : s === "expired" ? "" : "off");
+  const statusClass = (s) => {
+    if (s === "up") return "ds-badge ds-badge--ok";
+    if (s === "down" || s === "error") return "ds-badge ds-badge--danger";
+    return "ds-badge";
+  };
+  const shortTime = (v) => (typeof v === "string" && v.includes("T") ? `${v.slice(0, 10)} ${v.slice(11, 19)}` : v);
 
   const showBanner = (text) => {
     const b = $("#banner");
@@ -26,10 +31,10 @@
     if (b) b.hidden = true;
   };
 
-  function stat(label, value) {
-    return el("div", { class: "stat" }, [
-      el("div", { class: "stat-label", text: label }),
-      el("div", { class: "stat-value", text: value === null || value === undefined || value === "" ? "—" : String(value) }),
+  function stat(label, value, kind) {
+    return el("div", { class: "ds-stat" + (kind ? ` ds-stat--${kind}` : "") }, [
+      el("div", { class: "ds-stat__label", text: label }),
+      el("div", { class: "ds-stat__value", text: value === null || value === undefined || value === "" ? "—" : String(value) }),
     ]);
   }
 
@@ -38,18 +43,18 @@
   function renderTunnel(t) {
     const host = $("#tunnel-stats");
     host.innerHTML = "";
-    const badge = el("span", { class: "badge " + statusClass(t.status), text: statusLabel(t.status) });
+    const badge = el("span", { class: statusClass(t.status), text: statusLabel(t.status) });
     host.append(
-      el("div", { class: "stat" }, [
-        el("div", { class: "stat-label", text: "状态" }),
-        el("div", { class: "stat-value" }, [badge]),
+      el("div", { class: "ds-stat" }, [
+        el("div", { class: "ds-stat__label", text: "状态" }),
+        el("div", { class: "ds-stat__value" }, [badge]),
       ]),
       stat("进程", t.running ? `运行中 (pid ${t.pid ?? "?"})` : "未运行"),
       stat("地址", t.url),
-      stat("起始", t.since),
-      stat("最近检查", t.lastCheckedAt),
+      stat("起始", shortTime(t.since)),
+      stat("最近检查", shortTime(t.lastCheckedAt)),
       stat("通知尝试", t.notifyAttempts ?? 0),
-      stat("已通知", t.notifiedAt || "未通知"),
+      stat("已通知", shortTime(t.notifiedAt) || "未通知"),
     );
     $("#tunnel-detail").textContent = t.detail ? `detail: ${t.detail}` : "";
   }
@@ -57,7 +62,12 @@
   function renderServer(s) {
     const host = $("#server-stats");
     host.innerHTML = "";
-    host.append(stat("主机名", s.hostname), stat("内网 IP", s.internalIp), stat("控制台端口", s.port), stat("当前时间", s.now));
+    host.append(
+      stat("主机名", s.hostname),
+      stat("内网 IP", s.internalIp),
+      stat("控制台端口", s.port),
+      stat("当前时间", shortTime(s.now)),
+    );
   }
 
   function renderAccounts(list) {
@@ -69,8 +79,8 @@
         a.enabled === null
           ? "—"
           : a.enabled
-            ? el("span", { class: "badge on", text: "启用" })
-            : el("span", { class: "badge off", text: "停用" });
+            ? el("span", { class: "ds-badge ds-badge--ok", text: "启用" })
+            : el("span", { class: "ds-badge ds-badge--danger", text: "停用" });
       const email = a.email && a.email.configured ? (a.email.to || []).join(", ") : "未配置";
       const kinds = Object.entries(a.secrets || {})
         .filter(([, v]) => v)
@@ -80,9 +90,9 @@
           el("td", {}, [el("a", { href: `/account?id=${a.id}`, text: a.alias })]),
           el("td", { text: a.displayName || "—" }),
           el("td", {}, [enabled]),
-          el("td", { class: "mono", text: email }),
-          el("td", { class: "mono", text: kinds.length ? kinds.join(", ") : "—" }),
-          el("td", { class: "mono", text: a.cdpPort ?? "—" }),
+          el("td", { class: "ds-mono", text: email }),
+          el("td", { class: "ds-mono", text: kinds.length ? kinds.join(", ") : "—" }),
+          el("td", { class: "ds-mono ds-num", text: a.cdpPort ?? "—" }),
         ]),
       );
     }
@@ -93,18 +103,24 @@
     tbody.innerHTML = "";
     $("#tunnels-empty").hidden = list.length > 0;
     for (const t of list) {
-      const badge = el("span", { class: "badge " + statusClass(t.status), text: statusLabel(t.status) });
+      const badge = el("span", { class: statusClass(t.status), text: statusLabel(t.status) });
       tbody.append(
         el("tr", {}, [
-          el("td", { class: "mono", text: t.id }),
+          el("td", { class: "ds-mono ds-num", text: t.id }),
           el("td", {}, [badge]),
-          el("td", { class: "mono", text: t.url || "—" }),
-          el("td", { class: "mono", text: t.pid ?? "—" }),
-          el("td", { class: "mono", text: t.createdAt || "—" }),
-          el("td", { class: "mono", text: t.expiresAt || t.lastCheckedAt || "—" }),
-          el("td", { class: "mono", text: t.notifiedAt || "—" }),
-          el("td", { class: "mono", text: t.replacedBy ?? "—" }),
-          el("td", {}, [el("button", { class: "ghost", text: "重发邮件", onclick: () => notifyRow(t.id) })]),
+          el("td", { class: "ds-mono", text: t.url || "—" }),
+          el("td", { class: "ds-mono ds-num", text: t.pid ?? "—" }),
+          el("td", { class: "ds-mono", text: shortTime(t.createdAt) || "—" }),
+          el("td", { class: "ds-mono", text: shortTime(t.expiresAt) || shortTime(t.lastCheckedAt) || "—" }),
+          el("td", { class: "ds-mono", text: shortTime(t.notifiedAt) || "—" }),
+          el("td", { class: "ds-mono ds-num", text: t.replacedBy ?? "—" }),
+          el("td", {}, [
+            el("button", {
+              class: "ds-btn ds-btn--ghost ds-btn--sm",
+              text: "重发邮件",
+              onclick: () => notifyRow(t.id),
+            }),
+          ]),
         ]),
       );
     }
@@ -121,7 +137,9 @@
     renderAccounts(overview.accounts);
     renderTunnels(tunnelsResp.tunnels);
     currentId = currentResp.current ? currentResp.current.id : null;
-    $("#msg").textContent = `运行中任务：${overview.jobsRunning}`;
+    const jobsMsg = $("#msg");
+    jobsMsg.textContent = `运行中任务：${overview.jobsRunning ?? 0}`;
+    jobsMsg.hidden = false;
   }
 
   function handleActionError(err, msg) {

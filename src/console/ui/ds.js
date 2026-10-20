@@ -151,7 +151,10 @@
     var legacyBrand = header.querySelector(":scope > .brand");
     if (legacyBrand) {
       var t = (legacyBrand.textContent || "").trim();
-      if (/wechat-flow/i.test(t)) {
+      var info = PAGES[pageName()];
+      if (info && t && t === info.title) {
+        legacyBrand.remove(); // page title: the topbar already shows it
+      } else if (/wechat-flow/i.test(t)) {
         brandText.textContent = t || "wechat-flow console";
         legacyBrand.remove();
       } else {
@@ -366,6 +369,58 @@
       document.body.appendChild(dlg);
       if (typeof dlg.showModal === "function") dlg.showModal();
       else dlg.setAttribute("open", "");
+    });
+  };
+
+  // Single-line input dialog — replaces window.prompt (which CSP/parent pages
+  // can suppress silently). Resolves the trimmed value, or null on cancel.
+  DS.prompt = function (opts) {
+    var o = typeof opts === "string" ? { body: opts } : opts || {};
+    return new Promise(function (resolve) {
+      var dlg = el("dialog", "ds-dialog");
+      var title = el("h3", "ds-dialog__title", o.title || "请输入");
+      var body = o.body ? el("div", "ds-dialog__body", o.body) : null;
+      var field = el("label", "ds-field ds-dialog__field");
+      if (o.label) field.appendChild(el("span", "ds-field__label", o.label));
+      var input = el("input", "ds-input");
+      input.type = "text";
+      input.value = o.value || "";
+      input.placeholder = o.placeholder || "";
+      field.appendChild(input);
+      var row = el("div", "ds-dialog__actions");
+      var cancel = el("button", "ds-btn ds-btn--ghost", o.cancelText || "取消");
+      var okBtn = el("button", "ds-btn ds-btn--primary", o.okText || "确定");
+      cancel.type = okBtn.type = "button";
+      var done = function (value) {
+        dlg.close();
+        resolve(value);
+      };
+      cancel.addEventListener("click", function () {
+        done(null);
+      });
+      okBtn.addEventListener("click", function () {
+        done(input.value.trim());
+      });
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          done(input.value.trim());
+        }
+      });
+      row.appendChild(cancel);
+      row.appendChild(okBtn);
+      dlg.appendChild(title);
+      if (body) dlg.appendChild(body);
+      dlg.appendChild(field);
+      dlg.appendChild(row);
+      dlg.addEventListener("close", function () {
+        dlg.remove();
+      });
+      document.body.appendChild(dlg);
+      if (typeof dlg.showModal === "function") dlg.showModal();
+      else dlg.setAttribute("open", "");
+      input.focus();
+      input.select();
     });
   };
 

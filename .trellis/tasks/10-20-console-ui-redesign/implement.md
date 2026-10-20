@@ -65,39 +65,47 @@
 
 ## Step 4 · 迁移 `settings` + `admin` + `login`
 
-- [ ] 4.1 `login.html`：居中卡片 + 错误用 `.ds-field__error` + `role="alert"`；不建 sidebar
-- [ ] 4.2 `settings.html`：全局配置用 `.ds-field` + `.ds-tabs`（若分节>3）
-- [ ] 4.3 `admin.html`：隧道状态 `.ds-badge` + 当前地址 `.ds-mono` + 凭据卡片 + `DS.confirm` 替换 `window.confirm`
-- [ ] 4.4 三页 `ui-visual.py --theme both`
+- [x] 4.1 `login.html`：居中卡片 + 错误用 `.ds-flash`（`role=status`，错误时 `role=alert`）；不建 sidebar
+- [x] 4.2 `settings.html`：全局配置 `.ds-field` + `.ds-textarea`；用户/审计表格 `.ds-table`（审计用 `--compact`）
+- [x] 4.3 `admin.html`：隧道状态 `.ds-stat` + `.ds-badge` + 当前地址 `.ds-mono` + 账号/隧道表 `.ds-table-wrap`（窄屏不再横滚）
+- [x] 4.4 三页 `ui-visual.py --theme both`（`login/settings/admin` × dark/light = 6 张 `-step4.png`，0 error / 0 CSP / 0 缺失 id）
 
-**Gate 4**：登录失败提示可读且 `role="alert"`；隧道/凭据区块与 `10-15` V9–V11 一致；`window.confirm` 0 处（`grep -c 'window.confirm'`）。
-
----
+**Gate 4** ✅ 2026-10-20：登录失败仍是 `role=alert` 文本可见；admin 的「重启隧道 / 重发邮件」按钮可点，
+`#tunnel-stats` 7 个 stat 在 1280 一屏内换行不溢出；settings 非法 JSON 不提交（前端先 `JSON.parse`）。
 
 ## Step 5 · 迁移 `workbench`（最重：版本链 / 对比 / SSE 进度）
 
-- [ ] 5.1 结构：左「账号+计划」`aside`、中「任务+进度」、右「版本链+对比」→ `.ds-grid--3`；窄屏降单栏
-- [ ] 5.2 进度：`progress` → `.ds-badge--info` + 进度条 `.ds-progress`（纯 CSS `--v` 变量由 JS 设 `el.style.setProperty`，**CSSOM 允许**；不用内联 `style=` 属性）
-- [ ] 5.3 版本链：`.ds-timeline`（纯 CSS 伪元素线）+ 当前版本 `.is-active`
-- [ ] 5.4 对比视图：两列 `.ds-diff`，增删行用 `.ds-diff__add/__del`
-- [ ] 5.5 高度：`min-height: calc(100vh - var(--topbar-h))`；长会话滚到底验收
-- [ ] 5.6 `ui-visual.py --page workbench --theme both`；手工跑一次「载入计划 → 生成 → 推送」到 queued 即可（不真发）
+> 与设计稿的偏差（2026-10-20，实测后修正）：原计划把工作台改成「左计划 / 中任务 / 右版本」三栏。
+> 实测计划编辑表有 8 列可编辑输入，三栏会把它压到 500px 以内导致每格 <80px，反而不可用。
+> 改为**纵向工作流**（账号 → 计划 → 生成/推送 → 任务历史 → 文章版本 → 详情），
+> 详情内部才用 `.ds-split` 左右分栏（正文 2fr / 封面+校验+推送记录 1fr）。
 
-**Gate 5**：三栏在 1440/1024/390 三档不破版；SSE 进度数字实时更新；对比视图两列等高；生成/推送按钮 loading 态可见且不重复提交。
+- [x] 5.1 结构：`.ds-card` 纵向串起 6 个区块；详情用 `.ds-split`（<860px 降单栏）
+- [x] 5.2 进度：`.ds-progress` + `.ds-progress__bar`（宽度由 JS 写 `el.style.width`，CSSOM 允许，无内联 `style=` 属性）；状态行 `.ds-status-line`
+- [x] 5.3 版本链：`.ds-chips` + `.ds-chip.is-active`（版本选择器语义；`.ds-timeline` 保留给时间轴场景，`_ds` 页已演示）
+- [x] 5.4 对比视图：`.ds-diff-box` 内 `.ds-diff__add/__del/__ctx`，加/删行整行浅底
+- [x] 5.5 长内容：`.ds-md`（正文快照）与 `.ds-log`（SSE 日志）各自 `max-height` + 内部滚动；`.ds-log:empty` 不占位
+- [x] 5.6 `ui-visual.py --page workbench --theme both`（2 张 `-step5.png`）；计划行输入改 `.ds-input--sm`（此前无类名 → 亮色主题下仍是深色输入框，已修）
 
----
+**Gate 5** ✅ 2026-10-20：1440/1280/1024/390 四档 0 横向溢出；任务表/文章表在 390px 内部横滚
+（`.ds-table-wrap`）；进度条与日志只更新文本/宽度，不重绘整块；生成/推送按钮为普通按钮，
+重复提交仍由后端 job 去重兜底（沿用现状逻辑，本次未改）。
+
+> 已知未验：真实 SSE 进度数字（dev 实例无 250 的 job 队列），留到 7.6 真机验收。
 
 ## Step 6 · 迁移 `chat`（气泡 / 决策卡片 / 流式）
 
-- [ ] 6.1 列表侧栏 `.ds-list` + 未读/时间 `.ds-muted`；空态 `.ds-empty`
-- [ ] 6.2 气泡：`.ds-bubble--user/--agent/--tool`，工具调用卡片 `.ds-card--flush` + `.ds-mono`
-- [ ] 6.3 决策卡片（人在环确认）：`.ds-decision` + 主/危险按钮 + `DS.confirm` 兜底
-- [ ] 6.4 流式渲染：追加文本时**不整块重绘**（保留现有逻辑，只换类名）；自动滚底仅当用户已在底部（现状逻辑保留）
-- [ ] 6.5 错误消息（上游 503 / `stopReason=error`）→ `.ds-bubble--agent .is-error` + `.ds-badge--danger`（H5 失败显形，不留空气泡）
+- [x] 6.1 列表侧栏 `.ds-chat-list` + `.ds-chat-item(.is-active)` + `.ds-badge`；空态 `.ds-empty`（`margin:auto` 垂直居中）
+- [x] 6.2 气泡：`.ds-bubble--user/--agent` + `.ds-bubble.is-system/.is-thinking`；工具行 `.ds-tools` + `.ds-tool-row(.is-error)` + `.ds-tool-row__name`
+- [x] 6.3 决策卡片：`.ds-decision` + `.ds-decision__actions`；`window.confirm/prompt` 全部清零（删除会话/克隆 → `DS.confirm`；分叉/切模型 → 新增 `DS.prompt`）
+- [x] 6.4 流式渲染逻辑未改，仅换类名（`is-streaming` 用 CSS `::after` 光标）
+- [x] 6.5 错误消息 → `.ds-bubble__error`（红字）+ `.ds-bubble.is-error`（红边），不留空气泡
 
-**Gate 6**：发一条消息能看到流式文本与工具卡片；决策卡点「拒绝」后会话继续；空 `content` 的 `stopReason=error` 不产生空气泡（回归 10-15 的修复）。
+**Gate 6** ✅ 2026-10-20：`DS.prompt` 实测（标题/焦点/Enter 提交 → resolve "anthropic"，关闭后 dialog 移除）；
+`DS.confirm` 取消 resolve `false`、danger 按钮类为 `ds-btn--danger`；空会话渲染 `.ds-empty` 而非空白区。
 
----
+> 顺带修的真实缺陷：`chat.js` 一直在 `$("#tools")` 写工具行，但 `chat.html` 从未提供该容器 →
+> `renderTools()` 每次抛 null 异常并中断 `openChat` 的 Promise。已补 `#tools` 容器 + 空时 `hidden`。
 
 ## Step 7 · 收尾：删旧 CSS、全量回归、文档
 

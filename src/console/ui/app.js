@@ -477,11 +477,19 @@ async function initSettings() {
     for (const u of users) {
       tbody.append(
         el("tr", {}, [
-          el("td", { class: "mono", text: u.id }),
+          el("td", { class: "ds-mono ds-num", text: u.id }),
           el("td", { text: u.username }),
-          el("td", { text: u.role === "admin" ? "管理员" : "负责人" }),
-          el("td", {}, [u.disabled ? el("span", { class: "badge off", text: "停用" }) : el("span", { class: "badge on", text: "正常" })]),
-          el("td", { class: "mono", text: (u.accounts || []).join(", ") || "—" }),
+          el("td", {}, [
+            u.role === "admin"
+              ? el("span", { class: "ds-badge ds-badge--accent", text: "管理员" })
+              : el("span", { class: "ds-badge", text: "负责人" }),
+          ]),
+          el("td", {}, [
+            u.disabled
+              ? el("span", { class: "ds-badge ds-badge--danger", text: "停用" })
+              : el("span", { class: "ds-badge ds-badge--ok", text: "正常" }),
+          ]),
+          el("td", { class: "ds-mono", text: (u.accounts || []).join(", ") || "—" }),
         ]),
       );
     }
@@ -494,11 +502,15 @@ async function initSettings() {
     for (const e of entries) {
       tbody.append(
         el("tr", {}, [
-          el("td", { class: "mono", text: e.ts }),
+          el("td", { class: "ds-mono", text: e.ts }),
           el("td", { text: e.action }),
-          el("td", { class: "mono", text: e.target || "—" }),
-          el("td", {}, [e.ok ? el("span", { class: "badge on", text: "成功" }) : el("span", { class: "badge off", text: "失败" })]),
-          el("td", { class: "mono", text: e.ip || "—" }),
+          el("td", { class: "ds-mono", text: e.target || "—" }),
+          el("td", {}, [
+            e.ok
+              ? el("span", { class: "ds-badge ds-badge--ok", text: "成功" })
+              : el("span", { class: "ds-badge ds-badge--danger", text: "失败" }),
+          ]),
+          el("td", { class: "ds-mono", text: e.ip || "—" }),
         ]),
       );
     }

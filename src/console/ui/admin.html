@@ -17,60 +17,80 @@
   <a href="/app">账号</a>
   <a href="/workbench">内容工作台</a>
   <a href="/chat">Agent 会话</a>
-  <span class="spacer"></span>
+  <span class="ds-spacer"></span>
   <span id="who" class="muted"></span>
   <button id="logout" class="ghost">退出</button>
 </header>
 <main>
-  <div id="banner" class="fail" hidden>
+  <div id="banner" class="ds-tip ds-tip--danger ds-banner" role="alert" hidden>
     <span id="banner-msg"></span>
-    <button id="banner-close" class="ghost">关闭</button>
+    <button id="banner-close" class="ds-btn ds-btn--quiet ds-btn--sm" type="button">关闭</button>
   </div>
 
-  <div class="card">
-    <h2>隧道状态（Cloudflare Quick Tunnel）</h2>
-    <div class="stat-grid" id="tunnel-stats"></div>
-    <div id="tunnel-detail" class="muted mono"></div>
-    <div class="row mt">
-      <button id="tunnel-restart" class="primary">重启隧道</button>
-      <button id="tunnel-notify">重发邮件</button>
-      <button id="tunnel-refresh" class="ghost">刷新</button>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">隧道状态</h2>
+        <p class="ds-card__desc">Cloudflare Quick Tunnel：地址每次重启都可能变化，变更会自动下发邮件。</p>
+      </div>
     </div>
-    <div id="tunnel-msg" class="msg"></div>
-  </div>
+    <div class="ds-stats" id="tunnel-stats"></div>
+    <div id="tunnel-detail" class="ds-mono ds-muted ds-detail"></div>
+    <div class="ds-row">
+      <button id="tunnel-restart" class="ds-btn ds-btn--primary" type="button">重启隧道</button>
+      <button id="tunnel-notify" class="ds-btn" type="button">重发邮件</button>
+      <button id="tunnel-refresh" class="ds-btn ds-btn--ghost" type="button">刷新</button>
+    </div>
+    <div id="tunnel-msg" class="ds-flash" role="status" hidden></div>
+  </section>
 
-  <div class="card">
-    <h2>服务器信息</h2>
-    <div class="stat-grid" id="server-stats"></div>
-  </div>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">服务器信息</h2>
+        <p class="ds-card__desc">控制台进程所在主机（非微信公众号服务器）。</p>
+      </div>
+    </div>
+    <div class="ds-stats" id="server-stats"></div>
+  </section>
 
-  <div class="card">
-    <h2>账号总览</h2>
-    <div class="table-wrap">
-      <table>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">账号总览</h2>
+        <p class="ds-card__desc">邮箱与凭据的配置状态（明文永不回显）。</p>
+      </div>
+    </div>
+    <div class="ds-table-wrap">
+      <table class="ds-table">
         <thead>
-          <tr><th>alias</th><th>显示名</th><th>启用</th><th>接收邮箱</th><th>凭据</th><th>CDP</th></tr>
+          <tr><th>alias</th><th>显示名</th><th>启用</th><th>接收邮箱</th><th>凭据</th><th class="is-num">CDP</th></tr>
         </thead>
         <tbody id="accounts"></tbody>
       </table>
     </div>
-    <div id="accounts-empty" class="muted" hidden>暂无账号。</div>
-  </div>
+    <div id="accounts-empty" class="ds-empty" hidden>暂无账号。</div>
+  </section>
 
-  <div class="card">
-    <h2>隧道历史（含已过期，replacedBy 指向后继行）</h2>
-    <div class="table-wrap">
-      <table>
+  <section class="ds-card">
+    <div class="ds-card__head">
+      <div>
+        <h2 class="ds-card__title">隧道历史</h2>
+        <p class="ds-card__desc">含已过期行，replacedBy 指向后继行。</p>
+      </div>
+    </div>
+    <div class="ds-table-wrap">
+      <table class="ds-table ds-table--compact">
         <thead>
-          <tr><th>id</th><th>状态</th><th>地址</th><th>PID</th><th>创建</th><th>检查/过期</th><th>通知</th><th>replacedBy</th><th></th></tr>
+          <tr><th class="is-num">id</th><th>状态</th><th>地址</th><th class="is-num">PID</th><th>创建</th><th>检查/过期</th><th>通知</th><th class="is-num">replacedBy</th><th></th></tr>
         </thead>
         <tbody id="tunnels"></tbody>
       </table>
     </div>
-    <div id="tunnels-empty" class="muted" hidden>暂无隧道记录。</div>
-    <div id="tunnels-msg" class="msg"></div>
-  </div>
-  <div id="msg" class="msg"></div>
+    <div id="tunnels-empty" class="ds-empty" hidden>暂无隧道记录。</div>
+    <div id="tunnels-msg" class="ds-flash" role="status" hidden></div>
+  </section>
+  <div id="msg" class="ds-flash" role="status" hidden></div>
 </main>
 </body>
 </html>
