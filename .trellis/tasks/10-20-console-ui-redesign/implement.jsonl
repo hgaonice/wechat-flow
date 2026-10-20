@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/console/index.md", "reason": "控制台红线：H3/AC-10 运行时不新增 npm 依赖、CSP style-src 'self'"}
+{"file": ".trellis/spec/console/agent-session.md", "reason": "chat.js 的 SSE/决策卡片渲染层边界（只换类名，不改流式与决策逻辑）"}
+{"file": ".trellis/spec/console/api.md", "reason": "改渲染层时不得改动的 API 契约（accounts/session/jobs/chat）"}
+{"file": ".trellis/spec/console/ops-deploy.md", "reason": "静态资源随 deploy.sh 同步的路径与 EXCLUDES 规则"}
+{"file": ".trellis/spec/engine/quality-guidelines.md", "reason": "断言与验证风格：失败必须显形、真机留原始数字"}
+{"file": ".trellis/tasks/10-20-console-ui-redesign/design.md", "reason": "本任务契约 S-1..S-7（shell 搬移/令牌/组件/主题/响应式/_ds 门禁/验证）"}

@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/10-20-console-ui-redesign/prd.md", "reason": "逐条核对 AC：DS-1/DS-2/DS-3/AC-V/AC-X/AC-F"}
+{"file": ".trellis/tasks/10-20-console-ui-redesign/implement.md", "reason": "Step 0–7 的 Gate 与命令，检查是否每步都有可执行验收"}
+{"file": ".trellis/tasks/10-15-console-acceptance-250/report.md", "reason": "V1–V13 功能等价基线 + CSP/内联 style 历史缺陷"}
