@@ -180,3 +180,29 @@ GATES: 7 passed, 0 failed        # 含 tsc --noEmit / bun build src/cli.ts / pac
 ② 若不恢复，建议把 `cover.ai.model` 直接改为 `cn:hunyuan-image-alpha-edit`、并把 `fallbacks` 留空或换 `ffmpeg`，
    避免每张封面都先白等一次失败（实测失败那次耗掉约 12s 才降级）；
 ③ `cover-compare` 结论仍成立（混元 4 题中 3 题语义不稳），恢复路由后建议重跑一次同题对比再定主力。
+
+## 8. 海报风落地（2026-10-22，用户选定 1/2 推荐版）
+
+**目标**：封面从「无字几何插画」切换为「教辅海报」（图上有中文标题/公式），但**图上写什么仍由代码决定**。
+
+| 改动 | 文件 |
+|---|---|
+| 确定性文案 + 画布常量 | `src/cover-poster.ts`（新增）：`buildPosterPrompt` / `missingPosterFields` / `POSTER_CANVAS=1536x1024` / `POSTER_CONSTRAINTS` |
+| 双路线 | `src/cover-ai.ts`：`AiCoverSettings.layout`；poster 跳过 `summarizeCoverBrief`（少一次 pi 调用），缺字段 WARN 回落 |
+| 配置 | `src/config.ts`：`cover.ai.layout` 默认 `illustration`（账号级可覆盖）；`config.example.json` 补文档 |
+| 透传 | `src/publisher.ts`、`src/cli.ts`：`day.topic` 传给封面 |
+| 裁切 | `src/cover.ts`：`fitImageToContent()` + `pickBandStart()`（内容自适应） |
+| 自测 | `tools/cover-poster-selftest.ts`（新增，30 断言） |
+
+**实证教训**：
+1. `900x383` 直接出图 → 混元吸附 `896x368`，只剩一行字（改大画布后裁）。
+2. prompt 写「按 2.35:1 居中裁切」→ 模型退化成白底纯文字（回退措辞，裁切归代码）。
+3. 有字排版不能用几何居中 → 三次实测内容分别偏上/居中/偏下。
+
+**验收**：poster 自测 30 PASS；既有 cover-selftest 109 PASS 0 FAIL；cta 自测 ALL PASS；`tsc` 0 错；`bun build` OK；
+250 真机 `cover -a gaoh --date 2026-10-22 --ai` → 12.6s、1536x1024 → 900x383、标题未切；样张发邮箱待终审。
+
+**配置落地位置**：控制台 DB（真相源）`accounts.gaoh.overrides_json.cover.ai.layout = "poster"` → 回渲 `config.json`（备份 `console/console.db.bak-layout-*`）。
+`second` 保持 `illustration` + `cover.mode=ffmpeg`。
+
+**回滚**：把该字段改回 `illustration`（或删除），无需改代码、无需重启浏览器。
