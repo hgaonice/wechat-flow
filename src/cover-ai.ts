@@ -17,7 +17,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { averageColor, fitImageTo, imageSize, luminance, parseSize } from "./cover.ts";
+import { averageColor, fitImageTo, fitImageToContent, imageSize, luminance, parseSize } from "./cover.ts";
+import { POSTER_CANVAS, buildPosterPrompt, missingPosterFields, type PosterCopy } from "./cover-poster.ts";
 import { log } from "./log.ts";
 import { renderTemplate } from "./prompts.ts";
 import { runPi } from "./pi.ts";
@@ -40,6 +41,13 @@ export interface AiCoverSettings {
   gateway?: string;
   apiKey?: string;
   style: string;
+  /**
+   * 封面生成路线（默认 `illustration`，与旧行为逐字节一致）：
+   *   illustration = 文本模型产出视觉简报 → 图像模型画「无字几何插画」；
+   *   poster       = **不调文本模型**，直接用 module/topic/title 拼确定性文案 → 教辅海报风。
+   * poster 缺少任一文案字段时**显式回落** illustration（并不静默降级）。
+   */
+  layout?: "illustration" | "poster";
   fallbackPalette: string[];
   overlayTitle: boolean;
   timeoutSec: number;
@@ -79,6 +87,8 @@ export interface AiCoverInput {
   briefPath?: string;
   title: string;
   module: string;
+  /** 选题（plans 的 `topic`），poster 路线必填；illustration 路线忽略。 */
+  topic?: string;
   body: string;
   promptFile: string;
   settings: AiCoverSettings;
@@ -104,6 +114,8 @@ export interface AiCoverResult {
   reason?: string;
   model?: string;
   brief?: CoverBrief;
+  /** poster 路线实际用到的确定性文案（供日志/审计回读） */
+  poster?: PosterCopy;
   size?: { w: number; h: number };
   ms?: number;
 }
@@ -676,32 +688,60 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
     }
   }
 
-  // 1) brief — a summary failure is not fatal: fall back to a deterministic one.
-  const sum = await summarizeCoverBrief({
-    title: input.title,
-    module: input.module,
-    body: input.body,
-    promptFile: input.promptFile,
-    model: input.summaryModel ?? s.summaryModel,
-    fallbacks: input.summaryFallbacks,
-    piBin: input.piBin,
-    cwd: input.cwd,
-    timeoutSec: Math.min(s.timeoutSec, 180),
-    palette: s.fallbackPalette,
-  });
-  if (!sum.ok) log.warn(`cover-ai: 摘要降级为确定性简报 (${sum.reason ?? "?"})`);
-  const brief = sum.brief;
-  if (input.briefPath) {
-    try {
-      fs.mkdirSync(path.dirname(input.briefPath), { recursive: true });
-      fs.writeFileSync(input.briefPath, JSON.stringify({ brief, summaryOk: sum.ok, summaryReason: sum.reason, at: new Date().toISOString() }, null, 2) + "\n");
-    } catch {
-      /* audit file is best-effort */
+  // 1) prompt —— 两条路线：
+  //    poster       : 纯确定性（module/选题/标题 直接拼，**不调文本模型**）；
+  //    illustration : 文本模型产出视觉简报 → 无字几何插画（旧行为，逐字节不变）。
+  //    poster 缺任一文案字段 → **显式 warn 并回落** illustration，绝不静默换风格。
+  let prompt = "";
+  let brief: CoverBrief | undefined;
+  let poster: PosterCopy | undefined;
+  if (s.layout === "poster") {
+    const missing = missingPosterFields({ module: input.module, topic: input.topic ?? "", title: input.title });
+    if (missing.length) {
+      log.warn(`cover-ai: poster 文案缺字段 [${missing.join(", ")}] — 回落插画风`);
+    } else {
+      poster = { module: input.module.trim(), topic: String(input.topic).trim(), title: input.title.trim() };
+      prompt = buildPosterPrompt(poster);
+      log.info(`cover-ai: poster 文案（确定性，无文本模型调用）title="${poster.title}"`);
+      if (input.briefPath) {
+        try {
+          fs.mkdirSync(path.dirname(input.briefPath), { recursive: true });
+          fs.writeFileSync(input.briefPath, JSON.stringify({ layout: "poster", copy: poster, at: new Date().toISOString() }, null, 2) + "\n");
+        } catch {
+          /* audit file is best-effort */
+        }
+      }
     }
   }
-
-  // 2) prompt — pure code, deterministic
-  const prompt = buildImagePrompt(brief, s.style);
+  if (!prompt) {
+    const sum = await summarizeCoverBrief({
+      title: input.title,
+      module: input.module,
+      body: input.body,
+      promptFile: input.promptFile,
+      model: input.summaryModel ?? s.summaryModel,
+      fallbacks: input.summaryFallbacks,
+      piBin: input.piBin,
+      cwd: input.cwd,
+      timeoutSec: Math.min(s.timeoutSec, 180),
+      palette: s.fallbackPalette,
+    });
+    if (!sum.ok) log.warn(`cover-ai: 摘要降级为确定性简报 (${sum.reason ?? "?"})`);
+    brief = sum.brief;
+    if (input.briefPath) {
+      try {
+        fs.mkdirSync(path.dirname(input.briefPath), { recursive: true });
+        fs.writeFileSync(
+          input.briefPath,
+          JSON.stringify({ layout: "illustration", brief, summaryOk: sum.ok, summaryReason: sum.reason, at: new Date().toISOString() }, null, 2) + "\n",
+        );
+      } catch {
+        /* audit file is best-effort */
+      }
+    }
+    // 2) prompt — pure code, deterministic
+    prompt = buildImagePrompt(brief, s.style);
+  }
 
   // 3) images — try each model id, normalised for the gateway's `<group>:<model>` form.
   const chain = [s.model, ...(s.fallbacks ?? [])].filter(Boolean).map(normalizeImageModelId);
@@ -729,9 +769,11 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
     const remaining = Math.max(10, Math.round((deadline - Date.now()) / 1000));
     const budget = Math.min(s.timeoutSec, remaining);
     const started = Date.now();
-    let r = await generateOneImage(gw, model, prompt, size, budget);
-    if (!r.ok && isSizeRejection(r.reason) && size !== SIZE_ESCALATION) {
-      log.warn(`cover-ai: ${model} rejected size ${size} (${r.reason.slice(0, 80)}) — retrying at ${SIZE_ESCALATION}`);
+    // poster 必须在大画布上排版（900x383 会让模型只写一行字），出图后再裁回 `size`。
+    const firstSize = poster ? POSTER_CANVAS : size;
+    let r = await generateOneImage(gw, model, prompt, firstSize, budget);
+    if (!r.ok && isSizeRejection(r.reason) && firstSize !== SIZE_ESCALATION) {
+      log.warn(`cover-ai: ${model} rejected size ${firstSize} (${r.reason.slice(0, 80)}) — retrying at ${SIZE_ESCALATION}`);
       // Re-derive the budget from the chain deadline: a rejection can take ~40s
       // (measured), and reusing the first attempt's full budget let one model
       // overrun `maxTotalSec` by up to `timeoutSec`.
@@ -751,7 +793,12 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
         return { ok: false, reason };
       }
       try {
-        await fitImageTo(rawPath, input.outPath, size);
+        if (poster) {
+          // poster 是文字排版：每次内容位置都不同，固定偏置会切字 → 用内容自适应裁切。
+          await fitImageToContent(rawPath, input.outPath, size);
+        } else {
+          await fitImageTo(rawPath, input.outPath, size);
+        }
       } catch (err) {
         const reason = `fit failed: ${(err as Error).message}`;
         recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason }, { apiKey: gw.apiKey });
@@ -770,14 +817,16 @@ export async function generateAiCover(input: AiCoverInput): Promise<AiCoverResul
       // "reachable but broken" must not look identical to "working" in doctor.
       recordCoverModelStat(stateDir, model, { ok: true, ms: modelMs }, { apiKey: gw.apiKey });
       // Sanity probe: a light background means the model ignored the palette.
-      // Non-blocking — the cover is still usable, but the log makes it visible.
-      const avg = await averageColor(input.outPath);
-      if (avg && luminance(avg) > 0.6) {
-        log.warn(
-          `cover-ai: 背景偏亮 (lum=${luminance(avg).toFixed(2)}) 模型可能忽略了深色底 ${brief.palette[0]} — 可改 style/重跑`,
-        );
+      // illustration 路线才检查 —— poster 本身就是浅底海报，亮底属预期。
+      if (brief) {
+        const avg = await averageColor(input.outPath);
+        if (avg && luminance(avg) > 0.6) {
+          log.warn(
+            `cover-ai: 背景偏亮 (lum=${luminance(avg).toFixed(2)}) 模型可能忽略了深色底 ${brief.palette[0]} — 可改 style/重跑`,
+          );
+        }
       }
-      return { ok: true, model, brief, size: dim, ms };
+      return { ok: true, model, brief, poster, size: dim, ms };
     }
     failures.push(`${model}[${r.reason}]`);
     recordCoverModelStat(stateDir, model, { ok: false, ms: modelMs, reason: r.reason }, { apiKey: gw.apiKey });

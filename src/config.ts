@@ -40,6 +40,12 @@ export interface CoverAiCfg {
    * cover degrades to ffmpeg (publishing never blocks) and a WARN is logged.
    */
   dailyBudget?: number;
+  /**
+   * 封面路线：`illustration`（默认，文本模型简报 + 无字几何插画）
+   * 或 `poster`（教辅海报风：用 module/选题/标题 拼确定性文案，**不调文本模型**）。
+   * poster 缺任一文案字段时自动回落 illustration（并打 WARN）。
+   */
+  layout?: "illustration" | "poster";
 }
 
 export interface CoverCfg {
@@ -127,6 +133,8 @@ export interface AppConfig {
       maxTotalSec: number;
       /** 0 = unlimited (default). See CoverAiCfg.dailyBudget. */
       dailyBudget: number;
+      /** 封面路线：illustration（默认）/ poster（教辅海报风） */
+      layout: "illustration" | "poster";
     };
   };
 
@@ -351,6 +359,8 @@ export function resolveConfig(raw: any, accountAlias?: string): AppConfig {
         maxTotalSec: acctAi.maxTotalSec ?? rawAi.maxTotalSec ?? 300,
         // 0 = 不限（默认，保持已有绑定行为不变）；负数/NaN 一律当 0。
         dailyBudget: Math.max(0, Math.floor(Number(acctAi.dailyBudget ?? rawAi.dailyBudget ?? 0) || 0)),
+        // 默认 illustration：不写该字段的账号行为与升级前**完全一致**（字节级）。
+        layout: (acctAi.layout ?? rawAi.layout) === "poster" ? "poster" : "illustration",
       },
     },
 

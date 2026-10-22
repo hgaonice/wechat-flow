@@ -106,7 +106,8 @@
       "overlayTitle": false,
       "timeoutSec": 120,
       "maxTotalSec": 300,
-      "dailyBudget": 0
+      "dailyBudget": 0,
+      "layout": "illustration"
     }
   },
   "cta": {

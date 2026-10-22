@@ -85,6 +85,94 @@ export async function fitImageTo(src: string, outPath: string, size?: string): P
 }
 
 /**
+ * 由「每行亮度」挑出 2.35:1 裁切带的起始行（纯函数，可单测）。
+ *
+ * 为什么不能用固定偏置：模型每次把内容放的位置都不一样（2026-10-22 实测三次：
+ * 内容分别偏上 / 居中 / 偏下，任何固定 bias 都会在某次切到字）。
+ * 这里先估背景亮度（取上下各 3 行），再把「与背景差 > 阈值」的行视为内容，
+ * 以内容中心对齐裁切带中心；找不到内容时退回几何居中。
+ */
+export function pickBandStart(rowMean: number[], band: number, threshold = 6): number {
+  const H = rowMean.length;
+  if (H <= 0 || band >= H) return 0;
+  const edge = [...rowMean.slice(0, 3), ...rowMean.slice(-3)];
+  const bg = edge.reduce((a, b) => a + b, 0) / Math.max(1, edge.length);
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < H; i++) {
+    if (Math.abs(rowMean[i] - bg) > threshold) {
+      if (first < 0) first = i;
+      last = i;
+    }
+  }
+  const center = first < 0 ? (H - 1) / 2 : (first + last) / 2;
+  const start = Math.round(center - band / 2);
+  return Math.min(H - band, Math.max(0, start));
+}
+
+/** 二进制安全地跑外部命令（灰度扫描用，不能按 utf8 解码）。 */
+function runBuffer(cmd: string, args: string[]): Promise<{ code: number | null; stdout: Buffer; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const chunks: Buffer[] = [];
+    let stderr = "";
+    child.stdout.on("data", (c: Buffer) => chunks.push(c));
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (c: string) => (stderr += c));
+    child.on("error", (err) => resolve({ code: null, stdout: Buffer.concat(chunks), stderr: err.message }));
+    child.on("close", (code) => resolve({ code, stdout: Buffer.concat(chunks), stderr }));
+  });
+}
+
+/**
+ * 内容自适应 fit：把原图按 2.35:1 裁一条「内容居中」的带，再缩放。
+ *
+ * 与 `fitImageTo()`（几何居中）的区别只在裁切起点：poster 路线是「文字排版」，
+ * 切掉字比留白不匀严重得多。任何一步失败都回落 `fitImageTo()`，绝不产出错尺寸文件。
+ */
+export async function fitImageToContent(src: string, outPath: string, size?: string): Promise<string> {
+  const { w, h } = parseSize(size);
+  const dim = imageSize(src);
+  if (!dim) return fitImageTo(src, outPath, size);
+  const bandRaw = Math.min(dim.h, Math.max(1, Math.round((dim.w * h) / w)));
+  if (bandRaw >= dim.h - 2) return fitImageTo(src, outPath, size);
+
+  const ffmpeg = await pickAnyFfmpeg();
+  if (!ffmpeg) return fitImageTo(src, outPath, size);
+
+  // 1) 把原图缩到宽 96 的灰度图，逐行求平均亮度（几百字节，成本可忽略）。
+  const probeW = 96;
+  const probe = await runBuffer(ffmpeg, [
+    "-v", "error", "-i", src, "-vf", `scale=${probeW}:-2,format=gray`, "-f", "rawvideo", "-",
+  ]);
+  if (probe.code !== 0 || probe.stdout.length < probeW * 8) {
+    log.warn(`fitImageToContent: 灰度扫描失败（exit ${probe.code}）— 回落居中裁切`);
+    return fitImageTo(src, outPath, size);
+  }
+  const rows = Math.floor(probe.stdout.length / probeW);
+  const rowMean: number[] = [];
+  for (let y = 0; y < rows; y++) {
+    let s = 0;
+    for (let x = 0; x < probeW; x++) s += probe.stdout[y * probeW + x];
+    rowMean.push(s / probeW);
+  }
+  // 2) 在「探针坐标」里选带，再换算回原图坐标。
+  const bandProbe = Math.max(1, Math.round((bandRaw * rows) / dim.h));
+  const startProbe = pickBandStart(rowMean, bandProbe);
+  let top = Math.round((startProbe * dim.h) / rows);
+  if (top % 2 !== 0) top -= 1;
+  top = Math.max(0, Math.min(dim.h - bandRaw, top));
+
+  // 3) 裁 + 缩到目标尺寸。
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  const vf = `crop=${dim.w}:${bandRaw}:0:${top},scale=${w}:${h}`;
+  const { code, stderr } = await run(ffmpeg, ["-y", "-i", src, "-vf", vf, "-frames:v", "1", "-update", "1", outPath]);
+  if (code === 0) return outPath;
+  log.warn(`fitImageToContent ffmpeg failed (exit ${code}): ${stderr.slice(0, 200)} — 回落居中裁切`);
+  return fitImageTo(src, outPath, size);
+}
+
+/**
  * Read image dimensions by parsing the file header directly (PNG / JPEG / GIF / WebP).
  *
  * Deliberately does NOT shell out: on some hosts `ffprobe` is a symlink to a static

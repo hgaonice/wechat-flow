@@ -656,6 +656,8 @@ async function cover(cfg: AppConfig, flags: Record<string, string | boolean>): P
       briefPath: path.join(path.dirname(coverPath), "cover-brief.json"),
       title,
       module: findEntryForDate(cfg, date)?.day.module ?? "",
+      // poster 路线需要「选题」；缺了会显式回落插画风（并打 WARN）。
+      topic: findEntryForDate(cfg, date)?.day.topic ?? "",
       body: md,
       promptFile: path.join(cfg.paths.prompts, "cover.md"),
       settings: cfg.cover.ai,
@@ -677,7 +679,7 @@ async function cover(cfg: AppConfig, flags: Record<string, string | boolean>): P
       return;
     }
     console.log(`✅ AI 封面：${r.model} → ${coverPath} (${r.size?.w}x${r.size?.h}, ${((r.ms ?? 0) / 1000).toFixed(1)}s)`);
-    console.log(`   简报：${JSON.stringify(r.brief)}`);
+    console.log(r.poster ? `   文案：${r.poster.title}` : `   简报：${JSON.stringify(r.brief)}`);
     if (flags.upload !== true) {
       console.log(`   （只生成文件；设到草稿请加 --upload）`);
       return;

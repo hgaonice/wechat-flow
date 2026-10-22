@@ -252,6 +252,8 @@ export async function runPublish(
         briefPath: path.join(cfg.paths.imgs, date, "cover-brief.json"),
         title,
         module: day.module,
+        // poster 路线需要「选题」；illustration 路线忽略此字段。
+        topic: day.topic,
         body: md,
         promptFile: path.join(cfg.paths.prompts, "cover.md"),
         settings: cfg.cover.ai,
@@ -268,7 +270,9 @@ export async function runPublish(
       });
       if (ai.ok) {
         done = true;
-        log.info(`cover: AI 生成（${ai.model}，${ai.brief?.subject ?? ""}）`);
+        log.info(
+          `cover: AI 生成（${ai.model}，${ai.poster ? `poster: ${ai.poster.title}` : ai.brief?.subject ?? ""}）`,
+        );
       } else {
         coverNote = `AI 封面失败，已回落渐变：${ai.reason}`;
         log.warn(`cover-ai failed, falling back to ffmpeg: ${ai.reason}`);
