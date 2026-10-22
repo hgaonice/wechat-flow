@@ -155,3 +155,28 @@ GATES: 7 passed, 0 failed        # 含 tsc --noEmit / bun build src/cli.ts / pac
 3. **nano-banana 2.1 未验**：给 `OPENROUTER_API_KEY` 后可加第五列（工具已支持 `--models` 追加）。
 4. **成本**：`model_ratio=37.5`（与混元同档），实际单张额度消耗以网关账单为准；每天 2 张封面的量级可接受。
 5. `second` 账号仍 `cover.mode=ffmpeg`，未纳入本任务范围。
+
+## 7. 上游变更（2026-10-22 追加）：gpt-image-2.5 路由被上游移除
+
+**结论：本任务选出的主力模型当前不可用，属**上游**变更，非本地配置问题。**
+
+| 项 | 证据 |
+|---|---|
+| 失败表现 | `http 502: Create image failed with error: Image model [gpt-image-2.5-sunburst] route config not found` |
+| 报错来源 | `wb-image-proxy`（meta-gateway 的 `image:workbuddy` 渠道 → `http://wb-image-proxy:8098`），日志中四个 acct 轮流报同一句 |
+| 本地配置无误 | `/v1/models` 仍有 `global:gpt-image-2.5-sunburst` 与 `workbuddy/global:...`；渠道 `image:workbuddy`(id=16) 仍 `status=1`、`base_url=http://wb-image-proxy:8098` |
+| 镜像 id 也失败 | `workbuddy/global:gpt-image-2.5-sunburst` → `404 openai_error bad_response_status_code` |
+| 同渠道另一模型可用 | `cn:hunyuan-image-alpha-edit` → 200，16.6s / 1.7MB |
+
+**生产影响（已实测自动降级，未中断）**：
+`data/gaoh/state/cover-model-stats.json` 显示
+`global:gpt-image-2.5-sunburst` 最后一次失败于 `2026-10-21T23:04:27Z`（`route config not found`），
+紧接着 `cn:hunyuan-image-alpha-edit` 于 `23:04:39Z` 成功（11.9s）；
+`journalctl -u wechat-console` 同时间段可见 `cover-ai: model=cn:hunyuan-image-alpha-edit` + `draft cover set ✓`。
+即：**gaoh 的 AI 封面链路仍能出图，只是画风/质量退回混元**（`cover.ai.model` 仍是 gpt-image，靠 `fallbacks` 兜底）。
+
+**处置建议**：
+① 找 WorkBuddy 侧恢复 `gpt-image-2.5-sunburst` 的路由配置（恢复后**无需改本地任何配置**，主力自动回到 gpt-image）；
+② 若不恢复，建议把 `cover.ai.model` 直接改为 `cn:hunyuan-image-alpha-edit`、并把 `fallbacks` 留空或换 `ffmpeg`，
+   避免每张封面都先白等一次失败（实测失败那次耗掉约 12s 才降级）；
+③ `cover-compare` 结论仍成立（混元 4 题中 3 题语义不稳），恢复路由后建议重跑一次同题对比再定主力。
